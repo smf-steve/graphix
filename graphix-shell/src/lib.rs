@@ -2,7 +2,6 @@ use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use derive_builder::Builder;
 use enumflags2::BitFlags;
-use fxhash::FxHashMap;
 use graphix_compiler::{
     expr::{ExprId, ModPath, ModuleResolver},
     typ::{format_with_flags, PrintFlag, TVal, Type},
@@ -134,9 +133,9 @@ pub struct Shell {
     /// before this time elapses
     #[builder(setter(strip_option), default)]
     resolve_timeout: Option<Duration>,
-    /// define extra loadable modules built into this binary
-    #[builder(setter(strip_option), default)]
-    extra_builtin_modules: Option<FxHashMap<Path, ArcStr>>,
+    /// define module resolvers to append to the default list
+    #[builder(default)]
+    module_resolvers: Vec<ModuleResolver>,
     /// enable or disable features of the standard library
     #[builder(default = "BitFlags::all()")]
     stdlib_modules: BitFlags<Module>,
@@ -164,8 +163,8 @@ impl Shell {
         let (root, mods) = graphix_stdlib::register(&mut ctx, self.stdlib_modules)?;
         let root = ArcStr::from(format!("{root};\nmod tui"));
         let mut mods = vec![mods, tui_mods()];
-        if let Some(v) = self.extra_builtin_modules.take() {
-            mods.push(ModuleResolver::VFS(v));
+        for res in self.module_resolvers.drain(..) {
+            mods.push(res);
         }
         let mut gx = GXConfig::builder(ctx, sub);
         if let Some(s) = self.publish_timeout {

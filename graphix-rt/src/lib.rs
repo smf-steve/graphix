@@ -12,7 +12,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use chrono::prelude::*;
-use combine::stream::position::SourcePosition;
 use compact_str::format_compact;
 use core::fmt;
 use derive_builder::Builder;
@@ -21,7 +20,9 @@ use fxhash::{FxBuildHasher, FxHashMap};
 use graphix_compiler::{
     compile,
     env::Env,
-    expr::{self, ExprId, ExprKind, ModPath, ModuleKind, ModuleResolver, Origin},
+    expr::{
+        self, ExprId, ExprKind, ModPath, ModuleKind, ModuleResolver, Origin, SourceOrigin,
+    },
     node::genn,
     typ::{FnType, Type},
     BindId, Ctx, Event, ExecCtx, LambdaId, NoUserEvent, Node, REFS,
@@ -798,15 +799,14 @@ impl GX {
 
     async fn compile_root(&mut self, text: ArcStr) -> Result<()> {
         let scope = ModPath::root();
-        let ori =
-            expr::parser::parse(None, text.clone()).context("parsing the root module")?;
-        let exprs = join_all(
-            ori.exprs.iter().map(|e| e.resolve_modules(&scope, &self.resolvers)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<SmallVec<[_; 4]>>>()
-        .context(CouldNotResolve)?;
+        let ori = expr::parser::parse(SourceOrigin::Unspecified, text.clone())
+            .context("parsing the root module")?;
+        let exprs =
+            join_all(ori.exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
+                .await
+                .into_iter()
+                .collect::<Result<SmallVec<[_; 4]>>>()
+                .context(CouldNotResolve)?;
         let ori = Origin { exprs: Arc::from_iter(exprs), ..ori };
         let nodes = ori
             .exprs
@@ -826,14 +826,13 @@ impl GX {
 
     async fn compile(&mut self, rt: GXHandle, text: ArcStr) -> Result<CompRes> {
         let scope = ModPath::root();
-        let ori = expr::parser::parse(None, text.clone())?;
-        let exprs = join_all(
-            ori.exprs.iter().map(|e| e.resolve_modules(&scope, &self.resolvers)),
-        )
-        .await
-        .into_iter()
-        .collect::<Result<SmallVec<[_; 4]>>>()
-        .context(CouldNotResolve)?;
+        let ori = expr::parser::parse(SourceOrigin::Unspecified, text.clone())?;
+        let exprs =
+            join_all(ori.exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
+                .await
+                .into_iter()
+                .collect::<Result<SmallVec<[_; 4]>>>()
+                .context(CouldNotResolve)?;
         let ori = Origin { exprs: Arc::from_iter(exprs), ..ori };
         let nodes = ori
             .exprs
@@ -859,13 +858,10 @@ impl GX {
     async fn load(&mut self, rt: GXHandle, file: &PathBuf) -> Result<CompRes> {
         let scope = ModPath::root();
         let st = Instant::now();
-        let (scope, ori) = match file.extension() {
+        let ori = match file.extension() {
             Some(e) if e.as_bytes() == b"gx" => {
-                let scope = match file.file_name() {
-                    None => scope,
-                    Some(name) => ModPath(scope.append(&*name.to_string_lossy())),
-                };
-                let s = fs::read_to_string(file).await?;
+                let file = file.canonicalize()?;
+                let s = fs::read_to_string(&file).await?;
                 let s = if s.starts_with("#!") {
                     if let Some(i) = s.find('\n') {
                         &s[i..]
@@ -876,8 +872,7 @@ impl GX {
                     s.as_str()
                 };
                 let s = ArcStr::from(s);
-                let name = ArcStr::from(file.to_string_lossy());
-                (scope, expr::parser::parse(Some(name), s)?)
+                expr::parser::parse(SourceOrigin::File(file), s)?
             }
             Some(e) => bail!("invalid file extension {e:?}"),
             None => {
@@ -898,8 +893,6 @@ impl GX {
                 let name = name
                     .parse::<ModPath>()
                     .with_context(|| "parsing module name {file:?}")?;
-                let scope =
-                    ModPath(Path::from_str(Path::dirname(&*name).unwrap_or(&*scope)));
                 let name = Path::basename(&*name)
                     .ok_or_else(|| anyhow!("invalid module name {file:?}"))?;
                 let name = ArcStr::from(name);
@@ -910,33 +903,31 @@ impl GX {
                 }
                 .to_expr(Default::default());
                 let ori = Origin {
-                    name: Some(name),
+                    origin: SourceOrigin::Internal(name),
                     source: literal!(""),
                     exprs: Arc::from_iter([e]),
                 };
-                (scope, ori)
+                ori
             }
         };
-        let expr = ExprKind::Module {
-            export: true,
-            name: ori.name.clone().unwrap_or(literal!("")),
-            value: ModuleKind::Inline(ori.exprs.clone()),
-        }
-        .to_expr(SourcePosition::default());
         info!("parse time: {:?}", st.elapsed());
         let st = Instant::now();
-        let expr = expr
-            .resolve_modules(&scope, &self.resolvers)
-            .await
-            .with_context(|| ori.clone())?;
+        let ori = {
+            let _ori = ori.clone();
+            ori.resolve_modules(&self.resolvers).await.with_context(|| _ori)?
+        };
         info!("resolve time: {:?}", st.elapsed());
-        let top_id = expr.id;
-        let n = compile(&mut self.ctx, &scope, expr).with_context(|| ori.clone())?;
-        let has_out = is_output(&n);
-        let typ = n.typ().clone();
-        self.nodes.insert(top_id, n);
-        self.updated.insert(top_id, true);
-        let exprs = smallvec![CompExp { id: top_id, output: has_out, typ, rt }];
+        let mut exprs = smallvec![];
+        for e in ori.exprs.iter() {
+            let top_id = e.id;
+            let n =
+                compile(&mut self.ctx, &scope, e.clone()).with_context(|| ori.clone())?;
+            let has_out = is_output(&n);
+            let typ = n.typ().clone();
+            self.nodes.insert(top_id, n);
+            self.updated.insert(top_id, true);
+            exprs.push(CompExp { id: top_id, output: has_out, typ, rt: rt.clone() })
+        }
         Ok(CompRes { exprs, env: self.ctx.env.clone() })
     }
 

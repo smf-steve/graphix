@@ -27,7 +27,7 @@ pub(crate) fn compile<C: Ctx, E: UserEvent>(
         }
         Expr { kind: ExprKind::Do { exprs }, id, pos: _ } => {
             let scope = ModPath(scope.append(&format_compact!("do{}", id.inner())));
-            Block::compile(ctx, spec.clone(), &scope, top_id, exprs)
+            Block::compile(ctx, spec.clone(), &scope, top_id, None, exprs)
         }
         Expr { kind: ExprKind::Array { args }, id: _, pos: _ } => {
             Array::compile(ctx, spec.clone(), scope, top_id, args)
@@ -57,14 +57,21 @@ pub(crate) fn compile<C: Ctx, E: UserEvent>(
                     bail!("at {} you must resolve external modules", pos)
                 }
                 ModuleKind::Resolved(ori) => {
-                    let res =
-                        Block::compile(ctx, spec.clone(), &scope, top_id, &ori.exprs)
-                            .with_context(|| ori.clone())?;
+                    let res = Block::compile(
+                        ctx,
+                        spec.clone(),
+                        &scope,
+                        top_id,
+                        Some(ori.clone()),
+                        &ori.exprs,
+                    )
+                    .with_context(|| ori.clone())?;
                     ctx.env.modules.insert_cow(scope.clone());
                     Ok(res)
                 }
                 ModuleKind::Inline(exprs) => {
-                    let res = Block::compile(ctx, spec.clone(), &scope, top_id, exprs)?;
+                    let res =
+                        Block::compile(ctx, spec.clone(), &scope, top_id, None, exprs)?;
                     ctx.env.modules.insert_cow(scope.clone());
                     Ok(res)
                 }

@@ -2,8 +2,9 @@ use crate::typ::{TVar, Type};
 use anyhow::Result;
 use arcstr::ArcStr;
 use combine::stream::position::SourcePosition;
+use futures::future::try_join_all;
 pub use modpath::ModPath;
-use netidx::{subscriber::Value, utils::Either};
+use netidx::{path::Path, subscriber::Value, utils::Either};
 pub use pattern::{Pattern, StructurePattern};
 use regex::Regex;
 pub use resolver::ModuleResolver;
@@ -14,7 +15,9 @@ use serde::{
 use std::{
     cell::RefCell,
     cmp::{Ordering, PartialEq, PartialOrd},
-    fmt, result,
+    fmt,
+    path::PathBuf,
+    result,
     str::FromStr,
     sync::LazyLock,
 };
@@ -312,26 +315,42 @@ impl Expr {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum SourceOrigin {
+    File(PathBuf),
+    Netidx(Path),
+    Internal(ArcStr),
+    Unspecified,
+}
+
 // hallowed are the ori
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Origin {
-    pub name: Option<ArcStr>,
+    pub origin: SourceOrigin,
     pub source: ArcStr,
     pub exprs: Arc<[Expr]>,
 }
 
 impl fmt::Display for Origin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.name {
-            None => write!(f, "in expr {}", self.source),
-            Some(n) => {
-                if n.ends_with(".gx") {
-                    write!(f, "in file {n}")
-                } else {
-                    write!(f, "in module {n}")
-                }
-            }
+        match &self.origin {
+            SourceOrigin::Unspecified => write!(f, "in expr {}", self.source),
+            SourceOrigin::File(n) => write!(f, "in file {n:?}"),
+            SourceOrigin::Netidx(n) => write!(f, "in netidx {n}"),
+            SourceOrigin::Internal(n) => write!(f, "in module {n}"),
         }
+    }
+}
+
+impl Origin {
+    pub async fn resolve_modules(
+        self,
+        resolvers: &Arc<[ModuleResolver]>,
+    ) -> Result<Self> {
+        let exprs = Arc::from_iter(
+            try_join_all(self.exprs.iter().map(|e| e.resolve_modules(resolvers))).await?,
+        );
+        Ok(Self { exprs, ..self })
     }
 }
 

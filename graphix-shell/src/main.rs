@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use flexi_logger::{FileSpec, Logger};
+use graphix_compiler::expr::ModuleResolver;
 use graphix_shell::{Mode, ShellBuilder};
 use log::info;
 use netidx::{
@@ -117,9 +118,15 @@ async fn main() -> Result<()> {
     if let Some(t) = p.resolve_timeout {
         shell.resolve_timeout(Duration::from_secs(t));
     }
-    shell.mode(match &p.file {
-        None => Mode::Repl,
-        Some(f) => Mode::File(f.clone()),
-    });
+    if let Some(f) = &p.file {
+        shell.mode(Mode::File(f.clone()));
+        match f.parent() {
+            Some(p) if p.as_os_str().is_empty() => (),
+            None => (),
+            Some(p) => {
+                shell.module_resolvers(vec![ModuleResolver::Files(p.canonicalize()?)]);
+            }
+        }
+    }
     shell.publisher(publisher).subscriber(subscriber).build()?.run().await
 }

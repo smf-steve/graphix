@@ -35,7 +35,7 @@ use smallvec::{smallvec, SmallVec};
 use std::sync::LazyLock;
 use triomphe::Arc;
 
-use super::Origin;
+use super::{Origin, SourceOrigin};
 
 #[cfg(test)]
 mod test;
@@ -1527,14 +1527,14 @@ parser! {
 ///
 /// followed by (optional) whitespace and then eof. At least one
 /// expression is required otherwise this function will fail.
-pub fn parse(name: Option<ArcStr>, s: ArcStr) -> anyhow::Result<Origin> {
+pub fn parse(origin: SourceOrigin, s: ArcStr) -> anyhow::Result<Origin> {
     let r: Vec<Expr> = sep_by1(expr(), attempt(sptoken(';')))
         .skip(spaces())
         .skip(eof())
         .easy_parse(position::Stream::new(&*s))
         .map(|(r, _)| r)
         .map_err(|e| anyhow::anyhow!(format!("{}", e)))?;
-    Ok(Origin { name, source: s, exprs: Arc::from(r) })
+    Ok(Origin { origin, source: s, exprs: Arc::from(r) })
 }
 
 /// Parse one and only one expression. Do not wrap it in an origin.

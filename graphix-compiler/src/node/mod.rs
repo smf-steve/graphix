@@ -1,6 +1,6 @@
 use crate::{
     env, err,
-    expr::{self, Expr, ExprId, ExprKind, ModPath},
+    expr::{self, Expr, ExprId, ExprKind, ModPath, Origin},
     typ::{self, TVal, TVar, Type},
     wrap, BindId, Ctx, Event, ExecCtx, Node, Refs, Update, UserEvent,
 };
@@ -297,6 +297,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Constant {
 #[derive(Debug)]
 pub(crate) struct Block<C: Ctx, E: UserEvent> {
     spec: Expr,
+    ori: Option<Origin>,
     children: Box<[Node<C, E>]>,
 }
 
@@ -306,13 +307,14 @@ impl<C: Ctx, E: UserEvent> Block<C, E> {
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
+        ori: Option<Origin>,
         exprs: &Arc<[Expr]>,
     ) -> Result<Node<C, E>> {
         let children = exprs
             .iter()
             .map(|e| compile(ctx, e.clone(), scope, top_id))
             .collect::<Result<Box<[Node<C, E>]>>>()?;
-        Ok(Box::new(Self { spec, children }))
+        Ok(Box::new(Self { ori, spec, children }))
     }
 }
 
@@ -345,7 +347,10 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Block<C, E> {
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
         for n in &mut self.children {
-            wrap!(n, n.typecheck(ctx))?
+            match &self.ori {
+                None => wrap!(n, n.typecheck(ctx))?,
+                Some(ori) => wrap!(n, n.typecheck(ctx)).with_context(|| ori.clone())?,
+            }
         }
         Ok(())
     }
