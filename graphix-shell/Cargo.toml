@@ -1,0 +1,61 @@
+[package]
+name = "graphix-shell"
+version = "0.1.1"
+authors = ["Eric Stokes <eestokes@pm.me>"]
+edition = "2024"
+license = "MIT"
+description = "A dataflow language for UIs and network programming"
+homepage = "https://graphix-lang.github.io/graphix"
+repository = "https://github.com/graphix-lang/graphix"
+documentation = "https://docs.rs/graphix-shell"
+readme = "../README.md"
+categories = ["network-programming", "compilers", "gui"]
+
+[profile.release]
+codegen-units = 1
+opt-level = 3
+lto = true
+debug = false
+
+[[bin]]
+name = "graphix"
+path = "src/main.rs"
+
+[features]
+default = []
+krb5_iov = [
+  "graphix-compiler/krb5_iov",
+  "graphix-rt/krb5_iov",
+  "graphix-stdlib/krb5_iov",
+  "netidx/krb5_iov"
+]
+
+[dependencies]
+anyhow = { workspace = true }
+arcstr = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+combine = { workspace = true }
+crossterm = { workspace = true }
+derive_builder = { workspace = true }
+enumflags2 = { workspace = true }
+flexi_logger = { workspace = true }
+futures = { workspace = true }
+fxhash = { workspace = true }
+graphix-compiler = { version = "0.1.0", path = "../graphix-compiler" }
+graphix-rt = { version = "0.1.0", path = "../graphix-rt" }
+graphix-stdlib = { version = "0.1.0", path = "../graphix-stdlib" }
+log = { workspace = true }
+netidx = { workspace = true }
+parking_lot = { workspace = true }
+ratatui = { workspace = true }
+reedline = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+smallvec = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+triomphe = { workspace = true }
