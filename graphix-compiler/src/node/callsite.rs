@@ -109,6 +109,7 @@ impl<C: Ctx, E: UserEvent> CallSite<C, E> {
             Type::Fn(ftype) => ftype.clone(),
             typ => bail!("at {pos} {f} has {typ}, expected a function"),
         };
+        ftype.unbind_tvars(); // make sure patterns compile properly
         let (args, arg_spec) = compile_apply_args(ctx, scope, top_id, &ftype, &args)
             .with_context(|| format!("in apply at {pos}"))?;
         let spec = TArc::new(spec);
