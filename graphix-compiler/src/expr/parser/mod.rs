@@ -1,7 +1,7 @@
 use crate::{
     expr::{
-        Arg, Bind, Expr, ExprId, ExprKind, Lambda, ModPath, ModuleKind, Pattern,
-        StructurePattern,
+        get_origin, set_origin, Arg, Bind, Expr, ExprId, ExprKind, Lambda, ModPath,
+        ModuleKind, Origin, Pattern, StructurePattern,
     },
     typ::{FnArgType, FnType, TVar, Type},
 };
@@ -34,8 +34,6 @@ use parking_lot::RwLock;
 use smallvec::{smallvec, SmallVec};
 use std::sync::LazyLock;
 use triomphe::Arc;
-
-use super::{Origin, SourceOrigin};
 
 #[cfg(test)]
 mod test;
@@ -240,6 +238,7 @@ parser! {
                 match self {
                     Intp::Lit(pos, s) => Expr {
                         id: ExprId::new(),
+                        ori: get_origin(),
                         pos,
                         kind: ExprKind::Constant(Value::from(s)),
                     },
@@ -1523,21 +1522,23 @@ parser! {
     }
 }
 
-/// Parse one or more toplevel module expressions
+/// Parse one or more expressions
 ///
 /// followed by (optional) whitespace and then eof. At least one
 /// expression is required otherwise this function will fail.
-pub fn parse(origin: SourceOrigin, s: ArcStr) -> anyhow::Result<Origin> {
+pub fn parse(ori: Origin) -> anyhow::Result<Arc<[Expr]>> {
+    let ori = Arc::new(ori);
+    set_origin(ori.clone());
     let r: Vec<Expr> = sep_by1(expr(), attempt(sptoken(';')))
         .skip(spaces())
         .skip(eof())
-        .easy_parse(position::Stream::new(&*s))
+        .easy_parse(position::Stream::new(&*ori.text))
         .map(|(r, _)| r)
         .map_err(|e| anyhow::anyhow!(format!("{}", e)))?;
-    Ok(Origin { origin, source: s, exprs: Arc::from(r) })
+    Ok(Arc::from(r))
 }
 
-/// Parse one and only one expression. Do not wrap it in an origin.
+/// Parse one and only one expression.
 pub fn parse_one(s: &str) -> anyhow::Result<Expr> {
     expr()
         .skip(spaces())

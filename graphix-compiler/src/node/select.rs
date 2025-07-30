@@ -6,7 +6,6 @@ use crate::{
     BindId, Ctx, Event, ExecCtx, Node, Refs, Update, UserEvent, REFS,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use combine::stream::position::SourcePosition;
 use compact_str::format_compact;
 use enumflags2::BitFlags;
 use netidx::subscriber::Value;
@@ -33,7 +32,6 @@ impl<C: Ctx, E: UserEvent> Select<C, E> {
         top_id: ExprId,
         arg: &Expr,
         arms: &[(Pattern, Expr)],
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let arg = Cached::new(compile(ctx, arg.clone(), scope, top_id)?);
         let mut atype = arg.node.typ().clone();
@@ -43,7 +41,7 @@ impl<C: Ctx, E: UserEvent> Select<C, E> {
                 let scope =
                     ModPath(scope.append(&format_compact!("sel{}", SelectId::new().0)));
                 let pat = PatternNode::compile(ctx, &atype, pat, &scope, top_id)
-                    .with_context(|| format!("in select at {pos}"))?;
+                    .with_context(|| format!("in select at {}", spec.pos))?;
                 if !pat.guard.is_some() && !pat.structure_predicate.is_refutable() {
                     atype = atype.diff(&ctx.env, &pat.type_predicate)?;
                 }
@@ -51,7 +49,7 @@ impl<C: Ctx, E: UserEvent> Select<C, E> {
                 Ok((pat, n))
             })
             .collect::<Result<SmallVec<_>>>()
-            .with_context(|| format!("in select at {pos}"))?;
+            .with_context(|| format!("in select at {}", spec.pos))?;
         let typ = Type::empty_tvar();
         Ok(Box::new(Self { spec, typ, arg, arms, selected: None }))
     }

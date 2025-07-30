@@ -8,7 +8,6 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
-use combine::stream::position::SourcePosition;
 use compact_str::{format_compact, CompactString};
 use fxhash::FxHashMap;
 use netidx::subscriber::Value;
@@ -102,16 +101,17 @@ impl<C: Ctx, E: UserEvent> CallSite<C, E> {
         top_id: ExprId,
         args: &TArc<[(Option<ArcStr>, Expr)]>,
         f: &TArc<Expr>,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let fnode = compile(ctx, (**f).clone(), scope, top_id)?;
         let ftype = match &fnode.typ() {
             Type::Fn(ftype) => ftype.clone(),
-            typ => bail!("at {pos} {f} has {typ}, expected a function"),
+            typ => {
+                bail!("at {} {f} has {typ}, expected a function", spec.pos)
+            }
         };
         ftype.unbind_tvars(); // make sure patterns compile properly
         let (args, arg_spec) = compile_apply_args(ctx, scope, top_id, &ftype, &args)
-            .with_context(|| format!("in apply at {pos}"))?;
+            .with_context(|| format!("in apply at {}", spec.pos))?;
         let spec = TArc::new(spec);
         let site = Self { spec, ftype, args, arg_spec, fnode, function: None, top_id };
         Ok(Box::new(site))

@@ -52,11 +52,15 @@ pub let browser = |
             (mode, { columns, rows })
         }
     };
-    let visible_rows = {
-        let len = array::len(structure.rows);
-        let start = min(len - 1, viewport.y);
-        let end = min(len, viewport.y + size.height - 1);
-        (structure.rows)[start .. end]?
+    dbg(structure);
+    let visible_rows = select structure.rows {
+        [] => [],
+        rows => {
+            let len = array::len(rows);
+            let start = min(len - 1, viewport.y);
+            let end = min(len, viewport.y + size.height - 1);
+            (rows)[start .. end]?
+        }
     };
     let content_widths: Array<i64> = [];
     let get_width = |i| {

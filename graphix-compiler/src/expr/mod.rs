@@ -2,7 +2,6 @@ use crate::typ::{TVar, Type};
 use anyhow::Result;
 use arcstr::ArcStr;
 use combine::stream::position::SourcePosition;
-use futures::future::try_join_all;
 pub use modpath::ModPath;
 use netidx::{path::Path, subscriber::Value, utils::Either};
 pub use pattern::{Pattern, StructurePattern};
@@ -31,10 +30,27 @@ mod resolver;
 #[cfg(test)]
 mod test;
 
-pub static VNAME: LazyLock<Regex> =
+pub const VNAME: LazyLock<Regex> =
     LazyLock::new(|| Regex::new("^[a-z][a-z0-9_]*$").unwrap());
 
 atomic_id!(ExprId);
+
+const DEFAULT_ORIGIN: LazyLock<Arc<Origin>> =
+    LazyLock::new(|| Arc::new(Origin::default()));
+
+thread_local! {
+    static ORIGIN: RefCell<Option<Arc<Origin>>> = RefCell::new(None);
+}
+
+pub(crate) fn set_origin(ori: Arc<Origin>) {
+    ORIGIN.with_borrow_mut(|global| *global = Some(ori))
+}
+
+pub(crate) fn get_origin() -> Arc<Origin> {
+    ORIGIN.with_borrow(|ori| {
+        ori.as_ref().cloned().unwrap_or_else(|| DEFAULT_ORIGIN.clone())
+    })
+}
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Arg {
@@ -46,7 +62,7 @@ pub struct Arg {
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum ModuleKind {
     Inline(Arc<[Expr]>),
-    Resolved(Origin),
+    Resolved(Arc<[Expr]>),
     Unresolved,
 }
 
@@ -115,18 +131,71 @@ pub enum ExprKind {
 
 impl ExprKind {
     pub fn to_expr(self, pos: SourcePosition) -> Expr {
-        Expr { id: ExprId::new(), pos, kind: self }
+        Expr { id: ExprId::new(), ori: get_origin(), pos, kind: self }
     }
 
     /// does not provide any position information or comment
     pub fn to_expr_nopos(self) -> Expr {
-        Expr { id: ExprId::new(), pos: Default::default(), kind: self }
+        Expr { id: ExprId::new(), ori: get_origin(), pos: Default::default(), kind: self }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum Source {
+    File(PathBuf),
+    Netidx(Path),
+    Internal(ArcStr),
+    Unspecified,
+}
+
+impl Default for Source {
+    fn default() -> Self {
+        Self::Unspecified
+    }
+}
+
+// hallowed are the ori
+#[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
+pub struct Origin {
+    pub parent: Option<Arc<Origin>>,
+    pub source: Source,
+    pub text: ArcStr,
+}
+
+impl fmt::Display for Origin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.source {
+            Source::Unspecified => write!(f, "in expr {}", self.text)?,
+            Source::File(n) => write!(f, "in file {n:?}")?,
+            Source::Netidx(n) => write!(f, "in netidx {n}")?,
+            Source::Internal(n) => write!(f, "in module {n}")?,
+        }
+        let mut p = &self.parent;
+        loop {
+            match p {
+                None => break Ok(()),
+                Some(parent) => {
+                    writeln!(f, "")?;
+                    write!(f, "    ")?;
+                    match &parent.source {
+                        Source::Unspecified => {
+                            write!(f, "included from expr {}", parent.text)?
+                        }
+                        Source::File(n) => write!(f, "included from file {n:?}")?,
+                        Source::Netidx(n) => write!(f, "included from netidx {n}")?,
+                        Source::Internal(n) => write!(f, "included from module {n}")?,
+                    }
+                    p = &parent.parent;
+                }
+            }
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Expr {
     pub id: ExprId,
+    pub ori: Arc<Origin>,
     pub pos: SourcePosition,
     pub kind: ExprKind,
 }
@@ -217,7 +286,7 @@ impl<'de> Deserialize<'de> for Expr {
 
 impl Expr {
     pub fn new(kind: ExprKind, pos: SourcePosition) -> Self {
-        Expr { id: ExprId::new(), pos, kind }
+        Expr { id: ExprId::new(), ori: get_origin(), pos, kind }
     }
 
     pub fn to_string_pretty(&self, col_limit: usize) -> String {
@@ -237,8 +306,8 @@ impl Expr {
             ExprKind::Module { value: ModuleKind::Inline(e), .. } => {
                 e.iter().fold(init, |init, e| e.fold(init, f))
             }
-            ExprKind::Module { value: ModuleKind::Resolved(o), .. } => {
-                o.exprs.iter().fold(init, |init, e| e.fold(init, f))
+            ExprKind::Module { value: ModuleKind::Resolved(exprs), .. } => {
+                exprs.iter().fold(init, |init, e| e.fold(init, f))
             }
             ExprKind::Module { value: ModuleKind::Unresolved, .. } => init,
             ExprKind::Do { exprs } => exprs.iter().fold(init, |init, e| e.fold(init, f)),
@@ -312,45 +381,6 @@ impl Expr {
                 rhs.fold(init, f)
             }
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum SourceOrigin {
-    File(PathBuf),
-    Netidx(Path),
-    Internal(ArcStr),
-    Unspecified,
-}
-
-// hallowed are the ori
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct Origin {
-    pub origin: SourceOrigin,
-    pub source: ArcStr,
-    pub exprs: Arc<[Expr]>,
-}
-
-impl fmt::Display for Origin {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.origin {
-            SourceOrigin::Unspecified => write!(f, "in expr {}", self.source),
-            SourceOrigin::File(n) => write!(f, "in file {n:?}"),
-            SourceOrigin::Netidx(n) => write!(f, "in netidx {n}"),
-            SourceOrigin::Internal(n) => write!(f, "in module {n}"),
-        }
-    }
-}
-
-impl Origin {
-    pub async fn resolve_modules(
-        self,
-        resolvers: &Arc<[ModuleResolver]>,
-    ) -> Result<Self> {
-        let exprs = Arc::from_iter(
-            try_join_all(self.exprs.iter().map(|e| e.resolve_modules(resolvers))).await?,
-        );
-        Ok(Self { exprs, ..self })
     }
 }
 

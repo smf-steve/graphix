@@ -1,12 +1,12 @@
 use crate::{
     env, err,
-    expr::{self, Expr, ExprId, ExprKind, ModPath, Origin},
+    expr::{self, Expr, ExprId, ExprKind, ModPath},
     typ::{self, TVal, TVar, Type},
     wrap, BindId, Ctx, Event, ExecCtx, Node, Refs, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::{literal, ArcStr};
-use combine::stream::position::SourcePosition;
+use compact_str::format_compact;
 use compiler::compile;
 use enumflags2::BitFlags;
 use netidx_value::{Typ, Value};
@@ -137,10 +137,9 @@ impl Use {
         spec: Expr,
         scope: &ModPath,
         name: &ModPath,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         match ctx.env.canonical_modpath(scope, name) {
-            None => bail!("at {pos} no such module {name}"),
+            None => bail!("at {} no such module {name}", spec.pos),
             Some(_) => {
                 let used = ctx.env.used.get_or_default_cow(scope.clone());
                 Arc::make_mut(used).push(name.clone());
@@ -200,12 +199,11 @@ impl TypeDef {
         name: &ArcStr,
         params: &Arc<[(TVar, Option<Type>)]>,
         typ: &Type,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let typ = typ.scope_refs(scope);
         ctx.env
             .deftype(scope, name, params.clone(), typ)
-            .with_context(|| format!("in typedef at {pos}"))?;
+            .with_context(|| format!("in typedef at {}", spec.pos))?;
         let name = name.clone();
         let scope = scope.clone();
         Ok(Box::new(Self { spec, scope, name }))
@@ -296,8 +294,8 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Constant {
 // used for both mod and do
 #[derive(Debug)]
 pub(crate) struct Block<C: Ctx, E: UserEvent> {
+    module: bool,
     spec: Expr,
-    ori: Option<Origin>,
     children: Box<[Node<C, E>]>,
 }
 
@@ -307,14 +305,14 @@ impl<C: Ctx, E: UserEvent> Block<C, E> {
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
-        ori: Option<Origin>,
+        module: bool,
         exprs: &Arc<[Expr]>,
     ) -> Result<Node<C, E>> {
         let children = exprs
             .iter()
             .map(|e| compile(ctx, e.clone(), scope, top_id))
             .collect::<Result<Box<[Node<C, E>]>>>()?;
-        Ok(Box::new(Self { ori, spec, children }))
+        Ok(Box::new(Self { module, spec, children }))
     }
 }
 
@@ -347,9 +345,10 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Block<C, E> {
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
         for n in &mut self.children {
-            match &self.ori {
-                None => wrap!(n, n.typecheck(ctx))?,
-                Some(ori) => wrap!(n, n.typecheck(ctx)).with_context(|| ori.clone())?,
+            if self.module {
+                wrap!(n, n.typecheck(ctx)).with_context(|| self.spec.ori.clone())?
+            } else {
+                wrap!(n, n.typecheck(ctx))?
             }
         }
         Ok(())
@@ -375,7 +374,6 @@ impl<C: Ctx, E: UserEvent> Bind<C, E> {
         scope: &ModPath,
         top_id: ExprId,
         b: &expr::Bind,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let expr::Bind { doc, pattern, typ, export: _, value } = b;
         let node = compile(ctx, value.clone(), &scope, top_id)?;
@@ -386,16 +384,19 @@ impl<C: Ctx, E: UserEvent> Bind<C, E> {
                 let ptyp = pattern.infer_type_predicate(&ctx.env)?;
                 if !ptyp.contains(&ctx.env, &typ)? {
                     typ::format_with_flags(typ::PrintFlag::DerefTVars.into(), || {
-                        bail!("at {pos} match error {typ} can't be matched by {ptyp}")
+                        bail!(
+                            "at {} match error {typ} can't be matched by {ptyp}",
+                            spec.pos
+                        )
                     })?
                 }
                 typ
             }
         };
         let pattern = StructPatternNode::compile(ctx, &typ, pattern, scope)
-            .with_context(|| format!("at {pos}"))?;
+            .with_context(|| format!("at {}", spec.pos))?;
         if pattern.is_refutable() {
-            bail!("at {pos} refutable patterns are not allowed in let");
+            bail!("at {} refutable patterns are not allowed in let", spec.pos);
         }
         if let Some(doc) = doc {
             pattern.ids(&mut |id| {
@@ -462,10 +463,9 @@ impl Ref {
         scope: &ModPath,
         top_id: ExprId,
         name: &ModPath,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         match ctx.env.lookup_bind(scope, name) {
-            None => bail!("at {pos} {name} not defined"),
+            None => bail!("at {} {name} not defined", spec.pos),
             Some((_, bind)) => {
                 ctx.user.ref_var(bind.id, top_id);
                 let typ = bind.typ.clone();
@@ -611,10 +611,9 @@ impl<C: Ctx, E: UserEvent> Connect<C, E> {
         top_id: ExprId,
         name: &ModPath,
         value: &Expr,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let id = match ctx.env.lookup_bind(scope, name) {
-            None => bail!("at {pos} {name} is undefined"),
+            None => bail!("at {} {name} is undefined", spec.pos),
             Some((_, env::Bind { id, .. })) => *id,
         };
         let node = compile(ctx, value.clone(), scope, top_id)?;
@@ -677,10 +676,9 @@ impl<C: Ctx, E: UserEvent> ConnectDeref<C, E> {
         top_id: ExprId,
         name: &ModPath,
         value: &Expr,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let src_id = match ctx.env.lookup_bind(scope, name) {
-            None => bail!("at {pos} {name} is undefined"),
+            None => bail!("at {} {name} is undefined", spec.pos),
             Some((_, env::Bind { id, .. })) => *id,
         };
         ctx.user.ref_var(src_id, top_id);
@@ -902,11 +900,10 @@ impl<C: Ctx, E: UserEvent> Qop<C, E> {
         scope: &ModPath,
         top_id: ExprId,
         e: &Expr,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let n = compile(ctx, e.clone(), scope, top_id)?;
         match ctx.env.lookup_bind(scope, &ModPath::from(["errors"])) {
-            None => bail!("at {pos} BUG: errors is undefined"),
+            None => bail!("at {} BUG: errors is undefined", spec.pos),
             Some((_, bind)) => {
                 let typ = Type::empty_tvar();
                 Ok(Box::new(Self { spec, typ, id: bind.id, n }))
@@ -919,8 +916,9 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Qop<C, E> {
     fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
         match self.n.update(ctx, event) {
             None => None,
-            Some(e @ Value::Error(_)) => {
-                ctx.set_var(self.id, e);
+            Some(Value::Error(e)) => {
+                let e = format_compact!("{} at {} {e}", self.spec.ori, self.spec.pos);
+                ctx.set_var(self.id, Value::Error(e.as_str().into()));
                 None
             }
             Some(v) => Some(v),
@@ -979,12 +977,11 @@ impl<C: Ctx, E: UserEvent> TypeCast<C, E> {
         top_id: ExprId,
         expr: &Expr,
         typ: &Type,
-        pos: &SourcePosition,
     ) -> Result<Node<C, E>> {
         let n = compile(ctx, expr.clone(), scope, top_id)?;
         let target = typ.scope_refs(scope);
         if let Err(e) = target.check_cast(&ctx.env) {
-            bail!("in cast at {pos} {e}");
+            bail!("in cast at {} {e}", spec.pos);
         }
         let typ = target.union(&ctx.env, &Type::Primitive(Typ::Error.into()))?;
         Ok(Box::new(Self { spec, typ, target, n }))

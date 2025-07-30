@@ -21,156 +21,131 @@ pub(crate) fn compile<C: Ctx, E: UserEvent>(
     scope: &ModPath,
     top_id: ExprId,
 ) -> Result<Node<C, E>> {
-    match &spec {
-        Expr { kind: ExprKind::Constant(v), id: _, pos: _ } => {
-            Constant::compile(spec.clone(), v)
+    match &spec.kind {
+        ExprKind::Constant(v) => Constant::compile(spec.clone(), v),
+        ExprKind::Do { exprs } => {
+            let scope = ModPath(scope.append(&format_compact!("do{}", spec.id.inner())));
+            Block::compile(ctx, spec.clone(), &scope, top_id, false, exprs)
         }
-        Expr { kind: ExprKind::Do { exprs }, id, pos: _ } => {
-            let scope = ModPath(scope.append(&format_compact!("do{}", id.inner())));
-            Block::compile(ctx, spec.clone(), &scope, top_id, None, exprs)
-        }
-        Expr { kind: ExprKind::Array { args }, id: _, pos: _ } => {
+        ExprKind::Array { args } => {
             Array::compile(ctx, spec.clone(), scope, top_id, args)
         }
-        Expr { kind: ExprKind::ArrayRef { source, i }, id: _, pos: _ } => {
+        ExprKind::ArrayRef { source, i } => {
             ArrayRef::compile(ctx, spec.clone(), scope, top_id, source, i)
         }
-        Expr { kind: ExprKind::ArraySlice { source, start, end }, id: _, pos: _ } => {
+        ExprKind::ArraySlice { source, start, end } => {
             ArraySlice::compile(ctx, spec.clone(), scope, top_id, source, start, end)
         }
-        Expr { kind: ExprKind::StringInterpolate { args }, id: _, pos: _ } => {
+        ExprKind::StringInterpolate { args } => {
             StringInterpolate::compile(ctx, spec.clone(), scope, top_id, args)
         }
-        Expr { kind: ExprKind::Tuple { args }, id: _, pos: _ } => {
+        ExprKind::Tuple { args } => {
             Tuple::compile(ctx, spec.clone(), scope, top_id, args)
         }
-        Expr { kind: ExprKind::Variant { tag, args }, id: _, pos: _ } => {
+        ExprKind::Variant { tag, args } => {
             Variant::compile(ctx, spec.clone(), scope, top_id, tag, args)
         }
-        Expr { kind: ExprKind::Struct { args }, id: _, pos: _ } => {
+        ExprKind::Struct { args } => {
             Struct::compile(ctx, spec.clone(), scope, top_id, args)
         }
-        Expr { kind: ExprKind::Module { name, export: _, value }, id: _, pos } => {
+        ExprKind::Module { name, export: _, value } => {
             let scope = ModPath(scope.append(&name));
             match value {
                 ModuleKind::Unresolved => {
-                    bail!("at {} you must resolve external modules", pos)
+                    bail!("at {} you must resolve external modules", spec.pos)
                 }
-                ModuleKind::Resolved(ori) => {
-                    let res = Block::compile(
-                        ctx,
-                        spec.clone(),
-                        &scope,
-                        top_id,
-                        Some(ori.clone()),
-                        &ori.exprs,
-                    )
-                    .with_context(|| ori.clone())?;
+                ModuleKind::Resolved(exprs) => {
+                    let res =
+                        Block::compile(ctx, spec.clone(), &scope, top_id, true, exprs)
+                            .with_context(|| spec.ori.clone())?;
                     ctx.env.modules.insert_cow(scope.clone());
                     Ok(res)
                 }
                 ModuleKind::Inline(exprs) => {
                     let res =
-                        Block::compile(ctx, spec.clone(), &scope, top_id, None, exprs)?;
+                        Block::compile(ctx, spec.clone(), &scope, top_id, true, exprs)
+                            .with_context(|| spec.ori.clone())?;
                     ctx.env.modules.insert_cow(scope.clone());
                     Ok(res)
                 }
             }
         }
-        Expr { kind: ExprKind::Use { name }, id: _, pos } => {
-            Use::compile(ctx, spec.clone(), scope, name, pos)
+        ExprKind::Use { name } => Use::compile(ctx, spec.clone(), scope, name),
+        ExprKind::Connect { name, value, deref: true } => {
+            ConnectDeref::compile(ctx, spec.clone(), scope, top_id, name, value)
         }
-        Expr { kind: ExprKind::Connect { name, value, deref: true }, id: _, pos } => {
-            ConnectDeref::compile(ctx, spec.clone(), scope, top_id, name, value, pos)
+        ExprKind::Connect { name, value, deref: false } => {
+            Connect::compile(ctx, spec.clone(), scope, top_id, name, value)
         }
-        Expr { kind: ExprKind::Connect { name, value, deref: false }, id: _, pos } => {
-            Connect::compile(ctx, spec.clone(), scope, top_id, name, value, pos)
+        ExprKind::Lambda(l) => Lambda::compile(ctx, spec.clone(), scope, l, top_id),
+        ExprKind::Any { args } => Any::compile(ctx, spec.clone(), scope, top_id, args),
+        ExprKind::Apply { args, function: f } => {
+            CallSite::compile(ctx, spec.clone(), scope, top_id, args, f)
         }
-        Expr { kind: ExprKind::Lambda(l), id: _, pos: _ } => {
-            Lambda::compile(ctx, spec.clone(), scope, l, top_id)
-        }
-        Expr { kind: ExprKind::Any { args }, id: _, pos: _ } => {
-            Any::compile(ctx, spec.clone(), scope, top_id, args)
-        }
-        Expr { kind: ExprKind::Apply { args, function: f }, id: _, pos } => {
-            CallSite::compile(ctx, spec.clone(), scope, top_id, args, f, pos)
-        }
-        Expr { kind: ExprKind::Bind(b), id: _, pos } => {
-            Bind::compile(ctx, spec.clone(), scope, top_id, b, pos)
-        }
-        Expr { kind: ExprKind::Qop(e), id: _, pos } => {
-            Qop::compile(ctx, spec.clone(), scope, top_id, e, pos)
-        }
-        Expr { kind: ExprKind::ByRef(e), id: _, pos: _ } => {
-            ByRef::compile(ctx, spec.clone(), scope, top_id, e)
-        }
-        Expr { kind: ExprKind::Deref(e), id: _, pos: _ } => {
-            Deref::compile(ctx, spec.clone(), scope, top_id, e)
-        }
-        Expr { kind: ExprKind::Ref { name }, id: _, pos } => {
-            Ref::compile(ctx, spec.clone(), scope, top_id, name, pos)
-        }
-        Expr { kind: ExprKind::TupleRef { source, field }, id: _, pos: _ } => {
+        ExprKind::Bind(b) => Bind::compile(ctx, spec.clone(), scope, top_id, b),
+        ExprKind::Qop(e) => Qop::compile(ctx, spec.clone(), scope, top_id, e),
+        ExprKind::ByRef(e) => ByRef::compile(ctx, spec.clone(), scope, top_id, e),
+        ExprKind::Deref(e) => Deref::compile(ctx, spec.clone(), scope, top_id, e),
+        ExprKind::Ref { name } => Ref::compile(ctx, spec.clone(), scope, top_id, name),
+        ExprKind::TupleRef { source, field } => {
             TupleRef::compile(ctx, spec.clone(), scope, top_id, source, field)
         }
-        Expr { kind: ExprKind::StructRef { source, field }, id: _, pos: _ } => {
+        ExprKind::StructRef { source, field } => {
             StructRef::compile(ctx, spec.clone(), scope, top_id, source, field)
         }
-        Expr { kind: ExprKind::StructWith { source, replace }, id: _, pos: _ } => {
+        ExprKind::StructWith { source, replace } => {
             StructWith::compile(ctx, spec.clone(), scope, top_id, source, replace)
         }
-        Expr { kind: ExprKind::Select { arg, arms }, id: _, pos } => {
-            Select::compile(ctx, spec.clone(), scope, top_id, arg, arms, pos)
+        ExprKind::Select { arg, arms } => {
+            Select::compile(ctx, spec.clone(), scope, top_id, arg, arms)
         }
-        Expr { kind: ExprKind::TypeCast { expr, typ }, id: _, pos } => {
-            TypeCast::compile(ctx, spec.clone(), scope, top_id, expr, typ, pos)
+        ExprKind::TypeCast { expr, typ } => {
+            TypeCast::compile(ctx, spec.clone(), scope, top_id, expr, typ)
         }
-        Expr { kind: ExprKind::TypeDef { name, params, typ }, id: _, pos } => {
-            TypeDef::compile(ctx, spec.clone(), scope, name, params, typ, pos)
+        ExprKind::TypeDef { name, params, typ } => {
+            TypeDef::compile(ctx, spec.clone(), scope, name, params, typ)
         }
-        Expr { kind: ExprKind::Not { expr }, id: _, pos: _ } => {
-            Not::compile(ctx, spec.clone(), scope, top_id, expr)
-        }
-        Expr { kind: ExprKind::Eq { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Not { expr } => Not::compile(ctx, spec.clone(), scope, top_id, expr),
+        ExprKind::Eq { lhs, rhs } => {
             Eq::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Ne { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Ne { lhs, rhs } => {
             Ne::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Lt { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Lt { lhs, rhs } => {
             Lt::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Gt { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Gt { lhs, rhs } => {
             Gt::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Lte { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Lte { lhs, rhs } => {
             Lte::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Gte { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Gte { lhs, rhs } => {
             Gte::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::And { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::And { lhs, rhs } => {
             And::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Or { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Or { lhs, rhs } => {
             Or::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Add { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Add { lhs, rhs } => {
             Add::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Sub { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Sub { lhs, rhs } => {
             Sub::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Mul { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Mul { lhs, rhs } => {
             Mul::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Div { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Div { lhs, rhs } => {
             Div::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Mod { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Mod { lhs, rhs } => {
             Mod::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
-        Expr { kind: ExprKind::Sample { lhs, rhs }, id: _, pos: _ } => {
+        ExprKind::Sample { lhs, rhs } => {
             Sample::compile(ctx, spec.clone(), scope, top_id, lhs, rhs)
         }
     }
