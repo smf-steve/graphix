@@ -852,7 +852,7 @@ impl GX {
     async fn load(&mut self, rt: GXHandle, file: &PathBuf) -> Result<CompRes> {
         let scope = ModPath::root();
         let st = Instant::now();
-        let exprs = match file.extension() {
+        let (ori, exprs) = match file.extension() {
             Some(e) if e.as_bytes() == b"gx" => {
                 let file = file.canonicalize()?;
                 let s = fs::read_to_string(&file).await?;
@@ -870,7 +870,7 @@ impl GX {
                     source: Source::File(file),
                     text: ArcStr::from(s),
                 };
-                expr::parser::parse(ori)?
+                (ori.clone(), expr::parser::parse(ori)?)
             }
             Some(e) => bail!("invalid file extension {e:?}"),
             None => {
@@ -904,12 +904,13 @@ impl GX {
                     name,
                     value: ModuleKind::Unresolved,
                 };
-                Arc::from(vec![Expr {
+                let exprs = Arc::from(vec![Expr {
                     id: ExprId::new(),
-                    ori: Arc::new(ori),
+                    ori: Arc::new(ori.clone()),
                     pos: SourcePosition::default(),
                     kind,
-                }])
+                }]);
+                (ori, exprs)
             }
         };
         info!("parse time: {:?}", st.elapsed());
@@ -922,8 +923,8 @@ impl GX {
         let mut res = smallvec![];
         for e in exprs.iter() {
             let top_id = e.id;
-            let n = compile(&mut self.ctx, &scope, e.clone())
-                .with_context(|| e.ori.clone())?;
+            let n =
+                compile(&mut self.ctx, &scope, e.clone()).with_context(|| ori.clone())?;
             let has_out = is_output(&n);
             let typ = n.typ().clone();
             self.nodes.insert(top_id, n);

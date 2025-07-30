@@ -234,7 +234,7 @@ impl Expr {
                     );
                     let kind = ExprKind::Module { name, export, value };
                     info!("load and parse {ori:?} {:?}", ts.elapsed());
-                    return Ok(Expr { id, ori: parent.clone(), pos, kind });
+                    return Ok(Expr { id, ori: Arc::new(ori), pos, kind });
                 }
                 bail!("module {name} could not be found {errors:?}")
             });

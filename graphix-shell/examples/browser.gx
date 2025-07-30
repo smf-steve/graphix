@@ -1,8 +1,7 @@
 use tui;
 use tui::block;
 use tui::input_handler;
-mod bwidget;
-use bwidget;
+use tui::browser;
 
 let path = "/";
 let command_error: error = never();
