@@ -38,17 +38,20 @@ let block2rem = block(
   &{
      let position = 0;
      let handle_event = |e: Event| -> [`Stop, `Continue] select e {
-         `Key(k) => select k.code {
-             k@`Up if position > 0 => {
-                 position <- (k ~ position) - 1;
-                 `Stop
-             },
-             k@`Down if position < 150 => {
-                 position <- (k ~ position) + 1;
-                 `Stop
-             },
-             _ => `Continue
-         },
+         `Key(k) => select k.kind {
+            `Press => select k.code {
+                k@`Up if position > 0 => {
+                    position <- (k ~ position) - 1;
+                    `Stop
+                },
+                k@`Down if position < 150 => {
+                    position <- (k ~ position) + 1;
+                    `Stop
+                },
+                _ => `Continue
+            },
+            _ => `Continue
+        },
          _ => `Continue
      };
      input_handler(

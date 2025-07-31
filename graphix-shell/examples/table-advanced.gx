@@ -85,30 +85,33 @@ let max_idx = array::len(process_data) - 1;
 
 // Handle keyboard navigation
 let handle_event = |e: Event| -> [`Stop, `Continue] select e {
-    `Key(k) => select k.code {
-        k@`Up if selected > 0 => {
-            selected <- (k ~ selected) - 1;
-            `Stop
-        },
-        k@`Down if selected < max_idx => {
-            selected <- (k ~ selected) + 1;
-            `Stop
-        },
-        k@`Home => {
-            selected <- k ~ 0;
-            `Stop
-        },
-        k@`End => {
-            selected <- k ~ max_idx;
-            `Stop
-        },
-        k@`PageUp => {
-            selected <- max(0, (k ~ selected) - 5);
-            `Stop
-        },
-        k@`PageDown => {
-            selected <- min(max_idx, (k ~ selected) + 5);
-            `Stop
+    `Key(k) => select k.kind {
+        `Press => select k.code {
+            k@`Up if selected > 0 => {
+                selected <- (k ~ selected) - 1;
+                `Stop
+            },
+            k@`Down if selected < max_idx => {
+                selected <- (k ~ selected) + 1;
+                `Stop
+            },
+            k@`Home => {
+                selected <- k ~ 0;
+                `Stop
+            },
+            k@`End => {
+                selected <- k ~ max_idx;
+                `Stop
+            },
+            k@`PageUp => {
+                selected <- max(0, (k ~ selected) - 5);
+                `Stop
+            },
+            k@`PageDown => {
+                selected <- min(max_idx, (k ~ selected) + 5);
+                `Stop
+            },
+            _ => `Continue
         },
         _ => `Continue
     },

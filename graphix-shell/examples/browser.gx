@@ -81,9 +81,12 @@ let handle_command_mode_key = |e: KeyCode| -> [`Stop, `Continue] select e {
 };
 
 let handle_event = |e: Event| -> [`Stop, `Continue] select e {
-    `Key(e) => select e ~ command_mode {
-        true => handle_command_mode_key(e.code),
-        false => handle_normal_mode_key(e.code)
+    `Key(e) => select e.kind {
+        `Press => select e ~ command_mode {
+            true => handle_command_mode_key(e.code),
+            false => handle_normal_mode_key(e.code)
+        },
+        _ => `Continue
     },
     _ => `Continue
 };

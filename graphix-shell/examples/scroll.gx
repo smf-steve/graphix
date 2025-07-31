@@ -20,7 +20,10 @@ let handle_key = |k: KeyCode| -> [`Stop, `Continue] select k {
 };
 
 let handle_event = |e: Event| -> [`Stop, `Continue] select e {
-    `Key(k) => handle_key(k.code),
+    `Key(k) => select k.kind {
+        `Press => handle_key(k.code),
+        _ => `Continue
+    },
     _ => `Continue
 };
 
