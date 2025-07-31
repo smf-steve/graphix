@@ -3,7 +3,7 @@ use crate::{
     env::LambdaDef,
     expr::{Expr, ExprId, ModPath},
     typ::{FnArgType, FnType, Type},
-    wrap, Apply, BindId, Ctx, Event, ExecCtx, LambdaId, Node, Refs, Update, UserEvent,
+    wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, Refs, Rt, Update, UserEvent,
     REFS,
 };
 use anyhow::{bail, Context, Result};
@@ -43,15 +43,15 @@ fn check_extra_named(named: &FxHashMap<ArcStr, Expr>) -> Result<()> {
     Ok(())
 }
 
-fn compile_apply_args<C: Ctx, E: UserEvent>(
-    ctx: &mut ExecCtx<C, E>,
+fn compile_apply_args<R: Rt, E: UserEvent>(
+    ctx: &mut ExecCtx<R, E>,
     scope: &ModPath,
     top_id: ExprId,
     typ: &FnType,
     args: &TArc<[(Option<ArcStr>, Expr)]>,
-) -> Result<(Vec<Node<C, E>>, FxHashMap<ArcStr, bool>)> {
+) -> Result<(Vec<Node<R, E>>, FxHashMap<ArcStr, bool>)> {
     let mut named = FxHashMap::default();
-    let mut nodes: Vec<Node<C, E>> = vec![];
+    let mut nodes: Vec<Node<R, E>> = vec![];
     let mut arg_spec: FxHashMap<ArcStr, bool> = FxHashMap::default();
     check_named_args(&mut named, args)?;
     for a in typ.args.iter() {
@@ -83,25 +83,25 @@ fn compile_apply_args<C: Ctx, E: UserEvent>(
 }
 
 #[derive(Debug)]
-pub(crate) struct CallSite<C: Ctx, E: UserEvent> {
+pub(crate) struct CallSite<R: Rt, E: UserEvent> {
     pub(super) spec: TArc<Expr>,
     pub(super) ftype: TArc<FnType>,
-    pub(super) fnode: Node<C, E>,
-    pub(super) args: Vec<Node<C, E>>,
+    pub(super) fnode: Node<R, E>,
+    pub(super) args: Vec<Node<R, E>>,
     pub(super) arg_spec: FxHashMap<ArcStr, bool>, // true if arg is using the default value
-    pub(super) function: Option<(LambdaId, Box<dyn Apply<C, E>>)>,
+    pub(super) function: Option<(LambdaId, Box<dyn Apply<R, E>>)>,
     pub(super) top_id: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> CallSite<C, E> {
+impl<R: Rt, E: UserEvent> CallSite<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         args: &TArc<[(Option<ArcStr>, Expr)]>,
         f: &TArc<Expr>,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let fnode = compile(ctx, (**f).clone(), scope, top_id)?;
         let ftype = match &fnode.typ() {
             Type::Fn(ftype) => ftype.clone(),
@@ -119,8 +119,8 @@ impl<C: Ctx, E: UserEvent> CallSite<C, E> {
 
     fn bind(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        f: Arc<LambdaDef<C, E>>,
+        ctx: &mut ExecCtx<R, E>,
+        f: Arc<LambdaDef<R, E>>,
         event: &mut Event<E>,
         set: &mut Vec<BindId>,
     ) -> Result<()> {
@@ -191,8 +191,8 @@ impl<C: Ctx, E: UserEvent> CallSite<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for CallSite<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         macro_rules! error {
             ($m:literal) => {{
                 let m = format_compact!($m);
@@ -244,7 +244,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for CallSite<C, E> {
         }
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         let Self { spec: _, ftype: _, fnode, args, arg_spec: _, function, top_id: _ } =
             self;
         if let Some((_, f)) = function {
@@ -256,7 +256,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for CallSite<C, E> {
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         let Self { spec: _, ftype: _, fnode, args, arg_spec: _, function, top_id: _ } =
             self;
         if let Some((_, f)) = function {
@@ -276,7 +276,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for CallSite<C, E> {
         &self.spec
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         for n in self.args.iter_mut() {
             wrap!(n, n.typecheck(ctx))?
         }

@@ -2,7 +2,7 @@ use super::{compiler::compile, Cached};
 use crate::{
     expr::{Expr, ExprId, ExprKind, ModPath},
     typ::Type,
-    update_args, wrap, Ctx, Event, ExecCtx, Node, Refs, Update, UserEvent,
+    update_args, wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -12,21 +12,21 @@ use std::iter;
 use triomphe::Arc;
 
 #[derive(Debug)]
-pub(crate) struct Struct<C: Ctx, E: UserEvent> {
+pub(crate) struct Struct<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
     names: Box<[ArcStr]>,
-    n: Box<[Cached<C, E>]>,
+    n: Box<[Cached<R, E>]>,
 }
 
-impl<C: Ctx, E: UserEvent> Struct<C, E> {
+impl<R: Rt, E: UserEvent> Struct<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         args: &[(ArcStr, Expr)],
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let names: Box<[ArcStr]> = args.iter().map(|(n, _)| ctx.tag(n)).collect();
         let n = args
             .iter()
@@ -39,8 +39,8 @@ impl<C: Ctx, E: UserEvent> Struct<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Struct<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Struct<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if self.n.is_empty() && event.init {
             return Some(Value::Array(ValArray::from([])));
         }
@@ -65,11 +65,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Struct<C, E> {
         &self.typ
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.node.delete(ctx))
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.sleep(ctx))
     }
 
@@ -77,7 +77,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Struct<C, E> {
         self.n.iter().for_each(|n| n.node.refs(refs))
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         for n in self.n.iter_mut() {
             wrap!(n.node, n.node.typecheck(ctx))?
         }
@@ -101,30 +101,30 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Struct<C, E> {
 }
 
 #[derive(Debug)]
-struct Replace<C: Ctx, E: UserEvent> {
+struct Replace<R: Rt, E: UserEvent> {
     index: Option<usize>,
     name: Value,
-    n: Cached<C, E>,
+    n: Cached<R, E>,
 }
 
 #[derive(Debug)]
-pub(crate) struct StructWith<C: Ctx, E: UserEvent> {
+pub(crate) struct StructWith<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    source: Node<C, E>,
+    source: Node<R, E>,
     current: Option<ValArray>,
-    replace: Box<[Replace<C, E>]>,
+    replace: Box<[Replace<R, E>]>,
 }
 
-impl<C: Ctx, E: UserEvent> StructWith<C, E> {
+impl<R: Rt, E: UserEvent> StructWith<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         source: &Expr,
         replace: &[(ArcStr, Expr)],
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let source = compile(ctx, source.clone(), scope, top_id)?;
         let replace = replace
             .iter()
@@ -141,8 +141,8 @@ impl<C: Ctx, E: UserEvent> StructWith<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for StructWith<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for StructWith<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         let mut updated = self
             .source
             .update(ctx, event)
@@ -203,12 +203,12 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StructWith<C, E> {
         &self.typ
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.source.delete(ctx);
         self.replace.iter_mut().for_each(|r| r.n.node.delete(ctx))
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.source.sleep(ctx);
         self.replace.iter_mut().for_each(|r| r.n.sleep(ctx))
     }
@@ -218,7 +218,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StructWith<C, E> {
         self.replace.iter().for_each(|r| r.n.node.refs(refs))
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
         let fields = match &self.spec.kind {
             ExprKind::StructWith { source: _, replace } => {
@@ -261,23 +261,23 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StructWith<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct StructRef<C: Ctx, E: UserEvent> {
+pub(crate) struct StructRef<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    source: Node<C, E>,
+    source: Node<R, E>,
     field: Option<usize>,
     field_name: ArcStr,
 }
 
-impl<C: Ctx, E: UserEvent> StructRef<C, E> {
+impl<R: Rt, E: UserEvent> StructRef<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         source: &Expr,
         field_name: &ArcStr,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let source = compile(ctx, source.clone(), scope, top_id)?;
         let (typ, field) = match &source.typ() {
             Type::Struct(flds) => {
@@ -299,8 +299,8 @@ impl<C: Ctx, E: UserEvent> StructRef<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for StructRef<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for StructRef<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         match self.source.update(ctx, event) {
             Some(Value::Array(a)) => match self.field {
                 Some(i) => a.get(i).and_then(|v| match v {
@@ -334,11 +334,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StructRef<C, E> {
         self.source.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.source.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.source.sleep(ctx)
     }
 
@@ -350,7 +350,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StructRef<C, E> {
         &self.spec
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
         let etyp = self.source.typ().with_deref(|typ| match typ {
             Some(Type::Struct(flds)) => {
@@ -376,20 +376,20 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StructRef<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Tuple<C: Ctx, E: UserEvent> {
+pub(crate) struct Tuple<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    n: Box<[Cached<C, E>]>,
+    n: Box<[Cached<R, E>]>,
 }
 
-impl<C: Ctx, E: UserEvent> Tuple<C, E> {
+impl<R: Rt, E: UserEvent> Tuple<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         args: &[Expr],
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let n = args
             .iter()
             .map(|e| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
@@ -399,8 +399,8 @@ impl<C: Ctx, E: UserEvent> Tuple<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Tuple<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Tuple<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if self.n.is_empty() && event.init {
             return Some(Value::Array(ValArray::from([])));
         }
@@ -421,11 +421,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Tuple<C, E> {
         &self.typ
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.node.delete(ctx))
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.sleep(ctx))
     }
 
@@ -433,7 +433,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Tuple<C, E> {
         self.n.iter().for_each(|n| n.node.refs(refs))
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         for n in self.n.iter_mut() {
             wrap!(n.node, n.node.typecheck(ctx))?
         }
@@ -453,22 +453,22 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Tuple<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Variant<C: Ctx, E: UserEvent> {
+pub(crate) struct Variant<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
     tag: ArcStr,
-    n: Box<[Cached<C, E>]>,
+    n: Box<[Cached<R, E>]>,
 }
 
-impl<C: Ctx, E: UserEvent> Variant<C, E> {
+impl<R: Rt, E: UserEvent> Variant<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         tag: &ArcStr,
         args: &[Expr],
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let n = args
             .iter()
             .map(|e| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
@@ -480,8 +480,8 @@ impl<C: Ctx, E: UserEvent> Variant<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Variant<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Variant<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if self.n.len() == 0 {
             if event.init {
                 Some(Value::String(self.tag.clone()))
@@ -508,11 +508,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Variant<C, E> {
         &self.typ
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.node.delete(ctx))
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.sleep(ctx))
     }
 
@@ -520,7 +520,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Variant<C, E> {
         self.n.iter().for_each(|n| n.node.refs(refs))
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         for n in self.n.iter_mut() {
             wrap!(n.node, n.node.typecheck(ctx))?
         }
@@ -543,22 +543,22 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Variant<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct TupleRef<C: Ctx, E: UserEvent> {
+pub(crate) struct TupleRef<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    source: Node<C, E>,
+    source: Node<R, E>,
     field: usize,
 }
 
-impl<C: Ctx, E: UserEvent> TupleRef<C, E> {
+impl<R: Rt, E: UserEvent> TupleRef<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         source: &Expr,
         field: &usize,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let source = compile(ctx, source.clone(), scope, top_id)?;
         let field = *field;
         let typ = match &source.typ() {
@@ -571,8 +571,8 @@ impl<C: Ctx, E: UserEvent> TupleRef<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for TupleRef<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for TupleRef<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         self.source.update(ctx, event).and_then(|v| match v {
             Value::Array(a) => a.get(self.field).map(|v| v.clone()),
             _ => None,
@@ -591,15 +591,15 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for TupleRef<C, E> {
         self.source.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.source.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.source.sleep(ctx);
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
         let etyp = self.source.typ().with_deref(|typ| match typ {
             Some(Type::Tuple(flds)) if flds.len() > self.field => {

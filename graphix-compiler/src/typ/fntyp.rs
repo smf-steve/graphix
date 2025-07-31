@@ -2,7 +2,7 @@ use crate::{
     env::Env,
     expr::ModPath,
     typ::{TVar, Type},
-    Ctx, UserEvent,
+    Rt, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -269,9 +269,9 @@ impl FnType {
         }
     }
 
-    pub fn contains<C: Ctx, E: UserEvent>(
+    pub fn contains<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         t: &Self,
     ) -> Result<bool> {
         thread_local! {
@@ -280,9 +280,9 @@ impl FnType {
         HIST.with_borrow_mut(|hist| self.contains_int(env, hist, t))
     }
 
-    pub(super) fn contains_int<C: Ctx, E: UserEvent>(
+    pub(super) fn contains_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashMap<(usize, usize), bool>,
         t: &Self,
     ) -> Result<bool> {
@@ -358,9 +358,9 @@ impl FnType {
             && self.rtype.contains_int(env, hist, &t.rtype)?)
     }
 
-    pub fn check_contains<C: Ctx, E: UserEvent>(
+    pub fn check_contains<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         other: &Self,
     ) -> Result<()> {
         if !self.contains(env, other)? {
@@ -371,9 +371,9 @@ impl FnType {
 
     /// Return true if function signatures match. This is contains,
     /// but does not allow labeled argument subtyping.
-    pub fn sigmatch<C: Ctx, E: UserEvent>(
+    pub fn sigmatch<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         other: &Self,
     ) -> Result<bool> {
         let Self { args: args0, vargs: vargs0, rtype: rtype0, constraints: constraints0 } =
@@ -409,9 +409,9 @@ impl FnType {
                 .0)
     }
 
-    pub fn check_sigmatch<C: Ctx, E: UserEvent>(
+    pub fn check_sigmatch<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         other: &Self,
     ) -> Result<()> {
         if !self.sigmatch(env, other)? {

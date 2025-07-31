@@ -189,27 +189,27 @@ impl Refs {
     }
 }
 
-pub type Node<C, E> = Box<dyn Update<C, E>>;
+pub type Node<R, E> = Box<dyn Update<R, E>>;
 
-pub type BuiltInInitFn<C, E> = sync::Arc<
+pub type BuiltInInitFn<R, E> = sync::Arc<
     dyn for<'a, 'b, 'c> Fn(
-            &'a mut ExecCtx<C, E>,
+            &'a mut ExecCtx<R, E>,
             &'a FnType,
             &'b ModPath,
-            &'c [Node<C, E>],
+            &'c [Node<R, E>],
             ExprId,
-        ) -> Result<Box<dyn Apply<C, E>>>
+        ) -> Result<Box<dyn Apply<R, E>>>
         + Send
         + Sync
         + 'static,
 >;
 
-pub type InitFn<C, E> = sync::Arc<
+pub type InitFn<R, E> = sync::Arc<
     dyn for<'a, 'b> Fn(
-            &'a mut ExecCtx<C, E>,
-            &'b [Node<C, E>],
+            &'a mut ExecCtx<R, E>,
+            &'b [Node<R, E>],
             ExprId,
-        ) -> Result<Box<dyn Apply<C, E>>>
+        ) -> Result<Box<dyn Apply<R, E>>>
         + Send
         + Sync
         + 'static,
@@ -219,17 +219,17 @@ pub type InitFn<C, E> = sync::Arc<
 /// does not hold ownership of it's arguments, instead those are held
 /// by a CallSite node. This allows us to change the function called
 /// at runtime without recompiling the arguments.
-pub trait Apply<C: Ctx, E: UserEvent>: Debug + Send + Sync + Any {
+pub trait Apply<R: Rt, E: UserEvent>: Debug + Send + Sync + Any {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value>;
 
     /// delete any internally generated nodes, only needed for
     /// builtins that dynamically generate code at runtime
-    fn delete(&mut self, _ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, _ctx: &mut ExecCtx<R, E>) {
         ()
     }
 
@@ -237,8 +237,8 @@ pub trait Apply<C: Ctx, E: UserEvent>: Debug + Send + Sync + Any {
     /// builtins that take lambdas as arguments
     fn typecheck(
         &mut self,
-        _ctx: &mut ExecCtx<C, E>,
-        _from: &mut [Node<C, E>],
+        _ctx: &mut ExecCtx<R, E>,
+        _from: &mut [Node<R, E>],
     ) -> Result<()> {
         Ok(())
     }
@@ -264,22 +264,22 @@ pub trait Apply<C: Ctx, E: UserEvent>: Debug + Send + Sync + Any {
 
     /// put the node to sleep, used in conditions like select for branches that
     /// are not selected. Any cached values should be cleared on sleep.
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>);
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>);
 }
 
 /// Update represents a regular graph node, as opposed to a function
 /// application represented by Apply. Regular graph nodes are used for
 /// every built in node except for builtin functions.
-pub trait Update<C: Ctx, E: UserEvent>: Debug + Send + Sync + Any + 'static {
+pub trait Update<R: Rt, E: UserEvent>: Debug + Send + Sync + Any + 'static {
     /// update the node with the specified event and return any output
     /// it might generate
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value>;
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value>;
 
     /// delete the node and it's children from the specified context
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>);
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>);
 
     /// type check the node and it's children
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()>;
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()>;
 
     /// return the node type
     fn typ(&self) -> &Type;
@@ -292,17 +292,17 @@ pub trait Update<C: Ctx, E: UserEvent>: Debug + Send + Sync + Any + 'static {
     fn spec(&self) -> &Expr;
 
     /// put the node to sleep, called on unselected branches
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>);
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>);
 }
 
-pub trait BuiltIn<C: Ctx, E: UserEvent> {
+pub trait BuiltIn<R: Rt, E: UserEvent> {
     const NAME: &str;
     const TYP: LazyLock<FnType>;
 
-    fn init(ctx: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E>;
+    fn init(ctx: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E>;
 }
 
-pub trait Ctx: Debug + 'static {
+pub trait Rt: Debug + 'static {
     fn clear(&mut self);
 
     /// Subscribe to the specified netidx path. When the subscription
@@ -395,18 +395,18 @@ pub trait Ctx: Debug + 'static {
     fn set_timer(&mut self, id: BindId, timeout: Duration);
 }
 
-pub struct ExecCtx<C: Ctx, E: UserEvent> {
-    builtins: FxHashMap<&'static str, (FnType, BuiltInInitFn<C, E>)>,
+pub struct ExecCtx<R: Rt, E: UserEvent> {
+    builtins: FxHashMap<&'static str, (FnType, BuiltInInitFn<R, E>)>,
     tags: FxHashSet<ArcStr>,
-    pub env: Env<C, E>,
+    pub env: Env<R, E>,
     pub cached: FxHashMap<BindId, Value>,
-    pub user: C,
+    pub rt: R,
 }
 
-impl<C: Ctx, E: UserEvent> ExecCtx<C, E> {
+impl<R: Rt, E: UserEvent> ExecCtx<R, E> {
     pub fn clear(&mut self) {
         self.env.clear();
-        self.user.clear();
+        self.rt.clear();
     }
 
     /// Build a new execution context.
@@ -417,17 +417,17 @@ impl<C: Ctx, E: UserEvent> ExecCtx<C, E> {
     /// correctly the semantics of the language can be wrong.
     ///
     /// Most likely you want to use the `rt` module instead.
-    pub fn new(user: C) -> Self {
+    pub fn new(user: R) -> Self {
         Self {
             env: Env::new(),
             builtins: FxHashMap::default(),
             tags: FxHashSet::default(),
             cached: HashMap::default(),
-            user,
+            rt: user,
         }
     }
 
-    pub fn register_builtin<T: BuiltIn<C, E>>(&mut self) -> Result<()> {
+    pub fn register_builtin<T: BuiltIn<R, E>>(&mut self) -> Result<()> {
         let f = T::init(self);
         match self.builtins.entry(T::NAME) {
             Entry::Vacant(e) => {
@@ -443,7 +443,7 @@ impl<C: Ctx, E: UserEvent> ExecCtx<C, E> {
     /// cached. This will also call the user ctx set_var.
     pub fn set_var(&mut self, id: BindId, v: Value) {
         self.cached.insert(id, v.clone());
-        self.user.set_var(id, v)
+        self.rt.set_var(id, v)
     }
 
     fn tag(&mut self, s: &ArcStr) -> ArcStr {
@@ -460,11 +460,11 @@ impl<C: Ctx, E: UserEvent> ExecCtx<C, E> {
     /// duration of `f` restoring it to it's original value
     /// afterwords. `by_id` and `lambdas` defined by the closure will
     /// be retained.
-    pub fn with_restored<R, F: FnOnce(&mut Self) -> R>(
+    pub fn with_restored<T, F: FnOnce(&mut Self) -> T>(
         &mut self,
-        env: Env<C, E>,
+        env: Env<R, E>,
         f: F,
-    ) -> R {
+    ) -> T {
         let snap = self.env.restore_lexical_env(env);
         let orig = mem::replace(&mut self.env, snap);
         let r = f(self);
@@ -475,11 +475,11 @@ impl<C: Ctx, E: UserEvent> ExecCtx<C, E> {
 
 /// compile the expression into a node graph in the specified context
 /// and scope, return the root node or an error if compilation failed.
-pub fn compile<C: Ctx, E: UserEvent>(
-    ctx: &mut ExecCtx<C, E>,
+pub fn compile<R: Rt, E: UserEvent>(
+    ctx: &mut ExecCtx<R, E>,
     scope: &ModPath,
     spec: Expr,
-) -> Result<Node<C, E>> {
+) -> Result<Node<R, E>> {
     let top_id = spec.id;
     let env = ctx.env.clone();
     let st = Instant::now();

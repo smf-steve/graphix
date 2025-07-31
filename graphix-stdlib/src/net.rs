@@ -7,8 +7,7 @@ use graphix_compiler::{
     expr::{ExprId, ModPath},
     node::genn,
     typ::{FnType, Type},
-    Apply, BindId, BuiltIn, BuiltInInitFn, Ctx, Event, ExecCtx, LambdaId, Node,
-    UserEvent,
+    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Rt, UserEvent,
 };
 use netidx::{
     path::Path,
@@ -42,11 +41,11 @@ struct Write {
     dv: Either<(Path, Dval), Vec<Value>>,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Write {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Write {
     const NAME: &str = "write";
     deftype!("net", "fn(string, Any) -> _");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, top_id| {
             Ok(Box::new(Write {
                 args: CachedVals::new(from),
@@ -57,11 +56,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Write {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Write {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Write {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         fn set(dv: &mut Either<(Path, Dval), Vec<Value>>, val: &Value) {
@@ -94,7 +93,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Write {
                     return errf!("write(path, val): invalid path {path:?}");
                 }
                 Some(path) => {
-                    let dv = ctx.user.subscribe(
+                    let dv = ctx.rt.subscribe(
                         UpdatesFlags::empty(),
                         path.clone(),
                         self.top_id,
@@ -117,18 +116,18 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Write {
         None
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Either::Left((path, dv)) = &self.dv {
-            ctx.user.unsubscribe(path.clone(), dv.clone(), self.top_id)
+            ctx.rt.unsubscribe(path.clone(), dv.clone(), self.top_id)
         }
         self.dv = Either::Right(vec![])
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.args.clear();
         match &mut self.dv {
             Either::Left((path, dv)) => {
-                ctx.user.unsubscribe(path.clone(), dv.clone(), self.top_id);
+                ctx.rt.unsubscribe(path.clone(), dv.clone(), self.top_id);
                 self.dv = Either::Right(vec![])
             }
             Either::Right(_) => (),
@@ -152,22 +151,22 @@ struct Subscribe {
     top_id: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Subscribe {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Subscribe {
     const NAME: &str = "subscribe";
     deftype!("net", "fn(string) -> Any");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, top_id| {
             Ok(Box::new(Subscribe { args: CachedVals::new(from), cur: None, top_id }))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Subscribe {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Subscribe {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         let mut up = [false; 1];
@@ -177,7 +176,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Subscribe {
             (Some(_), false) | (None, false) => (),
             (None, true) => {
                 if let Some((path, dv)) = self.cur.take() {
-                    ctx.user.unsubscribe(path, dv, self.top_id)
+                    ctx.rt.unsubscribe(path, dv, self.top_id)
                 }
                 return None;
             }
@@ -185,13 +184,13 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Subscribe {
                 if self.cur.as_ref().map(|(p, _)| &**p) != Some(&*path) =>
             {
                 if let Some((path, dv)) = self.cur.take() {
-                    ctx.user.unsubscribe(path, dv, self.top_id)
+                    ctx.rt.unsubscribe(path, dv, self.top_id)
                 }
                 let path = Path::from(path);
                 if !Path::is_absolute(&path) {
                     return errf!("expected absolute path");
                 }
-                let dval = ctx.user.subscribe(
+                let dval = ctx.rt.subscribe(
                     UpdatesFlags::BEGIN_WITH_LAST,
                     path.clone(),
                     self.top_id,
@@ -209,16 +208,16 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Subscribe {
         })
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some((path, dv)) = self.cur.take() {
-            ctx.user.unsubscribe(path, dv, self.top_id)
+            ctx.rt.unsubscribe(path, dv, self.top_id)
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.args.clear();
         if let Some((path, dv)) = self.cur.take() {
-            ctx.user.unsubscribe(path, dv, self.top_id);
+            ctx.rt.unsubscribe(path, dv, self.top_id);
         }
     }
 }
@@ -230,24 +229,24 @@ struct RpcCall {
     id: BindId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for RpcCall {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for RpcCall {
     const NAME: &str = "call";
     deftype!("net", "fn(string, Array<(string, Any)>) -> Any");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, from, top_id| {
             let id = BindId::new();
-            ctx.user.ref_var(id, top_id);
+            ctx.rt.ref_var(id, top_id);
             Ok(Box::new(RpcCall { args: CachedVals::new(from), top_id, id }))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for RpcCall {
+impl<R: Rt, E: UserEvent> Apply<R, E> for RpcCall {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         fn parse_args(
@@ -279,21 +278,21 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for RpcCall {
             ((Some(path), Some(args)), (_, true))
             | ((Some(path), Some(args)), (true, _)) => match parse_args(path, args) {
                 Err(e) => return errf!("{e}"),
-                Ok((path, args)) => ctx.user.call_rpc(path, args, self.id),
+                Ok((path, args)) => ctx.rt.call_rpc(path, args, self.id),
             },
             ((None, _), (_, _)) | ((_, None), (_, _)) | ((_, _), (false, false)) => (),
         }
         event.variables.get(&self.id).cloned()
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id)
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
         self.id = BindId::new();
-        ctx.user.ref_var(self.id, self.top_id);
+        ctx.rt.ref_var(self.id, self.top_id);
         self.args.clear()
     }
 }
@@ -308,14 +307,14 @@ macro_rules! list {
             top_id: ExprId,
         }
 
-        impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for $name {
+        impl<R: Rt, E: UserEvent> BuiltIn<R, E> for $name {
             const NAME: &str = $builtin;
             deftype!("net", $typ);
 
-            fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+            fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
                 Arc::new(|ctx, _, _, from, top_id| {
                     let id = BindId::new();
-                    ctx.user.ref_var(id, top_id);
+                    ctx.rt.ref_var(id, top_id);
                     Ok(Box::new($name {
                         args: CachedVals::new(from),
                         current: None,
@@ -326,11 +325,11 @@ macro_rules! list {
             }
         }
 
-        impl<C: Ctx, E: UserEvent> Apply<C, E> for $name {
+        impl<R: Rt, E: UserEvent> Apply<R, E> for $name {
             fn update(
                 &mut self,
-                ctx: &mut ExecCtx<C, E>,
-                from: &mut [Node<C, E>],
+                ctx: &mut ExecCtx<R, E>,
+                from: &mut [Node<R, E>],
                 event: &mut Event<E>,
             ) -> Option<Value> {
                 let mut up = [false; 2];
@@ -346,10 +345,10 @@ macro_rules! list {
                     {
                         let path = Path::from(path);
                         self.current = Some(path.clone());
-                        ctx.user.$method(self.id, path);
+                        ctx.rt.$method(self.id, path);
                     }
                     (Some(Value::String(path)), _, true) => {
-                        ctx.user.$method(self.id, Path::from(path));
+                        ctx.rt.$method(self.id, Path::from(path));
                     }
                     _ => (),
                 }
@@ -359,16 +358,16 @@ macro_rules! list {
                 })
             }
 
-            fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-                ctx.user.unref_var(self.id, self.top_id);
-                ctx.user.stop_list(self.id);
+            fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+                ctx.rt.unref_var(self.id, self.top_id);
+                ctx.rt.stop_list(self.id);
             }
 
-            fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
-                ctx.user.unref_var(self.id, self.top_id);
-                ctx.user.stop_list(self.id);
+            fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+                ctx.rt.unref_var(self.id, self.top_id);
+                ctx.rt.stop_list(self.id);
                 self.id = BindId::new();
-                ctx.user.ref_var(self.id, self.top_id);
+                ctx.rt.ref_var(self.id, self.top_id);
                 self.current = None;
                 self.args.clear();
             }
@@ -380,21 +379,21 @@ list!(List, "list", list, "fn(?#update:Any, string) -> Array<string>");
 list!(ListTable, "list_table", list_table, "fn(?#update:Any, string) -> Table");
 
 #[derive(Debug)]
-struct Publish<C: Ctx, E: UserEvent> {
+struct Publish<R: Rt, E: UserEvent> {
     args: CachedVals,
     current: Option<(Path, Val)>,
     top_id: ExprId,
     mftyp: TArc<FnType>,
     x: BindId,
     pid: BindId,
-    on_write: Node<C, E>,
+    on_write: Node<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Publish<C, E> {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Publish<R, E> {
     const NAME: &str = "publish";
     deftype!("net", "fn(?#on_write:fn(Any) -> _, string, Any) -> error");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [_, _, _] => {
                 let scope =
@@ -424,17 +423,17 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Publish<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Publish<C, E> {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Publish<R, E> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         macro_rules! publish {
             ($path:expr, $v:expr) => {{
                 let path = Path::from($path.clone());
-                match ctx.user.publish(path.clone(), $v.clone(), self.top_id) {
+                match ctx.rt.publish(path.clone(), $v.clone(), self.top_id) {
                     Err(e) => return Some(Value::Error(format!("{e:?}").into())),
                     Ok(id) => {
                         self.current = Some((path, id));
@@ -455,12 +454,12 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Publish<C, E> {
                 if self.current.as_ref().map(|(p, _)| &**p != path).unwrap_or(true) =>
             {
                 if let Some((_, id)) = self.current.take() {
-                    ctx.user.unpublish(id, self.top_id);
+                    ctx.rt.unpublish(id, self.top_id);
                 }
                 publish!(path, v)
             }
             ([_, true], [Some(Value::String(path)), Some(v)]) => match &self.current {
-                Some((_, val)) => ctx.user.update(val, v.clone()),
+                Some((_, val)) => ctx.rt.update(val, v.clone()),
                 None => publish!(path, v),
             },
             _ => (),
@@ -483,8 +482,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Publish<C, E> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
         for n in from.iter_mut() {
             n.typecheck(ctx)?;
@@ -499,9 +498,9 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Publish<C, E> {
         self.on_write.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some((_, val)) = self.current.take() {
-            ctx.user.unpublish(val, self.top_id);
+            ctx.rt.unpublish(val, self.top_id);
         }
         ctx.cached.remove(&self.pid);
         ctx.cached.remove(&self.x);
@@ -509,9 +508,9 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Publish<C, E> {
         self.on_write.delete(ctx);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some((_, val)) = self.current.take() {
-            ctx.user.unpublish(val, self.top_id);
+            ctx.rt.unpublish(val, self.top_id);
         }
         self.args.clear();
         self.on_write.sleep(ctx);
@@ -519,11 +518,11 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Publish<C, E> {
 }
 
 #[derive(Debug)]
-struct PublishRpc<C: Ctx, E: UserEvent> {
+struct PublishRpc<R: Rt, E: UserEvent> {
     args: CachedVals,
     id: BindId,
     top_id: ExprId,
-    f: Node<C, E>,
+    f: Node<R, E>,
     pid: BindId,
     x: BindId,
     typ: TArc<FnType>,
@@ -533,14 +532,14 @@ struct PublishRpc<C: Ctx, E: UserEvent> {
     current: Option<Path>,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for PublishRpc<C, E> {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for PublishRpc<R, E> {
     const NAME: &str = "publish_rpc";
     deftype!(
         "net",
         "fn(#path:string, #doc:string, #spec:Array<ArgSpec>, #f:fn(Array<(string, Any)>) -> Any) -> _"
     );
 
-    fn init(_ctx: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_ctx: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [_, _, _, _] => {
                 let scope =
@@ -548,7 +547,7 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for PublishRpc<C, E> {
                         format_compact!("fn{}", LambdaId::new().inner()).as_str(),
                     ));
                 let id = BindId::new();
-                ctx.user.ref_var(id, top_id);
+                ctx.rt.ref_var(id, top_id);
                 let pid = BindId::new();
                 let mftyp = match &typ.args[3].typ {
                     Type::Fn(ft) => ft.clone(),
@@ -577,11 +576,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for PublishRpc<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for PublishRpc<C, E> {
+impl<R: Rt, E: UserEvent> Apply<R, E> for PublishRpc<R, E> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         macro_rules! snd {
@@ -602,7 +601,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for PublishRpc<C, E> {
         }
         if changed[0] || changed[1] || changed[2] {
             if let Some(path) = self.current.take() {
-                ctx.user.unpublish_rpc(path);
+                ctx.rt.unpublish_rpc(path);
             }
             if let (Some(Value::String(path)), Some(doc), Some(Value::Array(spec))) =
                 (&self.args.0[0], &self.args.0[1], &self.args.0[2])
@@ -621,7 +620,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for PublishRpc<C, E> {
                     })
                     .collect::<Vec<_>>();
                 if let Err(e) =
-                    ctx.user.publish_rpc(path.clone(), doc.clone(), spec, self.id)
+                    ctx.rt.publish_rpc(path.clone(), doc.clone(), spec, self.id)
                 {
                     let e = Value::Error(format_compact!("{e:?}").as_str().into());
                     return Some(e);
@@ -669,8 +668,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for PublishRpc<C, E> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
     ) -> Result<()> {
         for n in from.iter_mut() {
             n.typecheck(ctx)?;
@@ -686,10 +685,10 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for PublishRpc<C, E> {
         self.f.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
         if let Some(path) = self.current.take() {
-            ctx.user.unpublish_rpc(path);
+            ctx.rt.unpublish_rpc(path);
         }
         ctx.cached.remove(&self.x);
         ctx.env.unbind_variable(self.x);
@@ -697,12 +696,12 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for PublishRpc<C, E> {
         self.f.delete(ctx);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
         self.id = BindId::new();
-        ctx.user.ref_var(self.id, self.top_id);
+        ctx.rt.ref_var(self.id, self.top_id);
         if let Some(path) = self.current.take() {
-            ctx.user.unpublish_rpc(path);
+            ctx.rt.unpublish_rpc(path);
         }
         self.args.clear();
         self.queue.clear();
@@ -712,13 +711,13 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for PublishRpc<C, E> {
     }
 }
 
-pub(super) fn register<C: Ctx, E: UserEvent>(ctx: &mut ExecCtx<C, E>) -> Result<ArcStr> {
+pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Write>()?;
     ctx.register_builtin::<Subscribe>()?;
     ctx.register_builtin::<RpcCall>()?;
     ctx.register_builtin::<List>()?;
     ctx.register_builtin::<ListTable>()?;
-    ctx.register_builtin::<Publish<C, E>>()?;
-    ctx.register_builtin::<PublishRpc<C, E>>()?;
+    ctx.register_builtin::<Publish<R, E>>()?;
+    ctx.register_builtin::<PublishRpc<R, E>>()?;
     Ok(literal!(include_str!("net.gx")))
 }

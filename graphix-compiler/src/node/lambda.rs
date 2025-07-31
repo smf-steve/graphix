@@ -4,7 +4,7 @@ use crate::{
     expr::{self, Arg, Expr, ExprId, ModPath},
     node::pattern::StructPatternNode,
     typ::{FnArgType, FnType, TVar, Type},
-    wrap, Apply, Ctx, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Update, UserEvent,
+    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -17,17 +17,17 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc as SArc};
 use triomphe::Arc;
 
 #[derive(Debug)]
-struct GXLambda<C: Ctx, E: UserEvent> {
+struct GXLambda<R: Rt, E: UserEvent> {
     args: Box<[StructPatternNode]>,
-    body: Node<C, E>,
+    body: Node<R, E>,
     typ: Arc<FnType>,
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for GXLambda<C, E> {
+impl<R: Rt, E: UserEvent> Apply<R, E> for GXLambda<R, E> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         for (arg, pat) in from.iter_mut().zip(&self.args) {
@@ -43,8 +43,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for GXLambda<C, E> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        args: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        args: &mut [Node<R, E>],
     ) -> Result<()> {
         for (arg, FnArgType { typ, .. }) in args.iter_mut().zip(self.typ.args.iter()) {
             wrap!(arg, arg.typecheck(ctx))?;
@@ -71,24 +71,24 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for GXLambda<C, E> {
         self.body.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.body.delete(ctx);
         for n in &self.args {
             n.delete(ctx)
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.body.sleep(ctx);
     }
 }
 
-impl<C: Ctx, E: UserEvent> GXLambda<C, E> {
+impl<R: Rt, E: UserEvent> GXLambda<R, E> {
     pub(super) fn new(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         typ: Arc<FnType>,
         argspec: Arc<[Arg]>,
-        args: &[Node<C, E>],
+        args: &[Node<R, E>],
         scope: &ModPath,
         tid: ExprId,
         body: Expr,
@@ -113,16 +113,16 @@ impl<C: Ctx, E: UserEvent> GXLambda<C, E> {
 }
 
 #[derive(Debug)]
-struct BuiltInLambda<C: Ctx, E: UserEvent> {
+struct BuiltInLambda<R: Rt, E: UserEvent> {
     typ: Arc<FnType>,
-    apply: Box<dyn Apply<C, E> + Send + Sync + 'static>,
+    apply: Box<dyn Apply<R, E> + Send + Sync + 'static>,
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for BuiltInLambda<C, E> {
+impl<R: Rt, E: UserEvent> Apply<R, E> for BuiltInLambda<R, E> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         self.apply.update(ctx, from, event)
@@ -130,8 +130,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for BuiltInLambda<C, E> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        args: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        args: &mut [Node<R, E>],
     ) -> Result<()> {
         if args.len() < self.typ.args.len()
             || (args.len() > self.typ.args.len() && self.typ.vargs.is_none())
@@ -168,31 +168,31 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for BuiltInLambda<C, E> {
         self.apply.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.apply.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.apply.sleep(ctx);
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct Lambda<C: Ctx, E: UserEvent> {
+pub(crate) struct Lambda<R: Rt, E: UserEvent> {
     top_id: ExprId,
     spec: Expr,
-    def: SArc<LambdaDef<C, E>>,
+    def: SArc<LambdaDef<R, E>>,
     typ: Type,
 }
 
-impl<C: Ctx, E: UserEvent> Lambda<C, E> {
+impl<R: Rt, E: UserEvent> Lambda<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         l: &expr::Lambda,
         top_id: ExprId,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let mut s: SmallVec<[&ArcStr; 16]> = smallvec![];
         for a in l.args.iter() {
             a.pattern.with_names(&mut |n| s.push(n));
@@ -275,7 +275,7 @@ impl<C: Ctx, E: UserEvent> Lambda<C, E> {
         let _typ = typ.clone();
         let _argspec = argspec.clone();
         let body = l.body.clone();
-        let init: InitFn<C, E> = SArc::new(move |ctx, args, tid| {
+        let init: InitFn<R, E> = SArc::new(move |ctx, args, tid| {
             // restore the lexical environment to the state it was in
             // when the closure was created
             ctx.with_restored(_env.clone(), |ctx| match body.clone() {
@@ -290,7 +290,7 @@ impl<C: Ctx, E: UserEvent> Lambda<C, E> {
                         body.clone(),
                     );
                     apply.map(|a| {
-                        let f: Box<dyn Apply<C, E>> = Box::new(a);
+                        let f: Box<dyn Apply<R, E>> = Box::new(a);
                         f
                     })
                 }
@@ -299,7 +299,7 @@ impl<C: Ctx, E: UserEvent> Lambda<C, E> {
                     Some((_, init)) => {
                         let init = SArc::clone(init);
                         init(ctx, &_typ, &_scope, args, tid).map(|apply| {
-                            let f: Box<dyn Apply<C, E>> =
+                            let f: Box<dyn Apply<R, E>> =
                                 Box::new(BuiltInLambda { typ: _typ.clone(), apply });
                             f
                         })
@@ -314,10 +314,10 @@ impl<C: Ctx, E: UserEvent> Lambda<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Lambda<C, E> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
     fn update(
         &mut self,
-        _ctx: &mut ExecCtx<C, E>,
+        _ctx: &mut ExecCtx<R, E>,
         event: &mut Event<E>,
     ) -> Option<Value> {
         if event.init {
@@ -333,19 +333,19 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Lambda<C, E> {
 
     fn refs(&self, _refs: &mut Refs) {}
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         ctx.env.lambdas.remove_cow(&self.def.id);
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
     fn typ(&self) -> &Type {
         &self.typ
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         self.typ.unbind_tvars();
-        let mut faux_args: Vec<Node<C, E>> = self
+        let mut faux_args: Vec<Node<R, E>> = self
             .def
             .argspec
             .iter()
@@ -355,7 +355,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Lambda<C, E> {
                     compile(ctx, e.clone(), &self.def.scope, self.top_id)
                 }),
                 Some(None) | None => {
-                    let n: Node<C, E> = Box::new(Nop { typ: at.typ.clone() });
+                    let n: Node<R, E> = Box::new(Nop { typ: at.typ.clone() });
                     Ok(n)
                 }
             })

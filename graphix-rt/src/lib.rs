@@ -26,7 +26,7 @@ use graphix_compiler::{
     },
     node::genn,
     typ::{FnType, Type},
-    BindId, Ctx, Event, ExecCtx, LambdaId, NoUserEvent, Node, REFS,
+    BindId, Event, ExecCtx, LambdaId, NoUserEvent, Node, Rt, REFS,
 };
 use indexmap::IndexMap;
 use log::{debug, error, info};
@@ -84,7 +84,7 @@ struct RpcClient {
 }
 
 #[derive(Debug)]
-pub struct GXCtx {
+pub struct GXRt {
     by_ref: FxHashMap<BindId, FxHashMap<ExprId, usize>>,
     subscribed: FxHashMap<SubId, FxHashMap<ExprId, usize>>,
     published: FxHashMap<Id, FxHashMap<ExprId, usize>>,
@@ -108,7 +108,7 @@ pub struct GXCtx {
     rpcs: mpsc::Receiver<(BindId, RpcCall)>,
 }
 
-impl GXCtx {
+impl GXRt {
     pub fn new(publisher: Publisher, subscriber: Subscriber) -> Self {
         let (updates_tx, updates) = mpsc::channel(100);
         let (writes_tx, writes) = mpsc::channel(100);
@@ -167,7 +167,7 @@ macro_rules! check_changed {
     };
 }
 
-impl Ctx for GXCtx {
+impl Rt for GXRt {
     fn clear(&mut self) {
         let Self {
             by_ref,
@@ -407,7 +407,7 @@ impl Ctx for GXCtx {
     }
 }
 
-fn is_output(n: &Node<GXCtx, NoUserEvent>) -> bool {
+fn is_output(n: &Node<GXRt, NoUserEvent>) -> bool {
     match &n.spec().kind {
         ExprKind::Bind { .. }
         | ExprKind::Lambda { .. }
@@ -473,13 +473,13 @@ impl Drop for CompExp {
 
 pub struct CompRes {
     pub exprs: SmallVec<[CompExp; 1]>,
-    pub env: Env<GXCtx, NoUserEvent>,
+    pub env: Env<GXRt, NoUserEvent>,
 }
 
 #[derive(Clone)]
 pub enum RtEvent {
     Updated(ExprId, Value),
-    Env(Env<GXCtx, NoUserEvent>),
+    Env(Env<GXRt, NoUserEvent>),
 }
 
 static BATCH: LazyLock<Pool<Vec<RtEvent>>> = LazyLock::new(|| Pool::new(10, 1000000));
@@ -516,7 +516,7 @@ atomic_id!(CallableId);
 pub struct Callable {
     rt: GXHandle,
     id: CallableId,
-    env: Env<GXCtx, NoUserEvent>,
+    env: Env<GXRt, NoUserEvent>,
     pub typ: FnType,
     pub expr: ExprId,
 }
@@ -554,7 +554,7 @@ impl Callable {
 }
 
 enum ToRt {
-    GetEnv { res: oneshot::Sender<Env<GXCtx, NoUserEvent>> },
+    GetEnv { res: oneshot::Sender<Env<GXRt, NoUserEvent>> },
     Delete { id: ExprId },
     Load { path: PathBuf, rt: GXHandle, res: oneshot::Sender<Result<CompRes>> },
     Compile { text: ArcStr, rt: GXHandle, res: oneshot::Sender<Result<CompRes>> },
@@ -571,10 +571,10 @@ struct CallableInt {
 }
 
 struct GX {
-    ctx: ExecCtx<GXCtx, NoUserEvent>,
+    ctx: ExecCtx<GXRt, NoUserEvent>,
     event: Event<NoUserEvent>,
     updated: FxHashMap<ExprId, bool>,
-    nodes: IndexMap<ExprId, Node<GXCtx, NoUserEvent>, FxBuildHasher>,
+    nodes: IndexMap<ExprId, Node<GXRt, NoUserEvent>, FxBuildHasher>,
     callables: FxHashMap<CallableId, CallableInt>,
     sub: tmpsc::Sender<Pooled<Vec<RtEvent>>>,
     resolvers: Arc<[ModuleResolver]>,
@@ -594,7 +594,7 @@ impl GX {
         match std::env::var("GRAPHIX_MODPATH") {
             Err(_) => resolvers_default(&mut rt.resolvers),
             Ok(mp) => match ModuleResolver::parse_env(
-                rt.ctx.user.subscriber.clone(),
+                rt.ctx.rt.subscriber.clone(),
                 rt.resolve_timeout,
                 &mp,
             ) {
@@ -639,34 +639,34 @@ impl GX {
                 match self.event.$event.entry($id) {
                     Entry::Vacant(e) => {
                         e.insert($v);
-                        if let Some(exps) = self.ctx.user.$refed.get(&$id) {
+                        if let Some(exps) = self.ctx.rt.$refed.get(&$id) {
                             for id in exps.keys() {
                                 self.updated.entry(*id).or_insert(false);
                             }
                         }
                     }
                     Entry::Occupied(_) => {
-                        self.ctx.user.$overflow.push_back(($id, $v));
+                        self.ctx.rt.$overflow.push_back(($id, $v));
                     }
                 }
             };
         }
-        for _ in 0..self.ctx.user.var_updates.len() {
-            let (id, v) = self.ctx.user.var_updates.pop_front().unwrap();
+        for _ in 0..self.ctx.rt.var_updates.len() {
+            let (id, v) = self.ctx.rt.var_updates.pop_front().unwrap();
             push_event!(id, v, variables, by_ref, var_updates)
         }
         for (id, v) in tasks.drain(..) {
             push_event!(id, v, variables, by_ref, var_updates)
         }
-        for _ in 0..self.ctx.user.rpc_overflow.len() {
-            let (id, v) = self.ctx.user.rpc_overflow.pop_front().unwrap();
+        for _ in 0..self.ctx.rt.rpc_overflow.len() {
+            let (id, v) = self.ctx.rt.rpc_overflow.pop_front().unwrap();
             push_event!(id, v, rpc_calls, by_ref, rpc_overflow)
         }
         for (id, v) in rpcs.drain(..) {
             push_event!(id, v, rpc_calls, by_ref, rpc_overflow)
         }
-        for _ in 0..self.ctx.user.net_updates.len() {
-            let (id, v) = self.ctx.user.net_updates.pop_front().unwrap();
+        for _ in 0..self.ctx.rt.net_updates.len() {
+            let (id, v) = self.ctx.rt.net_updates.pop_front().unwrap();
             push_event!(id, v, netidx, subscribed, net_updates)
         }
         if let Some(mut updates) = updates {
@@ -674,8 +674,8 @@ impl GX {
                 push_event!(id, v, netidx, subscribed, net_updates)
             }
         }
-        for _ in 0..self.ctx.user.net_writes.len() {
-            let (id, v) = self.ctx.user.net_writes.pop_front().unwrap();
+        for _ in 0..self.ctx.rt.net_writes.len() {
+            let (id, v) = self.ctx.rt.net_writes.pop_front().unwrap();
             push_event!(id, v, writes, published, net_writes)
         }
         if let Some(mut writes) = writes {
@@ -736,11 +736,9 @@ impl GX {
         }
         self.event.clear();
         self.updated.clear();
-        if self.ctx.user.batch.len() > 0 {
-            let batch = mem::replace(
-                &mut self.ctx.user.batch,
-                self.ctx.user.publisher.start_batch(),
-            );
+        if self.ctx.rt.batch.len() > 0 {
+            let batch =
+                mem::replace(&mut self.ctx.rt.batch, self.ctx.rt.publisher.start_batch());
             let timeout = self.publish_timeout;
             task::spawn(async move { batch.commit(timeout).await });
         }
@@ -791,10 +789,10 @@ impl GX {
     }
 
     fn cycle_ready(&self) -> bool {
-        self.ctx.user.var_updates.len() > 0
-            || self.ctx.user.net_updates.len() > 0
-            || self.ctx.user.net_writes.len() > 0
-            || self.ctx.user.rpc_overflow.len() > 0
+        self.ctx.rt.var_updates.len() > 0
+            || self.ctx.rt.net_updates.len() > 0
+            || self.ctx.rt.net_writes.len() > 0
+            || self.ctx.rt.rpc_overflow.len() > 0
     }
 
     async fn compile_root(&mut self, text: ArcStr) -> Result<()> {
@@ -1018,8 +1016,8 @@ impl GX {
             let mut writes = None;
             macro_rules! peek {
                 (updates) => {
-                    if self.ctx.user.net_updates.is_empty() {
-                        while let Ok(Some(mut up)) = self.ctx.user.updates.try_next() {
+                    if self.ctx.rt.net_updates.is_empty() {
+                        while let Ok(Some(mut up)) = self.ctx.rt.updates.try_next() {
                             match &mut updates {
                                 None => updates = Some(up),
                                 Some(prev) => prev.extend(up.drain(..)),
@@ -1028,20 +1026,20 @@ impl GX {
                     }
                 };
                 (writes) => {
-                    if self.ctx.user.net_writes.is_empty() {
-                        if let Ok(Some(wr)) = self.ctx.user.writes.try_next() {
+                    if self.ctx.rt.net_writes.is_empty() {
+                        if let Ok(Some(wr)) = self.ctx.rt.writes.try_next() {
                             writes = Some(wr);
                         }
                     }
                 };
                 (tasks) => {
-                    while let Some(Ok(up)) = self.ctx.user.tasks.try_join_next() {
+                    while let Some(Ok(up)) = self.ctx.rt.tasks.try_join_next() {
                         tasks.push(up);
                     }
                 };
                 (rpcs) => {
-                    if self.ctx.user.rpc_overflow.is_empty() {
-                        while let Ok(Some(up)) = self.ctx.user.rpcs.try_next() {
+                    if self.ctx.rt.rpc_overflow.is_empty() {
+                        while let Ok(Some(up)) = self.ctx.rt.rpcs.try_next() {
                             rpcs.push(up);
                         }
                     }
@@ -1057,27 +1055,27 @@ impl GX {
             }
             select! {
                 rp = maybe_next(
-                    self.ctx.user.rpc_overflow.is_empty(),
-                    &mut self.ctx.user.rpcs
+                    self.ctx.rt.rpc_overflow.is_empty(),
+                    &mut self.ctx.rt.rpcs
                 ) => {
                     rpcs.push(rp);
                     peek!(updates, tasks, writes, rpcs, input)
                 }
                 wr = maybe_next(
-                    self.ctx.user.net_writes.is_empty(),
-                    &mut self.ctx.user.writes
+                    self.ctx.rt.net_writes.is_empty(),
+                    &mut self.ctx.rt.writes
                 ) => {
                     writes = Some(wr);
                     peek!(updates, tasks, rpcs, input);
                 },
                 up = maybe_next(
-                    self.ctx.user.net_updates.is_empty(),
-                    &mut self.ctx.user.updates
+                    self.ctx.rt.net_updates.is_empty(),
+                    &mut self.ctx.rt.updates
                 ) => {
                     updates = Some(up);
                     peek!(updates, writes, tasks, rpcs, input);
                 },
-                up = join_or_wait(&mut self.ctx.user.tasks) => {
+                up = join_or_wait(&mut self.ctx.rt.tasks) => {
                     if let Ok(up) = up {
                         tasks.push(up);
                     }
@@ -1092,10 +1090,10 @@ impl GX {
                     }
                     peek!(updates, writes, tasks, rpcs);
                 },
-                () = unsubscribe_ready(&self.ctx.user.pending_unsubscribe, now) => {
-                    while let Some((ts, _)) = self.ctx.user.pending_unsubscribe.front() {
+                () = unsubscribe_ready(&self.ctx.rt.pending_unsubscribe, now) => {
+                    while let Some((ts, _)) = self.ctx.rt.pending_unsubscribe.front() {
                         if ts.elapsed() >= Duration::from_secs(1) {
-                            self.ctx.user.pending_unsubscribe.pop_front();
+                            self.ctx.rt.pending_unsubscribe.pop_front();
                         } else {
                             break
                         }
@@ -1109,18 +1107,19 @@ impl GX {
                 updates, writes, &mut tasks, &mut rpcs, &mut to_rt, &mut input, batch,
             )
             .await;
-            if !self.ctx.user.rpc_clients.is_empty() {
+            if !self.ctx.rt.rpc_clients.is_empty() {
                 if now - self.last_rpc_gc >= onemin {
                     self.last_rpc_gc = now;
-                    self.ctx.user.rpc_clients.retain(|_, c| now - c.last_used <= onemin);
+                    self.ctx.rt.rpc_clients.retain(|_, c| now - c.last_used <= onemin);
                 }
             }
         }
     }
 }
 
-/// A handle to a running GX instance. Drop the handle to shutdown the
-/// associated background tasks.
+/// A handle to a running GX instance.
+///
+/// Drop the handle to shutdown the associated background tasks.
 #[derive(Clone)]
 pub struct GXHandle(tmpsc::UnboundedSender<ToRt>);
 
@@ -1132,33 +1131,38 @@ impl GXHandle {
     }
 
     /// Get a copy of the current graphix environment
-    pub async fn get_env(&self) -> Result<Env<GXCtx, NoUserEvent>> {
+    pub async fn get_env(&self) -> Result<Env<GXRt, NoUserEvent>> {
         self.exec(|res| ToRt::GetEnv { res }).await
     }
 
-    /// Compile and execute the specified graphix expression. If it generates
-    /// results, they will be sent to all the channels that are subscribed. When
-    /// the `CompExp` objects contained in the `CompRes` are dropped their
-    /// corresponding expressions will be deleted. Therefore, you can stop
-    /// execution of the whole expression by dropping the returned `CompRes`.
+    /// Compile and execute the specified graphix expression.
+    ///
+    /// If it generates results, they will be sent to all the channels that are
+    /// subscribed. When the `CompExp` objects contained in the `CompRes` are
+    /// dropped their corresponding expressions will be deleted. Therefore, you
+    /// can stop execution of the whole expression by dropping the returned
+    /// `CompRes`.
     pub async fn compile(&self, text: ArcStr) -> Result<CompRes> {
         Ok(self.exec(|tx| ToRt::Compile { text, res: tx, rt: self.clone() }).await??)
     }
 
-    /// Load and execute the specified graphix module. The path may have one of
-    /// two forms. If it is the path to a file with extension .bs then the rt
-    /// will load the file directly. If it is a modpath (e.g. foo::bar::baz)
-    /// then the module resolver will look for a matching module in the modpath.
-    /// When the `CompExp` objects contained in the `CompRes` are dropped their
-    /// corresponding expressions will be deleted. Therefore, you can stop
-    /// execution of the whole file by dropping the returned `CompRes`.
+    /// Load and execute the specified graphix module.
+    ///
+    /// The path may have one of two forms. If it is the path to a file with
+    /// extension .bs then the rt will load the file directly. If it is a
+    /// modpath (e.g. foo::bar::baz) then the module resolver will look for a
+    /// matching module in the modpath. When the `CompExp` objects contained in
+    /// the `CompRes` are dropped their corresponding expressions will be
+    /// deleted. Therefore, you can stop execution of the whole file by dropping
+    /// the returned `CompRes`.
     pub async fn load(&self, path: PathBuf) -> Result<CompRes> {
         Ok(self.exec(|tx| ToRt::Load { path, res: tx, rt: self.clone() }).await??)
     }
 
-    /// Compile a callable interface to the specified lambda id. This is how you
-    /// call a lambda directly from rust. When the returned `Callable` is
-    /// dropped the associated callsite will be delete.
+    /// Compile a callable interface to the specified lambda id.
+    ///
+    /// This is how you call a lambda directly from rust. When the returned
+    /// `Callable` is dropped the associated callsite will be delete.
     pub async fn compile_callable(&self, id: Value) -> Result<Callable> {
         Ok(self
             .exec(|tx| ToRt::CompileCallable { id, rt: self.clone(), res: tx })
@@ -1166,16 +1170,19 @@ impl GXHandle {
     }
 
     /// Compile an expression that will output the value of the ref specifed by
-    /// id. This is the same as the deref (*) operator in graphix. When the
-    /// returned `Ref` is dropped the compiled code will be deleted.
+    /// id.
+    ///
+    /// This is the same as the deref (*) operator in graphix. When the returned
+    /// `Ref` is dropped the compiled code will be deleted.
     pub async fn compile_ref(&self, id: impl Into<BindId>) -> Result<Ref> {
         Ok(self
             .exec(|tx| ToRt::CompileRef { id: id.into(), res: tx, rt: self.clone() })
             .await??)
     }
 
-    /// Set the variable idenfified by `id` to `v`, triggering updates of all
-    /// dependent node trees.
+    /// Set the variable idenfified by `id` to `v`
+    ///
+    /// triggering updates of all dependent node trees.
     pub fn set<T: Into<Value>>(&self, id: BindId, v: T) -> Result<()> {
         let v = v.into();
         self.0.send(ToRt::Set { id, v }).map_err(|_| anyhow!("runtime is dead"))
@@ -1194,7 +1201,7 @@ pub struct GXConfig {
     #[builder(setter(strip_option), default)]
     publish_timeout: Option<Duration>,
     /// The execution context with any builtins already registered
-    ctx: ExecCtx<GXCtx, NoUserEvent>,
+    ctx: ExecCtx<GXRt, NoUserEvent>,
     /// The text of the root module
     #[builder(setter(strip_option), default)]
     root: Option<ArcStr>,
@@ -1208,7 +1215,7 @@ pub struct GXConfig {
 impl GXConfig {
     /// Create a new config
     pub fn builder(
-        ctx: ExecCtx<GXCtx, NoUserEvent>,
+        ctx: ExecCtx<GXRt, NoUserEvent>,
         sub: tmpsc::Sender<Pooled<Vec<RtEvent>>>,
     ) -> GXConfigBuilder {
         GXConfigBuilder::default().ctx(ctx).sub(sub)

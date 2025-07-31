@@ -3,8 +3,8 @@ use arcstr::ArcStr;
 use enumflags2::{bitflags, BitFlags};
 use fxhash::FxHashMap;
 use graphix_compiler::{
-    expr::ModuleResolver, typ::FnType, Apply, BuiltIn, BuiltInInitFn, Ctx, Event,
-    ExecCtx, Node, UserEvent,
+    expr::ModuleResolver, typ::FnType, Apply, BuiltIn, BuiltInInitFn, Event, ExecCtx,
+    Node, Rt, UserEvent,
 };
 use netidx::{path::Path, subscriber::Value};
 use netidx_core::utils::Either;
@@ -62,7 +62,7 @@ macro_rules! arity2 {
 pub struct CachedVals(pub Box<[Option<Value>]>);
 
 impl CachedVals {
-    pub fn new<C: Ctx, E: UserEvent>(from: &[Node<C, E>]) -> CachedVals {
+    pub fn new<R: Rt, E: UserEvent>(from: &[Node<R, E>]) -> CachedVals {
         CachedVals(from.into_iter().map(|_| None).collect())
     }
 
@@ -72,10 +72,10 @@ impl CachedVals {
         }
     }
 
-    pub fn update<C: Ctx, E: UserEvent>(
+    pub fn update<R: Rt, E: UserEvent>(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> bool {
         from.into_iter().enumerate().fold(false, |res, (i, src)| {
@@ -91,11 +91,11 @@ impl CachedVals {
 
     /// Like update, but return the indexes of the nodes that updated
     /// instead of a consolidated bool
-    pub fn update_diff<C: Ctx, E: UserEvent>(
+    pub fn update_diff<R: Rt, E: UserEvent>(
         &mut self,
         up: &mut [bool],
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) {
         for (i, n) in from.iter_mut().enumerate() {
@@ -130,11 +130,11 @@ pub struct CachedArgs<T: EvalCached> {
     t: T,
 }
 
-impl<C: Ctx, E: UserEvent, T: EvalCached> BuiltIn<C, E> for CachedArgs<T> {
+impl<R: Rt, E: UserEvent, T: EvalCached> BuiltIn<R, E> for CachedArgs<T> {
     const NAME: &str = T::NAME;
     const TYP: LazyLock<FnType> = T::TYP;
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, _| {
             let t = CachedArgs::<T> { cached: CachedVals::new(from), t: T::default() };
             Ok(Box::new(t))
@@ -142,11 +142,11 @@ impl<C: Ctx, E: UserEvent, T: EvalCached> BuiltIn<C, E> for CachedArgs<T> {
     }
 }
 
-impl<C: Ctx, E: UserEvent, T: EvalCached> Apply<C, E> for CachedArgs<T> {
+impl<R: Rt, E: UserEvent, T: EvalCached> Apply<R, E> for CachedArgs<T> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if self.cached.update(ctx, from, event) {
@@ -156,7 +156,7 @@ impl<C: Ctx, E: UserEvent, T: EvalCached> Apply<C, E> for CachedArgs<T> {
         }
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.cached.clear()
     }
 }
@@ -187,7 +187,7 @@ pub enum Module {
 /// use anyhow::Result;
 /// use netidx_core::pool::Pooled;
 /// use graphix_compiler::ExecCtx;
-/// use graphix_rt::{GXCtx, GXConfigBuilder, GXHandle, RtEvent};
+/// use graphix_rt::{GXRt, GXConfigBuilder, GXHandle, RtEvent};
 /// use tokio::sync::mpsc;
 /// use enumflags2::BitFlags;
 ///
@@ -196,7 +196,7 @@ pub enum Module {
 ///     subscriber: Subscriber,
 ///     sub: mpsc::Sender<Pooled<Vec<RtEvent>>>
 /// ) -> Result<GXHandle> {
-///     let mut ctx = ExecCtx::new(GXCtx::new(publisher, subscriber));
+///     let mut ctx = ExecCtx::new(GXRt::new(publisher, subscriber));
 ///     let (root, mods) = graphix_stdlib::register(&mut ctx, BitFlags::all())?;
 ///     GXConfigBuilder::default()
 ///        .ctx(ctx)
@@ -208,8 +208,8 @@ pub enum Module {
 ///        .await
 /// }
 /// ```
-pub fn register<C: Ctx, E: UserEvent>(
-    ctx: &mut ExecCtx<C, E>,
+pub fn register<R: Rt, E: UserEvent>(
+    ctx: &mut ExecCtx<R, E>,
     modules: BitFlags<Module>,
 ) -> Result<(ArcStr, ModuleResolver)> {
     let mut tbl = FxHashMap::default();

@@ -2,7 +2,7 @@ use crate::{deftype, CachedArgs, CachedVals, EvalCached};
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
-use graphix_compiler::{err, errf, Ctx, ExecCtx, UserEvent};
+use graphix_compiler::{err, errf, ExecCtx, Rt, UserEvent};
 use netidx::{path::Path, subscriber::Value, utils};
 use netidx_value::ValArray;
 use smallvec::SmallVec;
@@ -648,7 +648,7 @@ impl EvalCached for ParseEv {
 
 type Parse = CachedArgs<ParseEv>;
 
-pub(super) fn register<C: Ctx, E: UserEvent>(ctx: &mut ExecCtx<C, E>) -> Result<ArcStr> {
+pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<StartsWith>()?;
     ctx.register_builtin::<EndsWith>()?;
     ctx.register_builtin::<Contains>()?;

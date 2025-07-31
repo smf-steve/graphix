@@ -2,7 +2,7 @@ use super::{compiler::compile, Cached};
 use crate::{
     expr::{Expr, ExprId, ModPath},
     typ::Type,
-    wrap, Ctx, Event, ExecCtx, Node, Refs, Update, UserEvent,
+    wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
 use anyhow::Result;
 use netidx_value::{Typ, Value};
@@ -10,22 +10,22 @@ use netidx_value::{Typ, Value};
 macro_rules! compare_op {
     ($name:ident, $op:tt) => {
         #[derive(Debug)]
-        pub(crate) struct $name<C: Ctx, E: UserEvent> {
+        pub(crate) struct $name<R: Rt, E: UserEvent> {
             spec: Expr,
             typ: Type,
-            lhs: Cached<C, E>,
-            rhs: Cached<C, E>,
+            lhs: Cached<R, E>,
+            rhs: Cached<R, E>,
         }
 
-        impl<C: Ctx, E: UserEvent> $name<C, E> {
+        impl<R: Rt, E: UserEvent> $name<R, E> {
             pub(crate) fn compile(
-                ctx: &mut ExecCtx<C, E>,
+                ctx: &mut ExecCtx<R, E>,
                 spec: Expr,
                 scope: &ModPath,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
-            ) -> Result<Node<C, E>> {
+            ) -> Result<Node<R, E>> {
                 let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
                 let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
                 let typ = Type::Primitive(Typ::Bool.into());
@@ -33,10 +33,10 @@ macro_rules! compare_op {
             }
         }
 
-        impl<C: Ctx, E: UserEvent> Update<C, E> for $name<C, E> {
+        impl<R: Rt, E: UserEvent> Update<R, E> for $name<R, E> {
             fn update(
                 &mut self,
-                ctx: &mut ExecCtx<C, E>,
+                ctx: &mut ExecCtx<R, E>,
                 event: &mut Event<E>,
             ) -> Option<Value> {
                 let lhs_up = self.lhs.update(ctx, event);
@@ -62,17 +62,17 @@ macro_rules! compare_op {
                 self.rhs.node.refs(refs);
             }
 
-            fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+            fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
                 self.lhs.node.delete(ctx);
                 self.rhs.node.delete(ctx)
             }
 
-            fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+            fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
                 self.lhs.node.sleep(ctx);
                 self.rhs.node.sleep(ctx)
             }
 
-            fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+            fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
                 wrap!(self.lhs.node, self.lhs.node.typecheck(ctx))?;
                 wrap!(self.rhs.node, self.rhs.node.typecheck(ctx))?;
                 wrap!(
@@ -95,22 +95,22 @@ compare_op!(Gte, >=);
 macro_rules! bool_op {
     ($name:ident, $op:tt) => {
         #[derive(Debug)]
-        pub(crate) struct $name<C: Ctx, E: UserEvent> {
+        pub(crate) struct $name<R: Rt, E: UserEvent> {
             spec: Expr,
             typ: Type,
-            lhs: Cached<C, E>,
-            rhs: Cached<C, E>,
+            lhs: Cached<R, E>,
+            rhs: Cached<R, E>,
         }
 
-        impl<C: Ctx, E: UserEvent> $name<C, E> {
+        impl<R: Rt, E: UserEvent> $name<R, E> {
             pub(crate) fn compile(
-                ctx: &mut ExecCtx<C, E>,
+                ctx: &mut ExecCtx<R, E>,
                 spec: Expr,
                 scope: &ModPath,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
-            ) -> Result<Node<C, E>> {
+            ) -> Result<Node<R, E>> {
                 let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
                 let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
                 let typ = Type::Primitive(Typ::Bool.into());
@@ -118,10 +118,10 @@ macro_rules! bool_op {
             }
         }
 
-        impl<C: Ctx, E: UserEvent> Update<C, E> for $name<C, E> {
+        impl<R: Rt, E: UserEvent> Update<R, E> for $name<R, E> {
             fn update(
                 &mut self,
-                ctx: &mut ExecCtx<C, E>,
+                ctx: &mut ExecCtx<R, E>,
                 event: &mut Event<E>,
             ) -> Option<Value> {
                 let lhs_up = self.lhs.update(ctx, event);
@@ -148,17 +148,17 @@ macro_rules! bool_op {
                 self.rhs.node.refs(refs);
             }
 
-            fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+            fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
                 self.lhs.node.delete(ctx);
                 self.rhs.node.delete(ctx)
             }
 
-            fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+            fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
                 self.lhs.sleep(ctx);
                 self.rhs.sleep(ctx)
             }
 
-            fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+            fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
                 wrap!(self.lhs.node, self.lhs.node.typecheck(ctx))?;
                 wrap!(self.rhs.node, self.rhs.node.typecheck(ctx))?;
                 let bt = Type::Primitive(Typ::Bool.into());
@@ -174,28 +174,28 @@ bool_op!(And, &&);
 bool_op!(Or, ||);
 
 #[derive(Debug)]
-pub(crate) struct Not<C: Ctx, E: UserEvent> {
+pub(crate) struct Not<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    n: Node<C, E>,
+    n: Node<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> Not<C, E> {
+impl<R: Rt, E: UserEvent> Not<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         n: &Expr,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let n = compile(ctx, n.clone(), scope, top_id)?;
         let typ = Type::Primitive(Typ::Bool.into());
         Ok(Box::new(Self { spec, typ, n }))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Not<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Not<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         self.n.update(ctx, event).and_then(|v| match v {
             Value::Bool(b) => Some(Value::Bool(!b)),
             _ => None,
@@ -214,15 +214,15 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Not<C, E> {
         self.n.refs(refs);
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.delete(ctx);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.sleep(ctx);
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.n, self.n.typecheck(ctx))?;
         let bt = Type::Primitive(Typ::Bool.into());
         wrap!(self.n, bt.check_contains(&ctx.env, self.n.typ()))?;
@@ -233,22 +233,22 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Not<C, E> {
 macro_rules! arith_op {
     ($name:ident, $op:tt) => {
         #[derive(Debug)]
-        pub(crate) struct $name<C: Ctx, E: UserEvent> {
+        pub(crate) struct $name<R: Rt, E: UserEvent> {
             spec: Expr,
             typ: Type,
-            lhs: Cached<C, E>,
-            rhs: Cached<C, E>
+            lhs: Cached<R, E>,
+            rhs: Cached<R, E>
         }
 
-        impl<C: Ctx, E: UserEvent> $name<C, E> {
+        impl<R: Rt, E: UserEvent> $name<R, E> {
             pub(crate) fn compile(
-                ctx: &mut ExecCtx<C, E>,
+                ctx: &mut ExecCtx<R, E>,
                 spec: Expr,
                 scope: &ModPath,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
-            ) -> Result<Node<C, E>> {
+            ) -> Result<Node<R, E>> {
                 let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
                 let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
                 let typ = Type::empty_tvar();
@@ -256,8 +256,8 @@ macro_rules! arith_op {
             }
         }
 
-        impl<C: Ctx, E: UserEvent> Update<C, E> for $name<C, E> {
-            fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+        impl<R: Rt, E: UserEvent> Update<R, E> for $name<R, E> {
+            fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
                 let lhs_up = self.lhs.update(ctx, event);
                 let rhs_up = self.rhs.update(ctx, event);
                 if lhs_up || rhs_up {
@@ -281,17 +281,17 @@ macro_rules! arith_op {
                 self.rhs.node.refs(refs);
             }
 
-            fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+            fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
                 self.lhs.node.delete(ctx);
                 self.rhs.node.delete(ctx);
             }
 
-            fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+            fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
                 self.lhs.sleep(ctx);
                 self.rhs.sleep(ctx);
             }
 
-            fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+            fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
                 wrap!(self.lhs.node, self.lhs.node.typecheck(ctx))?;
                 wrap!(self.rhs.node, self.rhs.node.typecheck(ctx))?;
                 let typ = Type::Primitive(Typ::number());

@@ -19,7 +19,7 @@ use graphix_compiler::{
     expr::{ExprId, ModPath},
     BindId, NoUserEvent,
 };
-use graphix_rt::{CompExp, GXCtx, GXHandle, Ref};
+use graphix_rt::{CompExp, GXHandle, GXRt, Ref};
 use input_handler::{event_to_value, InputHandlerW};
 use layout::LayoutW;
 use line_gauge::LineGaugeW;
@@ -419,7 +419,7 @@ pub(super) struct Tui {
 impl Tui {
     pub(super) fn start(
         gx: &GXHandle,
-        env: Env<GXCtx, NoUserEvent>,
+        env: Env<GXRt, NoUserEvent>,
         root: CompExp,
     ) -> Tui {
         let gx = gx.clone();
@@ -462,7 +462,7 @@ fn is_ctrl_c(e: &Event) -> bool {
         .unwrap_or(false)
 }
 
-fn get_id(env: &Env<GXCtx, NoUserEvent>, name: &ModPath) -> Result<BindId> {
+fn get_id(env: &Env<GXRt, NoUserEvent>, name: &ModPath) -> Result<BindId> {
     Ok(env
         .lookup_bind(&ModPath::root(), name)
         .ok_or_else(|| anyhow!("could not find {name}"))?
@@ -496,7 +496,7 @@ fn set_mouse(enable: bool) {
 
 async fn run(
     gx: GXHandle,
-    env: Env<GXCtx, NoUserEvent>,
+    env: Env<GXRt, NoUserEvent>,
     root_exp: CompExp,
     mut to_rx: mpsc::Receiver<ToTui>,
     from_tx: mpsc::UnboundedSender<FromTui>,

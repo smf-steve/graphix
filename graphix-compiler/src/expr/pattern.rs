@@ -6,7 +6,7 @@ use netidx_value::{Typ, Value};
 use smallvec::{smallvec, SmallVec};
 use triomphe::Arc;
 
-use crate::{env::Env, typ::Type, Ctx, UserEvent};
+use crate::{env::Env, typ::Type, Rt, UserEvent};
 
 use super::Expr;
 
@@ -130,9 +130,9 @@ impl StructurePattern {
         names.len() == len
     }
 
-    pub fn infer_type_predicate<C: Ctx, E: UserEvent>(
+    pub fn infer_type_predicate<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
     ) -> Result<Type> {
         match self {
             Self::Bind(_) | Self::Ignore => Ok(Type::empty_tvar()),

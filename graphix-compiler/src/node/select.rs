@@ -3,7 +3,7 @@ use crate::{
     expr::{Expr, ExprId, ModPath, Pattern},
     node::pattern::PatternNode,
     typ::Type,
-    BindId, Ctx, Event, ExecCtx, Node, Refs, Update, UserEvent, REFS,
+    BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent, REFS,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use compact_str::format_compact;
@@ -16,23 +16,23 @@ use std::collections::hash_map::Entry;
 atomic_id!(SelectId);
 
 #[derive(Debug)]
-pub(crate) struct Select<C: Ctx, E: UserEvent> {
+pub(crate) struct Select<R: Rt, E: UserEvent> {
     selected: Option<usize>,
-    arg: Cached<C, E>,
-    arms: SmallVec<[(PatternNode<C, E>, Cached<C, E>); 8]>,
+    arg: Cached<R, E>,
+    arms: SmallVec<[(PatternNode<R, E>, Cached<R, E>); 8]>,
     typ: Type,
     spec: Expr,
 }
 
-impl<C: Ctx, E: UserEvent> Select<C, E> {
+impl<R: Rt, E: UserEvent> Select<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         arg: &Expr,
         arms: &[(Pattern, Expr)],
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let arg = Cached::new(compile(ctx, arg.clone(), scope, top_id)?);
         let mut atype = arg.node.typ().clone();
         let arms = arms
@@ -55,8 +55,8 @@ impl<C: Ctx, E: UserEvent> Select<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Select<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Select<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         let Self { selected, arg, arms, typ: _, spec: _ } = self;
         let mut pat_up = false;
         let arg_up = arg.update(ctx, event);
@@ -146,7 +146,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Select<C, E> {
         }
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         let Self { selected: _, arg, arms, typ: _, spec: _ } = self;
         arg.node.delete(ctx);
         for (pat, arg) in arms {
@@ -155,7 +155,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Select<C, E> {
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         let Self { selected: _, arg, arms, typ: _, spec: _ } = self;
         arg.sleep(ctx);
         for (pat, arg) in arms {
@@ -180,7 +180,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Select<C, E> {
         }
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         self.arg.node.typecheck(ctx)?;
         let mut rtype = Type::Primitive(BitFlags::empty());
         let mut mtype = Type::Primitive(BitFlags::empty());

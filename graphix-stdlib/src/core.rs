@@ -7,7 +7,7 @@ use graphix_compiler::{
     expr::{Expr, ExprId, ModPath},
     node::genn,
     typ::FnType,
-    Apply, BindId, BuiltIn, BuiltInInitFn, Ctx, Event, ExecCtx, Node, Refs, UserEvent,
+    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Refs, Rt, UserEvent,
 };
 use netidx::subscriber::Value;
 use netidx_value::FromValue;
@@ -18,20 +18,20 @@ use triomphe::Arc as TArc;
 #[derive(Debug)]
 struct IsErr;
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for IsErr {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for IsErr {
     const NAME: &str = "is_err";
     deftype!("core", "fn(Any) -> bool");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(IsErr)))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for IsErr {
+impl<R: Rt, E: UserEvent> Apply<R, E> for IsErr {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         from[0].update(ctx, event).map(|v| match v {
@@ -40,26 +40,26 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for IsErr {
         })
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
 #[derive(Debug)]
 struct FilterErr;
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for FilterErr {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for FilterErr {
     const NAME: &str = "filter_err";
     deftype!("core", "fn(Any) -> error");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(FilterErr)))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for FilterErr {
+impl<R: Rt, E: UserEvent> Apply<R, E> for FilterErr {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         from[0].update(ctx, event).and_then(|v| match v {
@@ -68,26 +68,26 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for FilterErr {
         })
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
 #[derive(Debug)]
 struct ToError;
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for ToError {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for ToError {
     const NAME: &str = "error";
     deftype!("core", "fn(Any) -> error");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(ToError)))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for ToError {
+impl<R: Rt, E: UserEvent> Apply<R, E> for ToError {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         from[0].update(ctx, event).map(|v| match v.cast_to::<ArcStr>() {
@@ -96,7 +96,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for ToError {
         })
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
 #[derive(Debug)]
@@ -104,20 +104,20 @@ struct Once {
     val: bool,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Once {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Once {
     const NAME: &str = "once";
     deftype!("core", "fn('a) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(Once { val: false })))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Once {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Once {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         match from {
@@ -133,7 +133,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Once {
         }
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.val = false
     }
 }
@@ -340,10 +340,10 @@ impl EvalCached for OrEv {
 type Or = CachedArgs<OrEv>;
 
 #[derive(Debug)]
-struct Filter<C: Ctx, E: UserEvent> {
+struct Filter<R: Rt, E: UserEvent> {
     ready: bool,
     queue: VecDeque<Value>,
-    pred: Node<C, E>,
+    pred: Node<R, E>,
     typ: TArc<FnType>,
     top_id: ExprId,
     fid: BindId,
@@ -351,11 +351,11 @@ struct Filter<C: Ctx, E: UserEvent> {
     out: BindId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Filter<C, E> {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Filter<R, E> {
     const NAME: &str = "filter";
     deftype!("core", "fn('a, fn('a) -> bool) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [arg, fnode] => {
                 let (x, xn) = genn::bind(ctx, scope, "x", arg.typ().clone(), top_id);
@@ -365,7 +365,7 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Filter<C, E> {
                 let pred = genn::apply(fnode, vec![xn], typ.clone(), top_id);
                 let queue = VecDeque::new();
                 let out = BindId::new();
-                ctx.user.ref_var(out, top_id);
+                ctx.rt.ref_var(out, top_id);
                 Ok(Box::new(Self { ready: true, queue, pred, typ, fid, x, out, top_id }))
             }
             _ => bail!("expected two arguments"),
@@ -373,11 +373,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Filter<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Filter<C, E> {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Filter<R, E> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         macro_rules! set {
@@ -414,7 +414,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Filter<C, E> {
                     self.ready = true;
                     match v {
                         Value::Bool(true) => {
-                            ctx.user.set_var(self.out, self.queue.pop_front().unwrap());
+                            ctx.rt.set_var(self.out, self.queue.pop_front().unwrap());
                             maybe_cont!();
                         }
                         _ => {
@@ -430,8 +430,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Filter<C, E> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
         for n in from.iter_mut() {
             n.typecheck(ctx)?;
@@ -445,19 +445,19 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Filter<C, E> {
         self.pred.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         ctx.cached.remove(&self.fid);
         ctx.cached.remove(&self.out);
         ctx.cached.remove(&self.x);
         ctx.env.unbind_variable(self.x);
         self.pred.delete(ctx);
-        ctx.user.unref_var(self.out, self.top_id)
+        ctx.rt.unref_var(self.out, self.top_id)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.out, self.top_id);
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.out, self.top_id);
         self.out = BindId::new();
-        ctx.user.ref_var(self.out, self.top_id);
+        ctx.rt.ref_var(self.out, self.top_id);
         self.queue.clear();
         self.pred.sleep(ctx);
     }
@@ -471,15 +471,15 @@ struct Queue {
     top_id: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Queue {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Queue {
     const NAME: &str = "queue";
     deftype!("core", "fn(#clock:Any, 'a) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, from, top_id| match from {
             [_, _] => {
                 let id = BindId::new();
-                ctx.user.ref_var(id, top_id);
+                ctx.rt.ref_var(id, top_id);
                 Ok(Box::new(Self { triggered: 0, queue: VecDeque::new(), id, top_id }))
             }
             _ => bail!("expected two arguments"),
@@ -487,11 +487,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Queue {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Queue {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Queue {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if from[0].update(ctx, event).is_some() {
@@ -502,19 +502,19 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Queue {
         }
         while self.triggered > 0 && self.queue.len() > 0 {
             self.triggered -= 1;
-            ctx.user.set_var(self.id, self.queue.pop_front().unwrap());
+            ctx.rt.set_var(self.id, self.queue.pop_front().unwrap());
         }
         event.variables.get(&self.id).cloned()
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
         self.id = BindId::new();
-        ctx.user.ref_var(self.id, self.top_id);
+        ctx.rt.ref_var(self.id, self.top_id);
         self.triggered = 0;
         self.queue.clear();
     }
@@ -527,32 +527,32 @@ struct Seq {
     args: CachedVals,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Seq {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Seq {
     const NAME: &str = "seq";
     deftype!("core", "fn(i64, i64) -> i64");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, from, top_id| {
             let id = BindId::new();
-            ctx.user.ref_var(id, top_id);
+            ctx.rt.ref_var(id, top_id);
             let args = CachedVals::new(from);
             Ok(Box::new(Self { id, top_id, args }))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Seq {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Seq {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if self.args.update(ctx, from, event) {
             match &self.args.0[..] {
                 [Some(Value::I64(i)), Some(Value::I64(j))] if i <= j => {
                     for v in *i..*j {
-                        ctx.user.set_var(self.id, Value::I64(v));
+                        ctx.rt.set_var(self.id, Value::I64(v));
                     }
                 }
                 _ => return err!("invalid args i must be <= j"),
@@ -561,14 +561,14 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Seq {
         event.variables.get(&self.id).cloned()
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
         self.id = BindId::new();
-        ctx.user.ref_var(self.id, self.top_id);
+        ctx.rt.ref_var(self.id, self.top_id);
     }
 }
 
@@ -581,11 +581,11 @@ struct Throttle {
     args: CachedVals,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Throttle {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Throttle {
     const NAME: &str = "throttle";
     deftype!("core", "fn(?#rate:duration, 'a) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, top_id| {
             let args = CachedVals::new(from);
             Ok(Box::new(Self {
@@ -599,11 +599,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Throttle {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Throttle {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Throttle {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         macro_rules! maybe_schedule {
@@ -614,8 +614,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Throttle {
                     return self.args.0[1].clone();
                 } else {
                     let id = BindId::new();
-                    ctx.user.ref_var(id, self.top_id);
-                    ctx.user.set_timer(id, self.wait - (now - *$last));
+                    ctx.rt.ref_var(id, self.top_id);
+                    ctx.rt.set_timer(id, self.wait - (now - *$last));
                     self.tid = Some(id);
                     return None;
                 }
@@ -630,7 +630,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Throttle {
             if let Some(id) = self.tid.take()
                 && let Some(last) = &mut self.last
             {
-                ctx.user.unref_var(id, self.top_id);
+                ctx.rt.unref_var(id, self.top_id);
                 maybe_schedule!(last)
             }
         }
@@ -646,7 +646,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Throttle {
         if let Some(id) = self.tid
             && let Some(_) = event.variables.get(&id)
         {
-            ctx.user.unref_var(id, self.top_id);
+            ctx.rt.unref_var(id, self.top_id);
             self.tid = None;
             self.last = Some(Instant::now());
             return self.args.0[1].clone();
@@ -654,13 +654,13 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Throttle {
         None
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some(id) = self.tid.take() {
-            ctx.user.unref_var(id, self.top_id);
+            ctx.rt.unref_var(id, self.top_id);
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.delete(ctx);
         self.last = None;
         self.wait = Duration::ZERO;
@@ -673,20 +673,20 @@ struct Count {
     count: i64,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Count {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Count {
     const NAME: &str = "count";
     deftype!("core", "fn(Any) -> i64");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(Count { count: 0 })))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Count {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Count {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if from.into_iter().fold(false, |u, n| u || n.update(ctx, event).is_some()) {
@@ -697,7 +697,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Count {
         }
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.count = 0
     }
 }
@@ -742,20 +742,20 @@ type Mean = CachedArgs<MeanEv>;
 #[derive(Debug)]
 struct Uniq(Option<Value>);
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Uniq {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Uniq {
     const NAME: &str = "uniq";
     deftype!("core", "fn('a) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(Uniq(None))))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Uniq {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Uniq {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         from[0].update(ctx, event).and_then(|v| {
@@ -768,7 +768,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Uniq {
         })
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.0 = None
     }
 }
@@ -776,20 +776,20 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Uniq {
 #[derive(Debug)]
 struct Never;
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Never {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Never {
     const NAME: &str = "never";
     deftype!("core", "fn(@args: Any) -> _");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(Never)))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Never {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Never {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         for n in from {
@@ -798,7 +798,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Never {
         None
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -846,22 +846,22 @@ struct Dbg {
     dest: LogDest,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Dbg {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Dbg {
     const NAME: &str = "dbg";
     deftype!("core", "fn(?#dest:[`Stdout, `Stderr, Log], 'a) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, _| {
             Ok(Box::new(Dbg { spec: from[1].spec().clone(), dest: LogDest::Stderr }))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Dbg {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Dbg {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if let Some(v) = from[0].update(ctx, event)
@@ -895,7 +895,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Dbg {
         })
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
 #[derive(Debug)]
@@ -904,22 +904,22 @@ struct Log {
     dest: Level,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Log {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Log {
     const NAME: &str = "log";
     deftype!("core", "fn(?#level:Log, 'a) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, scope, _, _| {
             Ok(Box::new(Self { scope: scope.clone(), dest: Level::Info }))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Log {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Log {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if let Some(v) = from[0].update(ctx, event)
@@ -939,16 +939,16 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Log {
         None
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
-pub(super) fn register<C: Ctx, E: UserEvent>(ctx: &mut ExecCtx<C, E>) -> Result<ArcStr> {
+pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Queue>()?;
     ctx.register_builtin::<All>()?;
     ctx.register_builtin::<And>()?;
     ctx.register_builtin::<Count>()?;
     ctx.register_builtin::<Divide>()?;
-    ctx.register_builtin::<Filter<C, E>>()?;
+    ctx.register_builtin::<Filter<R, E>>()?;
     ctx.register_builtin::<FilterErr>()?;
     ctx.register_builtin::<IsErr>()?;
     ctx.register_builtin::<Max>()?;

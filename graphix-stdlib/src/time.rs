@@ -3,8 +3,8 @@ use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
 use graphix_compiler::{
-    err, errf, expr::ExprId, Apply, BindId, BuiltIn, BuiltInInitFn, Ctx, Event, ExecCtx,
-    Node, UserEvent,
+    err, errf, expr::ExprId, Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node,
+    Rt, UserEvent,
 };
 use netidx::{publisher::FromValue, subscriber::Value};
 use std::{ops::SubAssign, sync::Arc, time::Duration};
@@ -16,22 +16,22 @@ struct AfterIdle {
     eid: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for AfterIdle {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for AfterIdle {
     const NAME: &str = "after_idle";
     deftype!("time", "fn([duration, Number], 'a) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, eid| {
             Ok(Box::new(AfterIdle { args: CachedVals::new(from), id: None, eid }))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for AfterIdle {
+impl<R: Rt, E: UserEvent> Apply<R, E> for AfterIdle {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         let mut up = [false; 2];
@@ -49,8 +49,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for AfterIdle {
                 Ok(dur) => {
                     let id = BindId::new();
                     self.id = Some(id);
-                    ctx.user.ref_var(id, self.eid);
-                    ctx.user.set_timer(id, dur);
+                    ctx.rt.ref_var(id, self.eid);
+                    ctx.rt.set_timer(id, dur);
                     return None;
                 }
             },
@@ -61,7 +61,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for AfterIdle {
         self.id.and_then(|id| {
             if event.variables.contains_key(&id) {
                 self.id = None;
-                ctx.user.unref_var(id, self.eid);
+                ctx.rt.unref_var(id, self.eid);
                 self.args.0.get(1).and_then(|v| v.clone())
             } else {
                 None
@@ -69,15 +69,15 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for AfterIdle {
         })
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some(id) = self.id.take() {
-            ctx.user.unref_var(id, self.eid)
+            ctx.rt.unref_var(id, self.eid)
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some(id) = self.id.take() {
-            ctx.user.unref_var(id, self.eid);
+            ctx.rt.unref_var(id, self.eid);
         }
         self.args.clear()
     }
@@ -131,11 +131,11 @@ struct Timer {
     eid: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Timer {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Timer {
     const NAME: &str = "timer";
     deftype!("time", "fn([duration, Number], [bool, Number]) -> datetime");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, eid| {
             Ok(Box::new(Self {
                 args: CachedVals::new(from),
@@ -148,11 +148,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Timer {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Timer {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Timer {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         macro_rules! error {
@@ -167,8 +167,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Timer {
             ($dur:expr) => {{
                 let id = BindId::new();
                 self.id = Some(id);
-                ctx.user.ref_var(id, self.eid);
-                ctx.user.set_timer(id, $dur);
+                ctx.rt.ref_var(id, self.eid);
+                ctx.rt.set_timer(id, $dur);
             }};
         }
         let mut up = [false; 2];
@@ -209,7 +209,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Timer {
         }
         self.id.and_then(|id| event.variables.get(&id).map(|now| (id, now))).map(
             |(id, now)| {
-                ctx.user.unref_var(id, self.eid);
+                ctx.rt.unref_var(id, self.eid);
                 self.id = None;
                 self.repeat -= 1;
                 if let Some(dur) = self.timeout {
@@ -222,23 +222,23 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Timer {
         )
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some(id) = self.id.take() {
-            ctx.user.unref_var(id, self.eid);
+            ctx.rt.unref_var(id, self.eid);
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.args.clear();
         self.timeout = None;
         self.repeat = Repeat::No;
         if let Some(id) = self.id.take() {
-            ctx.user.unref_var(id, self.eid);
+            ctx.rt.unref_var(id, self.eid);
         }
     }
 }
 
-pub(super) fn register<C: Ctx, E: UserEvent>(ctx: &mut ExecCtx<C, E>) -> Result<ArcStr> {
+pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<AfterIdle>()?;
     ctx.register_builtin::<Timer>()?;
     Ok(literal!(include_str!("time.gx")))

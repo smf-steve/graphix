@@ -1,18 +1,18 @@
 use super::{PrintFlag, Type};
-use crate::{env::Env, typ::format_with_flags, Ctx, UserEvent};
+use crate::{env::Env, typ::format_with_flags, Rt, UserEvent};
 use fxhash::FxHashSet;
 use netidx::publisher::Value;
 use netidx_value::NakedValue;
 use std::{cell::RefCell, collections::HashSet, fmt};
 
 /// A value with it's type, used for formatting
-pub struct TVal<'a, C: Ctx, E: UserEvent> {
-    pub env: &'a Env<C, E>,
+pub struct TVal<'a, R: Rt, E: UserEvent> {
+    pub env: &'a Env<R, E>,
     pub typ: &'a Type,
     pub v: &'a Value,
 }
 
-impl<'a, C: Ctx, E: UserEvent> TVal<'a, C, E> {
+impl<'a, R: Rt, E: UserEvent> TVal<'a, R, E> {
     fn fmt_int(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -108,7 +108,7 @@ impl<'a, C: Ctx, E: UserEvent> TVal<'a, C, E> {
     }
 }
 
-impl<'a, C: Ctx, E: UserEvent> fmt::Display for TVal<'a, C, E> {
+impl<'a, R: Rt, E: UserEvent> fmt::Display for TVal<'a, R, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         thread_local! {
             static HIST: RefCell<FxHashSet<(usize, usize)>> = RefCell::new(HashSet::default());

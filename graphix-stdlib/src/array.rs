@@ -6,7 +6,7 @@ use graphix_compiler::{
     expr::{ExprId, ModPath},
     node::genn,
     typ::{FnType, Type},
-    Apply, BindId, BuiltIn, BuiltInInitFn, Ctx, Event, ExecCtx, LambdaId, Node, Refs,
+    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Refs, Rt,
     UserEvent,
 };
 use netidx::{publisher::Typ, subscriber::Value, utils::Either};
@@ -20,7 +20,7 @@ use std::{
 };
 use triomphe::Arc as TArc;
 
-pub trait MapFn<C: Ctx, E: UserEvent>: Debug + Default + Send + Sync + 'static {
+pub trait MapFn<R: Rt, E: UserEvent>: Debug + Default + Send + Sync + 'static {
     const NAME: &str;
     const TYP: LazyLock<FnType>;
 
@@ -29,18 +29,18 @@ pub trait MapFn<C: Ctx, E: UserEvent>: Debug + Default + Send + Sync + 'static {
     /// predicate lambda for each index i, and a is the array. out and
     /// a are guaranteed to have the same length. out[i].cur is
     /// guaranteed to be Some.
-    fn finish(&mut self, slots: &[Slot<C, E>], a: &ValArray) -> Option<Value>;
+    fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value>;
 }
 
 #[derive(Debug)]
-pub struct Slot<C: Ctx, E: UserEvent> {
+pub struct Slot<R: Rt, E: UserEvent> {
     id: BindId,
-    pred: Node<C, E>,
+    pred: Node<R, E>,
     pub cur: Option<Value>,
 }
 
-impl<C: Ctx, E: UserEvent> Slot<C, E> {
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+impl<R: Rt, E: UserEvent> Slot<R, E> {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.pred.delete(ctx);
         ctx.cached.remove(&self.id);
         ctx.env.unbind_variable(self.id);
@@ -48,23 +48,23 @@ impl<C: Ctx, E: UserEvent> Slot<C, E> {
 }
 
 #[derive(Debug)]
-pub struct MapQ<C: Ctx, E: UserEvent, T: MapFn<C, E>> {
+pub struct MapQ<R: Rt, E: UserEvent, T: MapFn<R, E>> {
     scope: ModPath,
     predid: BindId,
     top_id: ExprId,
     ftyp: TArc<FnType>,
     mftyp: TArc<FnType>,
     etyp: Type,
-    slots: Vec<Slot<C, E>>,
+    slots: Vec<Slot<R, E>>,
     cur: ValArray,
     t: T,
 }
 
-impl<C: Ctx, E: UserEvent, T: MapFn<C, E>> BuiltIn<C, E> for MapQ<C, E, T> {
+impl<R: Rt, E: UserEvent, T: MapFn<R, E>> BuiltIn<R, E> for MapQ<R, E, T> {
     const NAME: &str = T::NAME;
     const TYP: LazyLock<FnType> = T::TYP;
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_ctx, typ, scope, from, top_id| match from {
             [_, _] => {
                 Ok(Box::new(Self {
@@ -93,11 +93,11 @@ impl<C: Ctx, E: UserEvent, T: MapFn<C, E>> BuiltIn<C, E> for MapQ<C, E, T> {
     }
 }
 
-impl<C: Ctx, E: UserEvent, T: MapFn<C, E>> Apply<C, E> for MapQ<C, E, T> {
+impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         let slen = self.slots.len();
@@ -170,8 +170,8 @@ impl<C: Ctx, E: UserEvent, T: MapFn<C, E>> Apply<C, E> for MapQ<C, E, T> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
         for n in from.iter_mut() {
             n.typecheck(ctx)?;
@@ -199,14 +199,14 @@ impl<C: Ctx, E: UserEvent, T: MapFn<C, E>> Apply<C, E> for MapQ<C, E, T> {
         }
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         ctx.cached.remove(&self.predid);
         for sl in &mut self.slots {
             sl.delete(ctx)
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.cur = ValArray::from([]);
         for sl in &mut self.slots {
             sl.cur = None;
@@ -218,27 +218,27 @@ impl<C: Ctx, E: UserEvent, T: MapFn<C, E>> Apply<C, E> for MapQ<C, E, T> {
 #[derive(Debug, Default)]
 pub(super) struct MapImpl;
 
-impl<C: Ctx, E: UserEvent> MapFn<C, E> for MapImpl {
+impl<R: Rt, E: UserEvent> MapFn<R, E> for MapImpl {
     const NAME: &str = "array_map";
     deftype!("core::array", "fn(Array<'a>, fn('a) -> 'b) -> Array<'b>");
 
-    fn finish(&mut self, slots: &[Slot<C, E>], _: &ValArray) -> Option<Value> {
+    fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter_exact(
             slots.iter().map(|s| s.cur.clone().unwrap()),
         )))
     }
 }
 
-pub(super) type Map<C, E> = MapQ<C, E, MapImpl>;
+pub(super) type Map<R, E> = MapQ<R, E, MapImpl>;
 
 #[derive(Debug, Default)]
 pub(super) struct FilterImpl;
 
-impl<C: Ctx, E: UserEvent> MapFn<C, E> for FilterImpl {
+impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterImpl {
     const NAME: &str = "array_filter";
     deftype!("core::array", "fn(Array<'a>, fn('a) -> bool) -> Array<'a>");
 
-    fn finish(&mut self, slots: &[Slot<C, E>], a: &ValArray) -> Option<Value> {
+    fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().zip(a.iter()).filter_map(
             |(p, v)| match p.cur {
                 Some(Value::Bool(true)) => Some(v.clone()),
@@ -248,16 +248,16 @@ impl<C: Ctx, E: UserEvent> MapFn<C, E> for FilterImpl {
     }
 }
 
-pub(super) type Filter<C, E> = MapQ<C, E, FilterImpl>;
+pub(super) type Filter<R, E> = MapQ<R, E, FilterImpl>;
 
 #[derive(Debug, Default)]
 pub(super) struct FlatMapImpl;
 
-impl<C: Ctx, E: UserEvent> MapFn<C, E> for FlatMapImpl {
+impl<R: Rt, E: UserEvent> MapFn<R, E> for FlatMapImpl {
     const NAME: &str = "array_flat_map";
     deftype!("core::array", "fn(Array<'a>, fn('a) -> ['b, Array<'b>]) -> Array<'b>");
 
-    fn finish(&mut self, slots: &[Slot<C, E>], _: &ValArray) -> Option<Value> {
+    fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().flat_map(|s| {
             match s.cur.as_ref().unwrap() {
                 Value::Array(a) => Either::Left(a.clone().into_iter()),
@@ -267,16 +267,16 @@ impl<C: Ctx, E: UserEvent> MapFn<C, E> for FlatMapImpl {
     }
 }
 
-pub(super) type FlatMap<C, E> = MapQ<C, E, FlatMapImpl>;
+pub(super) type FlatMap<R, E> = MapQ<R, E, FlatMapImpl>;
 
 #[derive(Debug, Default)]
 pub(super) struct FilterMapImpl;
 
-impl<C: Ctx, E: UserEvent> MapFn<C, E> for FilterMapImpl {
+impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterMapImpl {
     const NAME: &str = "array_filter_map";
     deftype!("core::array", "fn(Array<'a>, fn('a) -> ['b, null]) -> Array<'b>");
 
-    fn finish(&mut self, slots: &[Slot<C, E>], _: &ValArray) -> Option<Value> {
+    fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().filter_map(|s| {
             match s.cur.as_ref().unwrap() {
                 Value::Null => None,
@@ -286,16 +286,16 @@ impl<C: Ctx, E: UserEvent> MapFn<C, E> for FilterMapImpl {
     }
 }
 
-pub(super) type FilterMap<C, E> = MapQ<C, E, FilterMapImpl>;
+pub(super) type FilterMap<R, E> = MapQ<R, E, FilterMapImpl>;
 
 #[derive(Debug, Default)]
 pub(super) struct FindImpl;
 
-impl<C: Ctx, E: UserEvent> MapFn<C, E> for FindImpl {
+impl<R: Rt, E: UserEvent> MapFn<R, E> for FindImpl {
     const NAME: &str = "array_find";
     deftype!("core::array", "fn(Array<'a>, fn('a) -> bool) -> ['a, null]");
 
-    fn finish(&mut self, slots: &[Slot<C, E>], a: &ValArray) -> Option<Value> {
+    fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value> {
         let r = slots
             .iter()
             .enumerate()
@@ -309,16 +309,16 @@ impl<C: Ctx, E: UserEvent> MapFn<C, E> for FindImpl {
     }
 }
 
-pub(super) type Find<C, E> = MapQ<C, E, FindImpl>;
+pub(super) type Find<R, E> = MapQ<R, E, FindImpl>;
 
 #[derive(Debug, Default)]
 pub(super) struct FindMapImpl;
 
-impl<C: Ctx, E: UserEvent> MapFn<C, E> for FindMapImpl {
+impl<R: Rt, E: UserEvent> MapFn<R, E> for FindMapImpl {
     const NAME: &str = "array_find_map";
     deftype!("core::array", "fn(Array<'a>, fn('a) -> ['b, null]) -> ['b, null]");
 
-    fn finish(&mut self, slots: &[Slot<C, E>], _: &ValArray) -> Option<Value> {
+    fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         let r = slots
             .iter()
             .find_map(|s| match s.cur.as_ref().unwrap() {
@@ -330,14 +330,14 @@ impl<C: Ctx, E: UserEvent> MapFn<C, E> for FindMapImpl {
     }
 }
 
-pub(super) type FindMap<C, E> = MapQ<C, E, FindMapImpl>;
+pub(super) type FindMap<R, E> = MapQ<R, E, FindMapImpl>;
 
 #[derive(Debug)]
-pub(super) struct Fold<C: Ctx, E: UserEvent> {
+pub(super) struct Fold<R: Rt, E: UserEvent> {
     top_id: ExprId,
     fid: BindId,
     binds: Vec<BindId>,
-    nodes: Vec<Node<C, E>>,
+    nodes: Vec<Node<R, E>>,
     inits: Vec<Option<Value>>,
     initids: Vec<BindId>,
     initid: BindId,
@@ -347,11 +347,11 @@ pub(super) struct Fold<C: Ctx, E: UserEvent> {
     init: Option<Value>,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Fold<C, E> {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Fold<R, E> {
     const NAME: &str = "array_fold";
     deftype!("core::array", "fn(Array<'a>, 'b, fn('b, 'a) -> 'b) -> 'b");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_ctx, typ, _, from, top_id| match from {
             [_, _, _] => Ok(Box::new(Self {
                 top_id,
@@ -377,11 +377,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Fold<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Fold<C, E> {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Fold<R, E> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         let init = match from[0].update(ctx, event) {
@@ -496,8 +496,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Fold<C, E> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
         for n in from.iter_mut() {
             n.typecheck(ctx)?;
@@ -522,7 +522,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Fold<C, E> {
         }
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         let i =
             iter::once(&self.initid).chain(self.binds.iter()).chain(self.initids.iter());
         for id in i {
@@ -533,7 +533,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Fold<C, E> {
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.init = None;
         for v in &mut self.inits {
             *v = None
@@ -861,10 +861,10 @@ impl EvalCached for UnzipEv {
 pub(super) type Unzip = CachedArgs<UnzipEv>;
 
 #[derive(Debug)]
-pub(super) struct Group<C: Ctx, E: UserEvent> {
+pub(super) struct Group<R: Rt, E: UserEvent> {
     queue: VecDeque<Value>,
     buf: SmallVec<[Value; 16]>,
-    pred: Node<C, E>,
+    pred: Node<R, E>,
     mftyp: TArc<FnType>,
     etyp: Type,
     ready: bool,
@@ -873,11 +873,11 @@ pub(super) struct Group<C: Ctx, E: UserEvent> {
     xid: BindId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Group<C, E> {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
     const NAME: &str = "group";
     deftype!("core::array", "fn('a, fn(i64, 'a) -> bool) -> Array<'a>");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [arg, _] => {
                 let scope =
@@ -912,11 +912,11 @@ impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Group<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Group<C, E> {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Group<R, E> {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         macro_rules! set {
@@ -964,8 +964,8 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Group<C, E> {
 
     fn typecheck(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
         for n in from.iter_mut() {
             n.typecheck(ctx)?
@@ -980,14 +980,14 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Group<C, E> {
         self.pred.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         ctx.cached.remove(&self.nid);
         ctx.cached.remove(&self.pid);
         ctx.cached.remove(&self.xid);
         self.pred.delete(ctx);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.pred.sleep(ctx);
     }
 }
@@ -995,43 +995,43 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Group<C, E> {
 #[derive(Debug)]
 pub(super) struct Iter(BindId, ExprId);
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Iter {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Iter {
     const NAME: &str = "iter";
     deftype!("core::array", "fn(Array<'a>) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, _, top_id| {
             let id = BindId::new();
-            ctx.user.ref_var(id, top_id);
+            ctx.rt.ref_var(id, top_id);
             Ok(Box::new(Iter(id, top_id)))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Iter {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Iter {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if let Some(Value::Array(a)) = from[0].update(ctx, event) {
             for v in a.iter() {
-                ctx.user.set_var(self.0, v.clone());
+                ctx.rt.set_var(self.0, v.clone());
             }
         }
         event.variables.get(&self.0).map(|v| v.clone())
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.0, self.1)
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.0, self.1)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         // there may be in flight updates which we now must ignore forever
-        ctx.user.unref_var(self.0, self.1);
+        ctx.rt.unref_var(self.0, self.1);
         self.0 = BindId::new();
-        ctx.user.ref_var(self.0, self.1);
+        ctx.rt.ref_var(self.0, self.1);
     }
 }
 
@@ -1043,24 +1043,24 @@ pub(super) struct IterQ {
     top_id: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for IterQ {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for IterQ {
     const NAME: &str = "iterq";
     deftype!("core::array", "fn(#clock:Any, Array<'a>) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, _, top_id| {
             let id = BindId::new();
-            ctx.user.ref_var(id, top_id);
+            ctx.rt.ref_var(id, top_id);
             Ok(Box::new(IterQ { triggered: 0, queue: VecDeque::new(), id, top_id }))
         })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for IterQ {
+impl<R: Rt, E: UserEvent> Apply<R, E> for IterQ {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         if from[0].update(ctx, event).is_some() {
@@ -1074,7 +1074,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for IterQ {
         while self.triggered > 0 && self.queue.len() > 0 {
             let (i, a) = self.queue.front_mut().unwrap();
             while self.triggered > 0 && *i < a.len() {
-                ctx.user.set_var(self.id, a[*i].clone());
+                ctx.rt.set_var(self.id, a[*i].clone());
                 *i += 1;
                 self.triggered -= 1;
             }
@@ -1085,35 +1085,35 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for IterQ {
         event.variables.get(&self.id).cloned()
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id)
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
         self.id = BindId::new();
         self.queue.clear();
         self.triggered = 0;
     }
 }
 
-pub(super) fn register<C: Ctx, E: UserEvent>(ctx: &mut ExecCtx<C, E>) -> Result<ArcStr> {
+pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Concat>()?;
-    ctx.register_builtin::<Filter<C, E>>()?;
-    ctx.register_builtin::<FilterMap<C, E>>()?;
-    ctx.register_builtin::<Find<C, E>>()?;
-    ctx.register_builtin::<FindMap<C, E>>()?;
-    ctx.register_builtin::<FlatMap<C, E>>()?;
+    ctx.register_builtin::<Filter<R, E>>()?;
+    ctx.register_builtin::<FilterMap<R, E>>()?;
+    ctx.register_builtin::<Find<R, E>>()?;
+    ctx.register_builtin::<FindMap<R, E>>()?;
+    ctx.register_builtin::<FlatMap<R, E>>()?;
     ctx.register_builtin::<Enumerate>()?;
     ctx.register_builtin::<Zip>()?;
     ctx.register_builtin::<Unzip>()?;
     ctx.register_builtin::<Flatten>()?;
-    ctx.register_builtin::<Fold<C, E>>()?;
-    ctx.register_builtin::<Group<C, E>>()?;
+    ctx.register_builtin::<Fold<R, E>>()?;
+    ctx.register_builtin::<Group<R, E>>()?;
     ctx.register_builtin::<Iter>()?;
     ctx.register_builtin::<IterQ>()?;
     ctx.register_builtin::<Len>()?;
-    ctx.register_builtin::<Map<C, E>>()?;
+    ctx.register_builtin::<Map<R, E>>()?;
     ctx.register_builtin::<PushBack>()?;
     ctx.register_builtin::<PushFront>()?;
     ctx.register_builtin::<Sort>()?;

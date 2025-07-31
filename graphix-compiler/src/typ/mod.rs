@@ -1,4 +1,4 @@
-use crate::{env::Env, expr::ModPath, Ctx, UserEvent};
+use crate::{env::Env, expr::ModPath, Rt, UserEvent};
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
 use enumflags2::{bitflags, BitFlags};
@@ -115,9 +115,9 @@ impl Type {
         }
     }
 
-    pub fn lookup_ref<'a, C: Ctx, E: UserEvent>(
+    pub fn lookup_ref<'a, R: Rt, E: UserEvent>(
         &'a self,
-        env: &'a Env<C, E>,
+        env: &'a Env<R, E>,
     ) -> Result<&'a Type> {
         match self {
             Self::Ref { scope, name, params } => {
@@ -142,9 +142,9 @@ impl Type {
         }
     }
 
-    pub fn check_contains<C: Ctx, E: UserEvent>(
+    pub fn check_contains<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         t: &Self,
     ) -> Result<()> {
         if self.contains(env, t)? {
@@ -156,9 +156,9 @@ impl Type {
         }
     }
 
-    fn contains_int<C: Ctx, E: UserEvent>(
+    fn contains_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashMap<(usize, usize), bool>,
         t: &Self,
     ) -> Result<bool> {
@@ -380,9 +380,9 @@ impl Type {
         }
     }
 
-    pub fn contains<C: Ctx, E: UserEvent>(
+    pub fn contains<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         t: &Self,
     ) -> Result<bool> {
         thread_local! {
@@ -394,9 +394,9 @@ impl Type {
         })
     }
 
-    fn could_match_int<C: Ctx, E: UserEvent>(
+    fn could_match_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashMap<(usize, usize), bool>,
         t: &Self,
     ) -> Result<bool> {
@@ -455,9 +455,9 @@ impl Type {
         }
     }
 
-    pub fn could_match<C: Ctx, E: UserEvent>(
+    pub fn could_match<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         t: &Self,
     ) -> Result<bool> {
         thread_local! {
@@ -469,9 +469,9 @@ impl Type {
         })
     }
 
-    fn union_int<C: Ctx, E: UserEvent>(
+    fn union_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashMap<(usize, usize), Type>,
         t: &Self,
     ) -> Result<Self> {
@@ -615,7 +615,7 @@ impl Type {
         }
     }
 
-    pub fn union<C: Ctx, E: UserEvent>(&self, env: &Env<C, E>, t: &Self) -> Result<Self> {
+    pub fn union<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, t: &Self) -> Result<Self> {
         thread_local! {
             static HIST: RefCell<FxHashMap<(usize, usize), Type>> = RefCell::new(HashMap::default());
         }
@@ -625,9 +625,9 @@ impl Type {
         })
     }
 
-    fn diff_int<C: Ctx, E: UserEvent>(
+    fn diff_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashMap<(usize, usize), Type>,
         t: &Self,
     ) -> Result<Self> {
@@ -768,7 +768,7 @@ impl Type {
         }
     }
 
-    pub fn diff<C: Ctx, E: UserEvent>(&self, env: &Env<C, E>, t: &Self) -> Result<Self> {
+    pub fn diff<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, t: &Self) -> Result<Self> {
         thread_local! {
             static HIST: RefCell<FxHashMap<(usize, usize), Type>> = RefCell::new(HashMap::default());
         }
@@ -1053,9 +1053,9 @@ impl Type {
         }
     }
 
-    fn first_prim_int<C: Ctx, E: UserEvent>(
+    fn first_prim_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashSet<usize>,
     ) -> Option<Typ> {
         match self {
@@ -1086,7 +1086,7 @@ impl Type {
         }
     }
 
-    fn first_prim<C: Ctx, E: UserEvent>(&self, env: &Env<C, E>) -> Option<Typ> {
+    fn first_prim<R: Rt, E: UserEvent>(&self, env: &Env<R, E>) -> Option<Typ> {
         thread_local! {
             static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
         }
@@ -1096,9 +1096,9 @@ impl Type {
         })
     }
 
-    fn check_cast_int<C: Ctx, E: UserEvent>(
+    fn check_cast_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashSet<usize>,
     ) -> Result<()> {
         match self {
@@ -1136,7 +1136,7 @@ impl Type {
         }
     }
 
-    pub fn check_cast<C: Ctx, E: UserEvent>(&self, env: &Env<C, E>) -> Result<()> {
+    pub fn check_cast<R: Rt, E: UserEvent>(&self, env: &Env<R, E>) -> Result<()> {
         thread_local! {
             static HIST: RefCell<FxHashSet<usize>> = RefCell::new(FxHashSet::default());
         }
@@ -1146,9 +1146,9 @@ impl Type {
         })
     }
 
-    fn cast_value_int<C: Ctx, E: UserEvent>(
+    fn cast_value_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashSet<usize>,
         v: Value,
     ) -> Result<Value> {
@@ -1294,7 +1294,7 @@ impl Type {
         }
     }
 
-    pub fn cast_value<C: Ctx, E: UserEvent>(&self, env: &Env<C, E>, v: Value) -> Value {
+    pub fn cast_value<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, v: Value) -> Value {
         thread_local! {
             static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
         }
@@ -1307,9 +1307,9 @@ impl Type {
         })
     }
 
-    fn is_a_int<C: Ctx, E: UserEvent>(
+    fn is_a_int<R: Rt, E: UserEvent>(
         &self,
-        env: &Env<C, E>,
+        env: &Env<R, E>,
         hist: &mut FxHashSet<usize>,
         v: &Value,
     ) -> bool {
@@ -1388,7 +1388,7 @@ impl Type {
     }
 
     /// return true if v is structurally compatible with the type
-    pub fn is_a<C: Ctx, E: UserEvent>(&self, env: &Env<C, E>, v: &Value) -> bool {
+    pub fn is_a<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, v: &Value) -> bool {
         thread_local! {
             static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
         }

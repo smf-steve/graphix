@@ -3,7 +3,7 @@ use crate::{
     expr::{ExprId, ModPath, Pattern, StructurePattern},
     node::{compiler, Cached},
     typ::Type,
-    BindId, Ctx, Event, ExecCtx, UserEvent,
+    BindId, Event, ExecCtx, Rt, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
@@ -44,8 +44,8 @@ pub enum StructPatternNode {
 }
 
 impl StructPatternNode {
-    pub fn compile<C: Ctx, E: UserEvent>(
-        ctx: &mut ExecCtx<C, E>,
+    pub fn compile<R: Rt, E: UserEvent>(
+        ctx: &mut ExecCtx<R, E>,
         type_predicate: &Type,
         spec: &StructurePattern,
         scope: &ModPath,
@@ -56,8 +56,8 @@ impl StructPatternNode {
         Self::compile_int(ctx, type_predicate, spec, scope)
     }
 
-    fn compile_int<C: Ctx, E: UserEvent>(
-        ctx: &mut ExecCtx<C, E>,
+    fn compile_int<R: Rt, E: UserEvent>(
+        ctx: &mut ExecCtx<R, E>,
         type_predicate: &Type,
         spec: &StructurePattern,
         scope: &ModPath,
@@ -507,7 +507,7 @@ impl StructPatternNode {
         }
     }
 
-    pub fn delete<C: Ctx, E: UserEvent>(&self, ctx: &mut ExecCtx<C, E>) {
+    pub fn delete<R: Rt, E: UserEvent>(&self, ctx: &mut ExecCtx<R, E>) {
         match self {
             Self::Ignore | Self::Literal(_) => (),
             Self::Bind(id) => {
@@ -564,16 +564,16 @@ impl StructPatternNode {
 }
 
 #[derive(Debug)]
-pub(crate) struct PatternNode<C: Ctx, E: UserEvent> {
+pub(crate) struct PatternNode<R: Rt, E: UserEvent> {
     pub(super) explicit_type_predicate: bool,
     pub(super) type_predicate: Type,
     pub(super) structure_predicate: StructPatternNode,
-    pub(super) guard: Option<Cached<C, E>>,
+    pub(super) guard: Option<Cached<R, E>>,
 }
 
-impl<C: Ctx, E: UserEvent> PatternNode<C, E> {
+impl<R: Rt, E: UserEvent> PatternNode<R, E> {
     pub(super) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         arg_type: &Type,
         spec: &Pattern,
         scope: &ModPath,
@@ -630,7 +630,7 @@ impl<C: Ctx, E: UserEvent> PatternNode<C, E> {
 
     pub(super) fn bind_event(
         &self,
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         event: &mut Event<E>,
         v: &Value,
     ) {
@@ -648,7 +648,7 @@ impl<C: Ctx, E: UserEvent> PatternNode<C, E> {
 
     pub(super) fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         event: &mut Event<E>,
     ) -> bool {
         match &mut self.guard {
@@ -657,7 +657,7 @@ impl<C: Ctx, E: UserEvent> PatternNode<C, E> {
         }
     }
 
-    pub(super) fn is_match(&self, env: &Env<C, E>, v: &Value) -> bool {
+    pub(super) fn is_match(&self, env: &Env<R, E>, v: &Value) -> bool {
         (!self.explicit_type_predicate || self.type_predicate.is_a(env, v))
             && self.structure_predicate.is_match(v)
             && match &self.guard {
@@ -670,7 +670,7 @@ impl<C: Ctx, E: UserEvent> PatternNode<C, E> {
             }
     }
 
-    pub(super) fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    pub(super) fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some(n) = &mut self.guard {
             n.node.delete(ctx)
         }

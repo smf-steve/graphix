@@ -10,17 +10,17 @@ use super::{
 };
 use crate::{
     expr::{Expr, ExprId, ExprKind, ModPath, ModuleKind},
-    Ctx, ExecCtx, Node, UserEvent,
+    ExecCtx, Node, Rt, UserEvent,
 };
 use anyhow::{bail, Context, Result};
 use compact_str::format_compact;
 
-pub(crate) fn compile<C: Ctx, E: UserEvent>(
-    ctx: &mut ExecCtx<C, E>,
+pub(crate) fn compile<R: Rt, E: UserEvent>(
+    ctx: &mut ExecCtx<R, E>,
     spec: Expr,
     scope: &ModPath,
     top_id: ExprId,
-) -> Result<Node<C, E>> {
+) -> Result<Node<R, E>> {
     match &spec.kind {
         ExprKind::Constant(v) => Constant::compile(spec.clone(), v),
         ExprKind::Do { exprs } => {

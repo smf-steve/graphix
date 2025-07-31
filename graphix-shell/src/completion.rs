@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use arcstr::ArcStr;
 use graphix_compiler::{env::Env, expr::ModPath, typ::Type, NoUserEvent};
-use graphix_rt::GXCtx;
+use graphix_rt::GXRt;
 use log::debug;
 use netidx::path::Path;
 use reedline::{Completer, Span, Suggestion};
@@ -47,7 +47,7 @@ impl<'a> CompletionContext<'a> {
     }
 }
 
-pub(super) struct BComplete(pub Env<GXCtx, NoUserEvent>);
+pub(super) struct BComplete(pub Env<GXRt, NoUserEvent>);
 
 impl Completer for BComplete {
     fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {

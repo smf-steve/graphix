@@ -7,7 +7,7 @@ use graphix_compiler::{
     typ::{format_with_flags, PrintFlag, TVal, Type},
     ExecCtx, NoUserEvent,
 };
-use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXCtx, GXHandle, RtEvent};
+use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXHandle, GXRt, RtEvent};
 use graphix_stdlib::Module;
 use input::InputReader;
 use netidx::{
@@ -26,7 +26,7 @@ mod completion;
 mod input;
 mod tui;
 
-type Env = graphix_compiler::env::Env<GXCtx, NoUserEvent>;
+type Env = graphix_compiler::env::Env<GXRt, NoUserEvent>;
 
 const TUITYP: LazyLock<Type> = LazyLock::new(|| Type::Ref {
     scope: ModPath::root(),
@@ -159,7 +159,7 @@ impl Shell {
     ) -> Result<GXHandle> {
         let publisher = self.publisher.clone();
         let subscriber = self.subscriber.clone();
-        let mut ctx = ExecCtx::new(GXCtx::new(publisher, subscriber));
+        let mut ctx = ExecCtx::new(GXRt::new(publisher, subscriber));
         let (root, mods) = graphix_stdlib::register(&mut ctx, self.stdlib_modules)?;
         let root = ArcStr::from(format!("{root};\nmod tui"));
         let mut mods = vec![mods, tui_mods()];

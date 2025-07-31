@@ -2,7 +2,7 @@ use crate::{deftype, CachedArgs, CachedVals, EvalCached};
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
-use graphix_compiler::{errf, Ctx, ExecCtx, UserEvent};
+use graphix_compiler::{errf, ExecCtx, Rt, UserEvent};
 use netidx::subscriber::Value;
 use netidx_value::ValArray;
 use regex::Regex;
@@ -168,7 +168,7 @@ impl EvalCached for SplitNEv {
 
 type SplitN = CachedArgs<SplitNEv>;
 
-pub(super) fn register<C: Ctx, E: UserEvent>(ctx: &mut ExecCtx<C, E>) -> Result<ArcStr> {
+pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<IsMatch>()?;
     ctx.register_builtin::<Find>()?;
     ctx.register_builtin::<Captures>()?;

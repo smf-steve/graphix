@@ -2,7 +2,7 @@ use crate::{deftype, CachedVals};
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
 use graphix_compiler::{
-    Apply, BuiltIn, BuiltInInitFn, Ctx, Event, ExecCtx, Node, UserEvent,
+    Apply, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Rt, UserEvent,
 };
 use netidx::subscriber::Value;
 use netidx_value::ValArray;
@@ -15,20 +15,20 @@ struct Rand {
     args: CachedVals,
 }
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Rand {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Rand {
     const NAME: &str = "rand";
     deftype!("rand", "fn<'a: [Int, Float]>(?#start:'a, ?#end:'a, #clock:Any) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, _| Ok(Box::new(Rand { args: CachedVals::new(from) })))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Rand {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Rand {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         macro_rules! gen_cases {
@@ -56,7 +56,7 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Rand {
         }
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.args.clear()
     }
 }
@@ -64,20 +64,20 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Rand {
 #[derive(Debug)]
 struct Pick;
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Pick {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Pick {
     const NAME: &str = "rand_pick";
     deftype!("rand", "fn(Array<'a>) -> 'a");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(Pick)))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Pick {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Pick {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         from[0].update(ctx, event).and_then(|a| match a {
@@ -88,26 +88,26 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Pick {
         })
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
 #[derive(Debug)]
 struct Shuffle(SmallVec<[Value; 32]>);
 
-impl<C: Ctx, E: UserEvent> BuiltIn<C, E> for Shuffle {
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Shuffle {
     const NAME: &str = "rand_shuffle";
     deftype!("rand", "fn(Array<'a>) -> Array<'a>");
 
-    fn init(_: &mut ExecCtx<C, E>) -> BuiltInInitFn<C, E> {
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(Shuffle(smallvec![]))))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Apply<C, E> for Shuffle {
+impl<R: Rt, E: UserEvent> Apply<R, E> for Shuffle {
     fn update(
         &mut self,
-        ctx: &mut ExecCtx<C, E>,
-        from: &mut [Node<C, E>],
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
         from[0].update(ctx, event).and_then(|a| match a {
@@ -120,12 +120,12 @@ impl<C: Ctx, E: UserEvent> Apply<C, E> for Shuffle {
         })
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.0.clear()
     }
 }
 
-pub(super) fn register<C: Ctx, E: UserEvent>(ctx: &mut ExecCtx<C, E>) -> Result<ArcStr> {
+pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Rand>()?;
     ctx.register_builtin::<Pick>()?;
     ctx.register_builtin::<Shuffle>()?;

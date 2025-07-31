@@ -1,7 +1,7 @@
 use crate::{
     expr::{Arg, ModPath},
     typ::{FnType, TVar, Type},
-    BindId, Ctx, InitFn, LambdaId, UserEvent,
+    BindId, InitFn, LambdaId, Rt, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -12,16 +12,16 @@ use netidx::path::Path;
 use std::{cell::RefCell, fmt, iter, ops::Bound, sync::Weak};
 use triomphe::Arc;
 
-pub struct LambdaDef<C: Ctx, E: UserEvent> {
+pub struct LambdaDef<R: Rt, E: UserEvent> {
     pub id: LambdaId,
-    pub env: Env<C, E>,
+    pub env: Env<R, E>,
     pub scope: ModPath,
     pub argspec: Arc<[Arg]>,
     pub typ: Arc<FnType>,
-    pub init: InitFn<C, E>,
+    pub init: InitFn<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> fmt::Debug for LambdaDef<C, E> {
+impl<R: Rt, E: UserEvent> fmt::Debug for LambdaDef<R, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "LambdaDef({:?})", self.id)
     }
@@ -62,9 +62,9 @@ pub struct TypeDef {
 }
 
 #[derive(Debug)]
-pub struct Env<C: Ctx, E: UserEvent> {
+pub struct Env<R: Rt, E: UserEvent> {
     pub by_id: Map<BindId, Bind>,
-    pub lambdas: Map<LambdaId, Weak<LambdaDef<C, E>>>,
+    pub lambdas: Map<LambdaId, Weak<LambdaDef<R, E>>>,
     pub byref_chain: Map<BindId, BindId>,
     pub binds: Map<ModPath, Map<CompactString, BindId>>,
     pub used: Map<ModPath, Arc<Vec<ModPath>>>,
@@ -72,7 +72,7 @@ pub struct Env<C: Ctx, E: UserEvent> {
     pub typedefs: Map<ModPath, Map<CompactString, TypeDef>>,
 }
 
-impl<C: Ctx, E: UserEvent> Clone for Env<C, E> {
+impl<R: Rt, E: UserEvent> Clone for Env<R, E> {
     fn clone(&self) -> Self {
         Self {
             by_id: self.by_id.clone(),
@@ -86,7 +86,7 @@ impl<C: Ctx, E: UserEvent> Clone for Env<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Env<C, E> {
+impl<R: Rt, E: UserEvent> Env<R, E> {
     pub(super) fn new() -> Self {
         Self {
             by_id: Map::new(),
@@ -125,12 +125,12 @@ impl<C: Ctx, E: UserEvent> Env<C, E> {
         }
     }
 
-    pub fn find_visible<R, F: FnMut(&str, &str) -> Option<R>>(
+    pub fn find_visible<T, F: FnMut(&str, &str) -> Option<T>>(
         &self,
         scope: &ModPath,
         name: &ModPath,
         mut f: F,
-    ) -> Option<R> {
+    ) -> Option<T> {
         let mut buf = CompactString::from("");
         let name_scope = Path::dirname(&**name);
         let name = Path::basename(&**name).unwrap_or("");

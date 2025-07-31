@@ -2,7 +2,7 @@ use crate::{
     env, err,
     expr::{self, Expr, ExprId, ExprKind, ModPath},
     typ::{self, TVal, TVar, Type},
-    wrap, BindId, Ctx, Event, ExecCtx, Node, Refs, Update, UserEvent,
+    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::{literal, ArcStr};
@@ -61,25 +61,25 @@ pub(crate) struct Nop {
 }
 
 impl Nop {
-    pub(crate) fn new<C: Ctx, E: UserEvent>(typ: Type) -> Node<C, E> {
+    pub(crate) fn new<R: Rt, E: UserEvent>(typ: Type) -> Node<R, E> {
         Box::new(Nop { typ })
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Nop {
+impl<R: Rt, E: UserEvent> Update<R, E> for Nop {
     fn update(
         &mut self,
-        _ctx: &mut ExecCtx<C, E>,
+        _ctx: &mut ExecCtx<R, E>,
         _event: &mut Event<E>,
     ) -> Option<Value> {
         None
     }
 
-    fn delete(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn delete(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
-    fn typecheck(&mut self, _ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, _ctx: &mut ExecCtx<R, E>) -> Result<()> {
         Ok(())
     }
 
@@ -95,20 +95,20 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Nop {
 }
 
 #[derive(Debug)]
-struct Cached<C: Ctx, E: UserEvent> {
+struct Cached<R: Rt, E: UserEvent> {
     cached: Option<Value>,
-    node: Node<C, E>,
+    node: Node<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> Cached<C, E> {
-    fn new(node: Node<C, E>) -> Self {
+impl<R: Rt, E: UserEvent> Cached<R, E> {
+    fn new(node: Node<R, E>) -> Self {
         Self { cached: None, node }
     }
 
     /// update the node, return whether the node updated. If it did,
     /// the updated value will be stored in the cached field, if not,
     /// the previous value will remain there.
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> bool {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> bool {
         match self.node.update(ctx, event) {
             None => false,
             Some(v) => {
@@ -118,7 +118,7 @@ impl<C: Ctx, E: UserEvent> Cached<C, E> {
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.cached = None;
         self.node.sleep(ctx)
     }
@@ -132,12 +132,12 @@ pub(crate) struct Use {
 }
 
 impl Use {
-    pub(crate) fn compile<C: Ctx, E: UserEvent>(
-        ctx: &mut ExecCtx<C, E>,
+    pub(crate) fn compile<R: Rt, E: UserEvent>(
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         name: &ModPath,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         match ctx.env.canonical_modpath(scope, name) {
             None => bail!("at {} no such module {name}", spec.pos),
             Some(_) => {
@@ -149,16 +149,16 @@ impl Use {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Use {
+impl<R: Rt, E: UserEvent> Update<R, E> for Use {
     fn update(
         &mut self,
-        _ctx: &mut ExecCtx<C, E>,
+        _ctx: &mut ExecCtx<R, E>,
         _event: &mut Event<E>,
     ) -> Option<Value> {
         None
     }
 
-    fn typecheck(&mut self, _ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, _ctx: &mut ExecCtx<R, E>) -> Result<()> {
         Ok(())
     }
 
@@ -168,7 +168,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Use {
         &self.spec
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some(used) = ctx.env.used.get_mut_cow(&self.scope) {
             Arc::make_mut(used).retain(|n| n != &self.name);
             if used.is_empty() {
@@ -177,7 +177,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Use {
         }
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
     fn typ(&self) -> &Type {
         &Type::Bottom
@@ -192,14 +192,14 @@ pub(crate) struct TypeDef {
 }
 
 impl TypeDef {
-    pub(crate) fn compile<C: Ctx, E: UserEvent>(
-        ctx: &mut ExecCtx<C, E>,
+    pub(crate) fn compile<R: Rt, E: UserEvent>(
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         name: &ArcStr,
         params: &Arc<[(TVar, Option<Type>)]>,
         typ: &Type,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let typ = typ.scope_refs(scope);
         ctx.env
             .deftype(scope, name, params.clone(), typ)
@@ -210,16 +210,16 @@ impl TypeDef {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for TypeDef {
+impl<R: Rt, E: UserEvent> Update<R, E> for TypeDef {
     fn update(
         &mut self,
-        _ctx: &mut ExecCtx<C, E>,
+        _ctx: &mut ExecCtx<R, E>,
         _event: &mut Event<E>,
     ) -> Option<Value> {
         None
     }
 
-    fn typecheck(&mut self, _ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, _ctx: &mut ExecCtx<R, E>) -> Result<()> {
         Ok(())
     }
 
@@ -229,11 +229,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for TypeDef {
         &self.spec
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         ctx.env.undeftype(&self.scope, &self.name)
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
     fn typ(&self) -> &Type {
         &Type::Bottom
@@ -248,10 +248,10 @@ pub(crate) struct Constant {
 }
 
 impl Constant {
-    pub(crate) fn compile<C: Ctx, E: UserEvent>(
+    pub(crate) fn compile<R: Rt, E: UserEvent>(
         spec: Expr,
         value: &Value,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let spec = Arc::new(spec);
         let value = value.clone();
         let typ = Type::Primitive(Typ::get(&value).into());
@@ -259,10 +259,10 @@ impl Constant {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Constant {
+impl<R: Rt, E: UserEvent> Update<R, E> for Constant {
     fn update(
         &mut self,
-        _ctx: &mut ExecCtx<C, E>,
+        _ctx: &mut ExecCtx<R, E>,
         event: &mut Event<E>,
     ) -> Option<Value> {
         if event.init {
@@ -272,9 +272,9 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Constant {
         }
     }
 
-    fn delete(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn delete(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
     fn refs(&self, _refs: &mut Refs) {}
 
@@ -282,7 +282,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Constant {
         &self.typ
     }
 
-    fn typecheck(&mut self, _ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, _ctx: &mut ExecCtx<R, E>) -> Result<()> {
         Ok(())
     }
 
@@ -293,41 +293,41 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Constant {
 
 // used for both mod and do
 #[derive(Debug)]
-pub(crate) struct Block<C: Ctx, E: UserEvent> {
+pub(crate) struct Block<R: Rt, E: UserEvent> {
     module: bool,
     spec: Expr,
-    children: Box<[Node<C, E>]>,
+    children: Box<[Node<R, E>]>,
 }
 
-impl<C: Ctx, E: UserEvent> Block<C, E> {
+impl<R: Rt, E: UserEvent> Block<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         module: bool,
         exprs: &Arc<[Expr]>,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let children = exprs
             .iter()
             .map(|e| compile(ctx, e.clone(), scope, top_id))
-            .collect::<Result<Box<[Node<C, E>]>>>()?;
+            .collect::<Result<Box<[Node<R, E>]>>>()?;
         Ok(Box::new(Self { module, spec, children }))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Block<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Block<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         self.children.iter_mut().fold(None, |_, n| n.update(ctx, event))
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         for n in &mut self.children {
             n.delete(ctx)
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         for n in &mut self.children {
             n.sleep(ctx)
         }
@@ -343,7 +343,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Block<C, E> {
         &self.children.last().map(|n| n.typ()).unwrap_or(&Type::Bottom)
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         for n in &mut self.children {
             if self.module {
                 wrap!(n, n.typecheck(ctx)).with_context(|| self.spec.ori.clone())?
@@ -360,21 +360,21 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Block<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Bind<C: Ctx, E: UserEvent> {
+pub(crate) struct Bind<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
     pattern: StructPatternNode,
-    node: Node<C, E>,
+    node: Node<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> Bind<C, E> {
+impl<R: Rt, E: UserEvent> Bind<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         b: &expr::Bind,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let expr::Bind { doc, pattern, typ, export: _, value } = b;
         let node = compile(ctx, value.clone(), &scope, top_id)?;
         let typ = match typ {
@@ -409,8 +409,8 @@ impl<C: Ctx, E: UserEvent> Bind<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Bind<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Bind<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if let Some(v) = self.node.update(ctx, event) {
             self.pattern.bind(&v, &mut |id, v| ctx.set_var(id, v))
         }
@@ -424,12 +424,12 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Bind<C, E> {
         self.node.refs(refs);
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.node.delete(ctx);
         self.pattern.delete(ctx);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.node.sleep(ctx);
     }
 
@@ -441,7 +441,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Bind<C, E> {
         &self.spec
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.node, self.node.typecheck(ctx))?;
         wrap!(self.node, self.typ.check_contains(&ctx.env, self.node.typ()))?;
         Ok(())
@@ -457,17 +457,17 @@ pub(crate) struct Ref {
 }
 
 impl Ref {
-    pub(crate) fn compile<C: Ctx, E: UserEvent>(
-        ctx: &mut ExecCtx<C, E>,
+    pub(crate) fn compile<R: Rt, E: UserEvent>(
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         name: &ModPath,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         match ctx.env.lookup_bind(scope, name) {
             None => bail!("at {} {name} not defined", spec.pos),
             Some((_, bind)) => {
-                ctx.user.ref_var(bind.id, top_id);
+                ctx.rt.ref_var(bind.id, top_id);
                 let typ = bind.typ.clone();
                 let spec = Arc::new(spec);
                 Ok(Box::new(Self { spec, typ, id: bind.id, top_id }))
@@ -476,10 +476,10 @@ impl Ref {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Ref {
+impl<R: Rt, E: UserEvent> Update<R, E> for Ref {
     fn update(
         &mut self,
-        _ctx: &mut ExecCtx<C, E>,
+        _ctx: &mut ExecCtx<R, E>,
         event: &mut Event<E>,
     ) -> Option<Value> {
         event.variables.get(&self.id).map(|v| v.clone())
@@ -489,11 +489,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Ref {
         refs.refed.insert(self.id);
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id)
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id)
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<C, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 
     fn spec(&self) -> &Expr {
         &self.spec
@@ -503,28 +503,28 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Ref {
         &self.typ
     }
 
-    fn typecheck(&mut self, _ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, _ctx: &mut ExecCtx<R, E>) -> Result<()> {
         Ok(())
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct StringInterpolate<C: Ctx, E: UserEvent> {
+pub(crate) struct StringInterpolate<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
     typs: Box<[Type]>,
-    args: Box<[Cached<C, E>]>,
+    args: Box<[Cached<R, E>]>,
 }
 
-impl<C: Ctx, E: UserEvent> StringInterpolate<C, E> {
+impl<R: Rt, E: UserEvent> StringInterpolate<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         args: &[Expr],
-    ) -> Result<Node<C, E>> {
-        let args: Box<[Cached<C, E>]> = args
+    ) -> Result<Node<R, E>> {
+        let args: Box<[Cached<R, E>]> = args
             .iter()
             .map(|e| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
             .collect::<Result<_>>()?;
@@ -534,8 +534,8 @@ impl<C: Ctx, E: UserEvent> StringInterpolate<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for StringInterpolate<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for StringInterpolate<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         use std::fmt::Write;
         thread_local! {
             static BUF: RefCell<String> = RefCell::new(String::new());
@@ -572,19 +572,19 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StringInterpolate<C, E> {
         }
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         for n in &mut self.args {
             n.node.delete(ctx)
         }
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         for n in &mut self.args {
             n.sleep(ctx);
         }
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         for (i, a) in self.args.iter_mut().enumerate() {
             wrap!(a.node, a.node.typecheck(ctx))?;
             self.typs[i] = a.node.typ().with_deref(|t| match t {
@@ -597,21 +597,21 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for StringInterpolate<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Connect<C: Ctx, E: UserEvent> {
+pub(crate) struct Connect<R: Rt, E: UserEvent> {
     spec: Expr,
-    node: Node<C, E>,
+    node: Node<R, E>,
     id: BindId,
 }
 
-impl<C: Ctx, E: UserEvent> Connect<C, E> {
+impl<R: Rt, E: UserEvent> Connect<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         name: &ModPath,
         value: &Expr,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let id = match ctx.env.lookup_bind(scope, name) {
             None => bail!("at {} {name} is undefined", spec.pos),
             Some((_, env::Bind { id, .. })) => *id,
@@ -621,8 +621,8 @@ impl<C: Ctx, E: UserEvent> Connect<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Connect<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Connect<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if let Some(v) = self.node.update(ctx, event) {
             ctx.set_var(self.id, v)
         }
@@ -641,15 +641,15 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Connect<C, E> {
         self.node.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.node.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.node.sleep(ctx);
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.node, self.node.typecheck(ctx))?;
         let bind = match ctx.env.by_id.get(&self.id) {
             None => bail!("BUG missing bind {:?}", self.id),
@@ -660,35 +660,35 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Connect<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct ConnectDeref<C: Ctx, E: UserEvent> {
+pub(crate) struct ConnectDeref<R: Rt, E: UserEvent> {
     spec: Expr,
-    rhs: Cached<C, E>,
+    rhs: Cached<R, E>,
     src_id: BindId,
     target_id: Option<BindId>,
     top_id: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> ConnectDeref<C, E> {
+impl<R: Rt, E: UserEvent> ConnectDeref<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         name: &ModPath,
         value: &Expr,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let src_id = match ctx.env.lookup_bind(scope, name) {
             None => bail!("at {} {name} is undefined", spec.pos),
             Some((_, env::Bind { id, .. })) => *id,
         };
-        ctx.user.ref_var(src_id, top_id);
+        ctx.rt.ref_var(src_id, top_id);
         let rhs = Cached::new(compile(ctx, value.clone(), scope, top_id)?);
         Ok(Box::new(Self { spec, rhs, src_id, target_id: None, top_id }))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for ConnectDeref<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for ConnectDeref<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         let mut up = self.rhs.update(ctx, event);
         if let Some(Value::U64(id)) = event.variables.get(&self.src_id) {
             if let Some(target_id) = ctx.env.byref_chain.get(&BindId::from(*id)) {
@@ -719,16 +719,16 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for ConnectDeref<C, E> {
         self.rhs.node.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.src_id, self.top_id);
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.src_id, self.top_id);
         self.rhs.node.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.rhs.sleep(ctx);
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.rhs.node, self.rhs.node.typecheck(ctx))?;
         let bind = match ctx.env.by_id.get(&self.src_id) {
             None => bail!("BUG missing bind {:?}", self.src_id),
@@ -740,21 +740,21 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for ConnectDeref<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct ByRef<C: Ctx, E: UserEvent> {
+pub(crate) struct ByRef<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    child: Node<C, E>,
+    child: Node<R, E>,
     id: BindId,
 }
 
-impl<C: Ctx, E: UserEvent> ByRef<C, E> {
+impl<R: Rt, E: UserEvent> ByRef<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         expr: &Expr,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let child = compile(ctx, expr.clone(), scope, top_id)?;
         let id = BindId::new();
         if let Some(c) = (&*child as &dyn std::any::Any).downcast_ref::<Ref>() {
@@ -765,8 +765,8 @@ impl<C: Ctx, E: UserEvent> ByRef<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for ByRef<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for ByRef<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if let Some(v) = self.child.update(ctx, event) {
             ctx.set_var(self.id, v);
         }
@@ -777,12 +777,12 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for ByRef<C, E> {
         }
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         ctx.env.byref_chain.remove_cow(&self.id);
         self.child.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.child.sleep(ctx);
     }
 
@@ -798,7 +798,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for ByRef<C, E> {
         self.child.refs(refs)
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.child, self.child.typecheck(ctx))?;
         let t = Type::ByRef(Arc::new(self.child.typ().clone()));
         wrap!(self, self.typ.check_contains(&ctx.env, &t))
@@ -806,39 +806,39 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for ByRef<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Deref<C: Ctx, E: UserEvent> {
+pub(crate) struct Deref<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    child: Node<C, E>,
+    child: Node<R, E>,
     id: Option<BindId>,
     top_id: ExprId,
 }
 
-impl<C: Ctx, E: UserEvent> Deref<C, E> {
+impl<R: Rt, E: UserEvent> Deref<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         expr: &Expr,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let child = compile(ctx, expr.clone(), scope, top_id)?;
         let typ = Type::empty_tvar();
         Ok(Box::new(Self { spec, typ, child, id: None, top_id }))
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Deref<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Deref<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if let Some(v) = self.child.update(ctx, event) {
             match v {
                 Value::U64(i) | Value::V64(i) => {
                     let new_id = BindId::from(i);
                     if self.id != Some(new_id) {
                         if let Some(old) = self.id {
-                            ctx.user.unref_var(old, self.top_id);
+                            ctx.rt.unref_var(old, self.top_id);
                         }
-                        ctx.user.ref_var(new_id, self.top_id);
+                        ctx.rt.ref_var(new_id, self.top_id);
                         self.id = Some(new_id);
                     }
                 }
@@ -848,14 +848,14 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Deref<C, E> {
         self.id.and_then(|id| event.variables.get(&id).cloned())
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         if let Some(id) = self.id.take() {
-            ctx.user.unref_var(id, self.top_id);
+            ctx.rt.unref_var(id, self.top_id);
         }
         self.child.delete(ctx);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.child.sleep(ctx);
     }
 
@@ -874,7 +874,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Deref<C, E> {
         }
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.child, self.child.typecheck(ctx))?;
         let typ = match self.child.typ() {
             Type::ByRef(t) => (**t).clone(),
@@ -886,21 +886,21 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Deref<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Qop<C: Ctx, E: UserEvent> {
+pub(crate) struct Qop<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
     id: BindId,
-    n: Node<C, E>,
+    n: Node<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> Qop<C, E> {
+impl<R: Rt, E: UserEvent> Qop<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         e: &Expr,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let n = compile(ctx, e.clone(), scope, top_id)?;
         match ctx.env.lookup_bind(scope, &ModPath::from(["errors"])) {
             None => bail!("at {} BUG: errors is undefined", spec.pos),
@@ -912,8 +912,8 @@ impl<C: Ctx, E: UserEvent> Qop<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Qop<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         match self.n.update(ctx, event) {
             None => None,
             Some(Value::Error(e)) => {
@@ -937,15 +937,15 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Qop<C, E> {
         self.n.refs(refs)
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.sleep(ctx);
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.n, self.n.typecheck(ctx))?;
         let bind =
             ctx.env.by_id.get(&self.id).ok_or_else(|| anyhow!("BUG: missing bind"))?;
@@ -962,22 +962,22 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Qop<C, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct TypeCast<C: Ctx, E: UserEvent> {
+pub(crate) struct TypeCast<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
     target: Type,
-    n: Node<C, E>,
+    n: Node<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> TypeCast<C, E> {
+impl<R: Rt, E: UserEvent> TypeCast<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         expr: &Expr,
         typ: &Type,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let n = compile(ctx, expr.clone(), scope, top_id)?;
         let target = typ.scope_refs(scope);
         if let Err(e) = target.check_cast(&ctx.env) {
@@ -988,8 +988,8 @@ impl<C: Ctx, E: UserEvent> TypeCast<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for TypeCast<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for TypeCast<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         self.n.update(ctx, event).map(|v| self.target.cast_value(&ctx.env, v))
     }
 
@@ -1001,11 +1001,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for TypeCast<C, E> {
         &self.typ
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.delete(ctx)
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.sleep(ctx);
     }
 
@@ -1013,26 +1013,26 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for TypeCast<C, E> {
         self.n.refs(refs)
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         Ok(wrap!(self.n, self.n.typecheck(ctx))?)
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct Any<C: Ctx, E: UserEvent> {
+pub(crate) struct Any<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    n: Box<[Node<C, E>]>,
+    n: Box<[Node<R, E>]>,
 }
 
-impl<C: Ctx, E: UserEvent> Any<C, E> {
+impl<R: Rt, E: UserEvent> Any<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         args: &[Expr],
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let n = args
             .iter()
             .map(|e| compile(ctx, e.clone(), scope, top_id))
@@ -1043,8 +1043,8 @@ impl<C: Ctx, E: UserEvent> Any<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Any<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Any<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         self.n
             .iter_mut()
             .filter_map(|s| s.update(ctx, event))
@@ -1059,11 +1059,11 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Any<C, E> {
         &self.typ
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.delete(ctx))
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.n.iter_mut().for_each(|n| n.sleep(ctx))
     }
 
@@ -1071,7 +1071,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Any<C, E> {
         self.n.iter().for_each(|n| n.refs(refs))
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         for n in self.n.iter_mut() {
             wrap!(n, n.typecheck(ctx))?
         }
@@ -1085,27 +1085,27 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Any<C, E> {
 }
 
 #[derive(Debug)]
-struct Sample<C: Ctx, E: UserEvent> {
+struct Sample<R: Rt, E: UserEvent> {
     spec: Expr,
     triggered: usize,
     typ: Type,
     id: BindId,
     top_id: ExprId,
-    trigger: Node<C, E>,
-    arg: Cached<C, E>,
+    trigger: Node<R, E>,
+    arg: Cached<R, E>,
 }
 
-impl<C: Ctx, E: UserEvent> Sample<C, E> {
+impl<R: Rt, E: UserEvent> Sample<R, E> {
     pub(crate) fn compile(
-        ctx: &mut ExecCtx<C, E>,
+        ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
         lhs: &Arc<Expr>,
         rhs: &Arc<Expr>,
-    ) -> Result<Node<C, E>> {
+    ) -> Result<Node<R, E>> {
         let id = BindId::new();
-        ctx.user.ref_var(id, top_id);
+        ctx.rt.ref_var(id, top_id);
         let trigger = compile(ctx, (**lhs).clone(), scope, top_id)?;
         let arg = Cached::new(compile(ctx, (**rhs).clone(), scope, top_id)?);
         let typ = arg.node.typ().clone();
@@ -1113,8 +1113,8 @@ impl<C: Ctx, E: UserEvent> Sample<C, E> {
     }
 }
 
-impl<C: Ctx, E: UserEvent> Update<C, E> for Sample<C, E> {
-    fn update(&mut self, ctx: &mut ExecCtx<C, E>, event: &mut Event<E>) -> Option<Value> {
+impl<R: Rt, E: UserEvent> Update<R, E> for Sample<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if let Some(_) = self.trigger.update(ctx, event) {
             self.triggered += 1;
         }
@@ -1129,19 +1129,19 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Sample<C, E> {
         if self.arg.cached.is_some() {
             while self.triggered > 0 {
                 self.triggered -= 1;
-                ctx.user.set_var(self.id, self.arg.cached.clone().unwrap());
+                ctx.rt.set_var(self.id, self.arg.cached.clone().unwrap());
             }
         }
         res
     }
 
-    fn delete(&mut self, ctx: &mut ExecCtx<C, E>) {
-        ctx.user.unref_var(self.id, self.top_id);
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
         self.arg.node.delete(ctx);
         self.trigger.delete(ctx);
     }
 
-    fn sleep(&mut self, ctx: &mut ExecCtx<C, E>) {
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.arg.sleep(ctx);
         self.trigger.sleep(ctx);
     }
@@ -1160,7 +1160,7 @@ impl<C: Ctx, E: UserEvent> Update<C, E> for Sample<C, E> {
         self.trigger.refs(refs);
     }
 
-    fn typecheck(&mut self, ctx: &mut ExecCtx<C, E>) -> Result<()> {
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.trigger, self.trigger.typecheck(ctx))?;
         wrap!(self.arg.node, self.arg.node.typecheck(ctx))
     }
