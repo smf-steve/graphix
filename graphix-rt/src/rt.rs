@@ -58,6 +58,7 @@ pub struct GXRt<X: GXExt> {
     pub(super) writes: mpsc::Receiver<WriteBatch>,
     pub(super) rpcs_tx: mpsc::Sender<(BindId, RpcCall)>,
     pub(super) rpcs: mpsc::Receiver<(BindId, RpcCall)>,
+    pub(super) updated: FxHashMap<ExprId, bool>,
     pub ext: X,
 }
 
@@ -81,6 +82,7 @@ impl<X: GXExt> GXRt<X> {
             published: HashMap::default(),
             change_trackers: HashMap::default(),
             published_rpcs: HashMap::default(),
+            updated: HashMap::default(),
             ext: X::default(),
             tasks,
             batch,
@@ -145,9 +147,11 @@ impl<X: GXExt> Rt for GXRt<X> {
             writes,
             rpcs,
             rpcs_tx,
+            updated,
             ext,
         } = self;
         ext.clear();
+        updated.clear();
         by_ref.clear();
         var_updates.clear();
         net_updates.clear();
@@ -360,5 +364,13 @@ impl<X: GXExt> Rt for GXRt<X> {
 
     fn set_var(&mut self, id: BindId, value: Value) {
         self.var_updates.push_back((id, value.clone()));
+    }
+
+    fn set_var_now(&mut self, id: BindId) {
+        if let Some(refed) = self.by_ref.get(&id) {
+            for eid in refed.keys() {
+                self.updated.entry(*eid).or_default();
+            }
+        }
     }
 }

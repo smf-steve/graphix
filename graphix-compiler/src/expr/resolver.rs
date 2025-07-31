@@ -1,6 +1,9 @@
-use crate::expr::{
-    parser, Bind, Expr, ExprId, ExprKind, Lambda, ModPath, ModuleKind, Origin, Pattern,
-    Source,
+use crate::{
+    expr::{
+        parser, Bind, Expr, ExprId, ExprKind, Lambda, ModPath, ModuleKind, Origin,
+        Pattern, Source,
+    },
+    format_with_flags, PrintFlag,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::ArcStr;
@@ -233,7 +236,9 @@ impl Expr {
                             .with_context(|| format!("parsing file {ori:?}"))?,
                     );
                     let kind = ExprKind::Module { name, export, value };
-                    info!("load and parse {ori:?} {:?}", ts.elapsed());
+                    format_with_flags(PrintFlag::NoSource | PrintFlag::NoParents, || {
+                        info!("load and parse {ori} {:?}", ts.elapsed())
+                    });
                     return Ok(Expr { id, ori: Arc::new(ori), pos, kind });
                 }
                 bail!("module {name} could not be found {errors:?}")

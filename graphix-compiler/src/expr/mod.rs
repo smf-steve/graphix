@@ -1,4 +1,7 @@
-use crate::typ::{TVar, Type};
+use crate::{
+    typ::{TVar, Type},
+    PrintFlag, PRINT_FLAGS,
+};
 use anyhow::Result;
 use arcstr::ArcStr;
 use combine::stream::position::SourcePosition;
@@ -164,28 +167,43 @@ pub struct Origin {
 
 impl fmt::Display for Origin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let flags = PRINT_FLAGS.with(|f| f.get());
         match &self.source {
-            Source::Unspecified => write!(f, "in expr {}", self.text)?,
+            Source::Unspecified => {
+                if flags.contains(PrintFlag::NoSource) {
+                    write!(f, "in expr")?
+                } else {
+                    write!(f, "in expr {}", self.text)?
+                }
+            }
             Source::File(n) => write!(f, "in file {n:?}")?,
             Source::Netidx(n) => write!(f, "in netidx {n}")?,
             Source::Internal(n) => write!(f, "in module {n}")?,
         }
         let mut p = &self.parent;
-        loop {
-            match p {
-                None => break Ok(()),
-                Some(parent) => {
-                    writeln!(f, "")?;
-                    write!(f, "    ")?;
-                    match &parent.source {
-                        Source::Unspecified => {
-                            write!(f, "included from expr {}", parent.text)?
+        if flags.contains(PrintFlag::NoParents) {
+            Ok(())
+        } else {
+            loop {
+                match p {
+                    None => break Ok(()),
+                    Some(parent) => {
+                        writeln!(f, "")?;
+                        write!(f, "    ")?;
+                        match &parent.source {
+                            Source::Unspecified => {
+                                if flags.contains(PrintFlag::NoSource) {
+                                    write!(f, "included from expr")?
+                                } else {
+                                    write!(f, "included from expr {}", parent.text)?
+                                }
+                            }
+                            Source::File(n) => write!(f, "included from file {n:?}")?,
+                            Source::Netidx(n) => write!(f, "included from netidx {n}")?,
+                            Source::Internal(n) => write!(f, "included from module {n}")?,
                         }
-                        Source::File(n) => write!(f, "included from file {n:?}")?,
-                        Source::Netidx(n) => write!(f, "included from netidx {n}")?,
-                        Source::Internal(n) => write!(f, "included from module {n}")?,
+                        p = &parent.parent;
                     }
-                    p = &parent.parent;
                 }
             }
         }

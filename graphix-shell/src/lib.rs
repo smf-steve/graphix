@@ -4,8 +4,9 @@ use derive_builder::Builder;
 use enumflags2::BitFlags;
 use graphix_compiler::{
     expr::{ExprId, ModPath, ModuleResolver},
-    typ::{format_with_flags, PrintFlag, TVal, Type},
-    ExecCtx,
+    format_with_flags,
+    typ::{TVal, Type},
+    ExecCtx, PrintFlag,
 };
 use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXEvent, GXExt, GXHandle, GXRt};
 use graphix_stdlib::Module;

@@ -19,7 +19,7 @@ impl<'a, R: Rt, E: UserEvent> TVal<'a, R, E> {
         hist: &mut FxHashSet<(usize, usize)>,
     ) -> fmt::Result {
         if !self.typ.is_a(&self.env, &self.v) {
-            return format_with_flags(PrintFlag::DerefTVars.into(), || {
+            return format_with_flags(PrintFlag::DerefTVars, || {
                 write!(
                     f,
                     "error, type {} does not match value {}",

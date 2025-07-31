@@ -1,8 +1,9 @@
 use crate::{
     env, err,
     expr::{self, Expr, ExprId, ExprKind, ModPath},
-    typ::{self, TVal, TVar, Type},
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
+    format_with_flags,
+    typ::{TVal, TVar, Type},
+    wrap, BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::{literal, ArcStr};
@@ -383,7 +384,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
                 let typ = node.typ().clone();
                 let ptyp = pattern.infer_type_predicate(&ctx.env)?;
                 if !ptyp.contains(&ctx.env, &typ)? {
-                    typ::format_with_flags(typ::PrintFlag::DerefTVars.into(), || {
+                    format_with_flags(PrintFlag::DerefTVars, || {
                         bail!(
                             "at {} match error {typ} can't be matched by {ptyp}",
                             spec.pos
@@ -412,7 +413,10 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
 impl<R: Rt, E: UserEvent> Update<R, E> for Bind<R, E> {
     fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if let Some(v) = self.node.update(ctx, event) {
-            self.pattern.bind(&v, &mut |id, v| ctx.set_var(id, v))
+            self.pattern.bind(&v, &mut |id, v| {
+                event.variables.insert(id, v.clone());
+                ctx.set_var_now(id, v);
+            })
         }
         None
     }

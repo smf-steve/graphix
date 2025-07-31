@@ -678,10 +678,8 @@ run!(array_flatten, ARRAY_FLATTEN, |v: Result<&Value>| {
 #[cfg(test)]
 const ARRAY_GROUP: &str = r#"
 {
-   let x = 1;
-   let y = x + 1;
-   let z = y + 1;
-   array::group(any(x, y, z), |_, v| v == 3)
+    let a = array::iter([1, 2, 3]);
+    array::group(a, |_, v| v == 3)
 }
 "#;
 

@@ -17,6 +17,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
+use enumflags2::{bitflags, BitFlags};
 use expr::Expr;
 use fxhash::{FxHashMap, FxHashSet};
 use log::info;
@@ -30,7 +31,7 @@ use node::compiler;
 use parking_lot::RwLock;
 use std::{
     any::Any,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
     mem,
@@ -124,6 +125,39 @@ pub struct NoUserEvent;
 
 impl UserEvent for NoUserEvent {
     fn clear(&mut self) {}
+}
+
+#[derive(Debug, Clone, Copy)]
+#[bitflags]
+#[repr(u64)]
+pub enum PrintFlag {
+    /// Dereference type variables and print both the tvar name and the bound
+    /// type or "unbound".
+    DerefTVars,
+    /// Replace common primitives with shorter type names as defined
+    /// in core. e.g. Any, instead of the set of every primitive type.
+    ReplacePrims,
+    /// When formatting an Origin don't print the source, just the location
+    NoSource,
+    /// When formatting an Origin don't print the origin's parents
+    NoParents,
+}
+
+thread_local! {
+    static PRINT_FLAGS: Cell<BitFlags<PrintFlag>> = Cell::new(PrintFlag::ReplacePrims.into());
+}
+
+/// For the duration of the closure F change the way type variables
+/// are formatted (on this thread only) according to the specified
+/// flags.
+pub fn format_with_flags<G: Into<BitFlags<PrintFlag>>, R, F: FnOnce() -> R>(
+    flags: G,
+    f: F,
+) -> R {
+    let prev = PRINT_FLAGS.replace(flags.into());
+    let res = f();
+    PRINT_FLAGS.set(prev);
+    res
 }
 
 /// Event represents all the things that happened simultaneously in a
@@ -350,18 +384,30 @@ pub trait Rt: Debug + 'static {
     fn ref_var(&mut self, id: BindId, ref_by: ExprId);
     fn unref_var(&mut self, id: BindId, ref_by: ExprId);
 
-    /// Called by the ExecCtx when set_var is called on it. All
-    /// expressions that ref the id should be updated when this
-    /// happens.
+    /// Called by the ExecCtx when set_var is called on it.
     ///
-    /// The runtime must deliver all set_vars in a single event except
-    /// that set_vars for the same variable in the same cycle must be
-    /// queued and deferred to the next cycle.
+    /// All expressions that ref the id should be updated when this happens. The
+    /// runtime must deliver all set_vars in a single event except that set_vars
+    /// for the same variable in the same cycle must be queued and deferred to
+    /// the next cycle.
     ///
     /// The runtime MUST NOT change event while a cycle is in
     /// progress. set_var must be queued until the cycle ends and then
     /// presented as a new batch.
     fn set_var(&mut self, id: BindId, value: Value);
+
+    /// Called by the ExecCtx when set_var_now is called on it
+    ///
+    /// Set the variable right now for the current cycle. This is called when
+    /// the compiler knows that nothing can depend on the variable before the
+    /// current node, and as a result the only nodes that can depend on the
+    /// variable have yet to be executed. It is therefore safe to skip the extra
+    /// cycle and set the variable in the event now. The Rt must make sure to
+    /// wake up any nodes that depend on the variable, but it need not wake up
+    /// nodes before the current node.
+    ///
+    /// The runtime can assume that the event has already been updated.
+    fn set_var_now(&mut self, id: BindId);
 
     /// This must return results from the same path in the call order.
     ///
@@ -444,6 +490,11 @@ impl<R: Rt, E: UserEvent> ExecCtx<R, E> {
     pub fn set_var(&mut self, id: BindId, v: Value) {
         self.cached.insert(id, v.clone());
         self.rt.set_var(id, v)
+    }
+
+    pub fn set_var_now(&mut self, id: BindId, v: Value) {
+        self.cached.insert(id, v);
+        self.rt.set_var_now(id);
     }
 
     fn tag(&mut self, s: &ArcStr) -> ArcStr {

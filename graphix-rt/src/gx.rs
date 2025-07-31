@@ -104,7 +104,6 @@ struct CallableInt {
 pub(super) struct GX<X: GXExt> {
     ctx: ExecCtx<GXRt<X>, X::UserEvent>,
     event: Event<X::UserEvent>,
-    updated: FxHashMap<ExprId, bool>,
     nodes: IndexMap<ExprId, Node<GXRt<X>, X::UserEvent>, FxBuildHasher>,
     callables: FxHashMap<CallableId, CallableInt>,
     sub: tmpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
@@ -141,7 +140,6 @@ impl<X: GXExt> GX<X> {
         let mut t = Self {
             ctx: cfg.ctx,
             event,
-            updated: HashMap::default(),
             nodes: IndexMap::default(),
             callables: HashMap::default(),
             sub: cfg.sub,
@@ -175,7 +173,7 @@ impl<X: GXExt> GX<X> {
                         e.insert($v);
                         if let Some(exps) = self.ctx.rt.$refed.get(&$id) {
                             for id in exps.keys() {
-                                self.updated.entry(*id).or_insert(false);
+                                self.ctx.rt.updated.entry(*id).or_insert(false);
                             }
                         }
                     }
@@ -222,7 +220,7 @@ impl<X: GXExt> GX<X> {
             error!("could not marshall user events {e:?}")
         }
         for (id, n) in self.nodes.iter_mut() {
-            if let Some(init) = self.updated.get(id) {
+            if let Some(init) = self.ctx.rt.updated.get(id) {
                 let mut clear: SmallVec<[BindId; 16]> = smallvec![];
                 self.event.init = *init;
                 if self.event.init {
@@ -272,7 +270,7 @@ impl<X: GXExt> GX<X> {
             }
         }
         self.event.clear();
-        self.updated.clear();
+        self.ctx.rt.updated.clear();
         if self.ctx.rt.batch.len() > 0 {
             let batch =
                 mem::replace(&mut self.ctx.rt.batch, self.ctx.rt.publisher.start_batch());
@@ -351,7 +349,7 @@ impl<X: GXExt> GX<X> {
             .collect::<Result<SmallVec<[_; 4]>>>()
             .with_context(|| ori.clone())?;
         for (e, n) in exprs.iter().zip(nodes.into_iter()) {
-            self.updated.insert(e.id, true);
+            self.ctx.rt.updated.insert(e.id, true);
             self.nodes.insert(e.id, n);
         }
         Ok(())
@@ -376,7 +374,7 @@ impl<X: GXExt> GX<X> {
             .map(|(e, n)| {
                 let output = is_output(&n);
                 let typ = n.typ().clone();
-                self.updated.insert(e.id, true);
+                self.ctx.rt.updated.insert(e.id, true);
                 self.nodes.insert(e.id, n);
                 CompExp { id: e.id, output, typ, rt: rt.clone() }
             })
@@ -463,7 +461,7 @@ impl<X: GXExt> GX<X> {
             let has_out = is_output(&n);
             let typ = n.typ().clone();
             self.nodes.insert(top_id, n);
-            self.updated.insert(top_id, true);
+            self.ctx.rt.updated.insert(top_id, true);
             res.push(CompExp { id: top_id, output: has_out, typ, rt: rt.clone() })
         }
         Ok(CompRes { exprs: res, env: self.ctx.env.clone() })

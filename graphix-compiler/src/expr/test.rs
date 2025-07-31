@@ -1,7 +1,8 @@
 use super::*;
 use crate::{
     expr::parser::parse_one,
-    typ::{self, FnArgType, FnType, Type},
+    format_with_flags,
+    typ::{FnArgType, FnType, Type},
 };
 use bytes::Bytes;
 use chrono::prelude::*;
@@ -1180,7 +1181,7 @@ proptest! {
     #[test]
     fn expr_round_trip0(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1188,7 +1189,7 @@ proptest! {
     #[test]
     fn expr_round_trip1(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1196,7 +1197,7 @@ proptest! {
     #[test]
     fn expr_round_trip2(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1204,7 +1205,7 @@ proptest! {
     #[test]
     fn expr_round_trip3(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1212,7 +1213,7 @@ proptest! {
     #[test]
     fn expr_round_trip4(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1220,7 +1221,7 @@ proptest! {
     #[test]
     fn expr_round_trip5(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1228,7 +1229,7 @@ proptest! {
     #[test]
     fn expr_round_trip6(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1236,7 +1237,7 @@ proptest! {
     #[test]
     fn expr_round_trip7(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string()));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string()));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1244,7 +1245,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip0(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1252,7 +1253,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip1(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1260,7 +1261,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip2(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1268,7 +1269,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip3(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1276,7 +1277,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip4(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1284,7 +1285,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip5(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1292,7 +1293,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip6(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }
@@ -1300,7 +1301,7 @@ proptest! {
     #[test]
     fn expr_pp_round_trip7(s in expr()) {
         let s = dbg!(s);
-        let st = dbg!(typ::format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
+        let st = dbg!(format_with_flags(BitFlags::empty(), || s.to_string_pretty(80)));
         let e = dbg!(parse_one(st.as_str()).unwrap());
         assert!(check(&s, &e))
     }

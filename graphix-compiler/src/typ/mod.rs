@@ -1,7 +1,9 @@
-use crate::{env::Env, expr::ModPath, Rt, UserEvent};
+use crate::{
+    env::Env, expr::ModPath, format_with_flags, PrintFlag, Rt, UserEvent, PRINT_FLAGS,
+};
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
-use enumflags2::{bitflags, BitFlags};
+use enumflags2::BitFlags;
 use fxhash::{FxHashMap, FxHashSet};
 use netidx::{
     publisher::{Typ, Value},
@@ -11,7 +13,7 @@ use netidx_value::ValArray;
 use parking_lot::RwLock;
 use smallvec::{smallvec, SmallVec};
 use std::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     cmp::{Eq, PartialEq},
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::{self, Debug},
@@ -34,32 +36,6 @@ impl FromIterator<bool> for AndAc {
     fn from_iter<T: IntoIterator<Item = bool>>(iter: T) -> Self {
         AndAc(iter.into_iter().all(|b| b))
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-#[bitflags]
-#[repr(u64)]
-pub enum PrintFlag {
-    /// Dereference type variables and print both the tvar name and the bound
-    /// type or "unbound".
-    DerefTVars,
-    /// Replace common primitives with shorter type names as defined
-    /// in core. e.g. Any, instead of the set of every primitive type.
-    ReplacePrims,
-}
-
-thread_local! {
-    static PRINT_FLAGS: Cell<BitFlags<PrintFlag>> = Cell::new(PrintFlag::ReplacePrims.into());
-}
-
-/// For the duration of the closure F change the way type variables
-/// are formatted (on this thread only) according to the specified
-/// flags.
-pub fn format_with_flags<R, F: FnOnce() -> R>(flags: BitFlags<PrintFlag>, f: F) -> R {
-    let prev = PRINT_FLAGS.replace(flags);
-    let res = f();
-    PRINT_FLAGS.set(prev);
-    res
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

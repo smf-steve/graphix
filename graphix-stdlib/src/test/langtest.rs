@@ -150,22 +150,16 @@ const SELECT0: &str = r#"
   let x = 1;
   let y = x + 1;
   let z = y + 1;
-  let s = select any(x, y, z) {
+  select any(x, y, z) {
     v if v == 1 => "first [v]",
     v if v == 2 => "second [v]",
     v => "third [v]"
-  };
-  array::group(s, |n, x| n == 3)
+  }
 }
 "#;
 
 run!(select0, SELECT0, |v: Result<&Value>| match v {
-    Ok(Value::Array(a)) => match &**a {
-        [Value::String(a), Value::String(b), Value::String(c)]
-            if &**a == "first 1" && &**b == "second 2" && &**c == "third 3" =>
-            true,
-        _ => false,
-    },
+    Ok(Value::String(s)) => &**s == "first 1",
     _ => false,
 });
 
@@ -1010,16 +1004,13 @@ const ANY0: &str = r#"
   let x = 1;
   let y = x + 1;
   let z = y + 1;
-  array::group(any(x, y, z), |n, _| n == 3)
+  any(z, x, y)
 }
 "#;
 
 #[cfg(test)]
 run!(any0, ANY0, |v: Result<&Value>| match v {
-    Ok(Value::Array(a)) => match &a[..] {
-        [Value::I64(1), Value::I64(2), Value::I64(3)] => true,
-        _ => false,
-    },
+    Ok(Value::I64(3)) => true,
     _ => false,
 });
 
@@ -1029,22 +1020,15 @@ const ANY1: &str = r#"
   let x = 1;
   let y = "[x] + 1";
   let z = [y, y];
-  let r: [i64, string, Array<string>] = any(x, y, z);
-  array::group(r, |n, _| n == 3)
+  any(z, x, y)
 }
 "#;
 
 #[cfg(test)]
 run!(any1, ANY1, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
-        [Value::I64(1), Value::String(s), Value::Array(a)] => {
-            &**s == "1 + 1"
-                && match &a[..] {
-                    [Value::String(s0), Value::String(s1)] => {
-                        (&**s0 == &**s1) && &**s0 == "1 + 1"
-                    }
-                    _ => false,
-                }
+        [Value::String(s0), Value::String(s1)] => {
+            &**s0 == "1 + 1" && s0 == s1
         }
         _ => false,
     },
