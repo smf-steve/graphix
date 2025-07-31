@@ -4,21 +4,21 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::GXHandle;
+use graphix_rt::{GXExt, GXHandle};
 use netidx::publisher::Value;
 use ratatui::{layout::Rect, style::Style, text::Text, Frame};
 use std::mem;
 use tokio::try_join;
 
-pub(super) struct TextW {
-    alignment: TRef<Option<AlignmentV>>,
-    lines: TRef<LinesV>,
-    style: TRef<StyleV>,
+pub(super) struct TextW<X: GXExt> {
+    alignment: TRef<X, Option<AlignmentV>>,
+    lines: TRef<X, LinesV>,
+    style: TRef<X, StyleV>,
     text: Text<'static>,
 }
 
-impl TextW {
-    pub(super) async fn compile(gx: GXHandle, source: Value) -> Result<TuiW> {
+impl<X: GXExt> TextW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, source: Value) -> Result<TuiW> {
         let [(_, alignment), (_, lines), (_, style)] =
             source.cast_to::<[(ArcStr, u64); 3]>().context("text flds")?;
         let (alignment, lines, style) = try_join! {
@@ -26,10 +26,10 @@ impl TextW {
             gx.compile_ref(lines),
             gx.compile_ref(style)
         }?;
-        let alignment =
-            TRef::<Option<AlignmentV>>::new(alignment).context("text tref alignment")?;
-        let mut lines = TRef::<LinesV>::new(lines).context("text tref lines")?;
-        let style = TRef::<StyleV>::new(style).context("text tref style")?;
+        let alignment = TRef::<X, Option<AlignmentV>>::new(alignment)
+            .context("text tref alignment")?;
+        let mut lines = TRef::<X, LinesV>::new(lines).context("text tref lines")?;
+        let style = TRef::<X, StyleV>::new(style).context("text tref style")?;
         let text = Text {
             alignment: alignment.t.as_ref().and_then(|a| a.map(|a| a.0)),
             style: style.t.as_ref().map(|s| s.0).unwrap_or(Style::new()),
@@ -40,7 +40,7 @@ impl TextW {
 }
 
 #[async_trait]
-impl TuiWidget for TextW {
+impl<X: GXExt> TuiWidget for TextW<X> {
     fn draw(&mut self, frame: &mut Frame, rect: Rect) -> Result<()> {
         frame.render_widget(&self.text, rect);
         Ok(())

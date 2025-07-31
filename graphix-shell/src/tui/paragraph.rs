@@ -6,7 +6,7 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::GXHandle;
+use graphix_rt::{GXExt, GXHandle};
 use netidx::publisher::Value;
 use ratatui::{
     layout::Rect,
@@ -15,16 +15,16 @@ use ratatui::{
 };
 use tokio::try_join;
 
-pub(super) struct ParagraphW {
-    alignment: TRef<Option<AlignmentV>>,
-    lines: TRef<LinesV>,
-    scroll: TRef<ScrollV>,
-    style: TRef<StyleV>,
-    trim: TRef<bool>,
+pub(super) struct ParagraphW<X: GXExt> {
+    alignment: TRef<X, Option<AlignmentV>>,
+    lines: TRef<X, LinesV>,
+    scroll: TRef<X, ScrollV>,
+    style: TRef<X, StyleV>,
+    trim: TRef<X, bool>,
 }
 
-impl ParagraphW {
-    pub(super) async fn compile(gx: GXHandle, source: Value) -> Result<TuiW> {
+impl<X: GXExt> ParagraphW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, source: Value) -> Result<TuiW> {
         let [(_, alignment), (_, lines), (_, scroll), (_, style), (_, trim)] =
             source.cast_to::<[(ArcStr, u64); 5]>().context("paragraph flds")?;
         let (alignment, lines, scroll, style, trim) = try_join! {
@@ -34,18 +34,19 @@ impl ParagraphW {
             gx.compile_ref(style),
             gx.compile_ref(trim)
         }?;
-        let alignment: TRef<Option<AlignmentV>> =
+        let alignment: TRef<X, Option<AlignmentV>> =
             TRef::new(alignment).context("paragraph tref alignment")?;
-        let lines: TRef<LinesV> = TRef::new(lines).context("paragraph tref lines")?;
-        let scroll: TRef<ScrollV> = TRef::new(scroll).context("paragraph tref scroll")?;
-        let style: TRef<StyleV> = TRef::new(style).context("paragraph tref style")?;
-        let trim: TRef<bool> = TRef::new(trim).context("paragraph tref trim")?;
+        let lines: TRef<X, LinesV> = TRef::new(lines).context("paragraph tref lines")?;
+        let scroll: TRef<X, ScrollV> =
+            TRef::new(scroll).context("paragraph tref scroll")?;
+        let style: TRef<X, StyleV> = TRef::new(style).context("paragraph tref style")?;
+        let trim: TRef<X, bool> = TRef::new(trim).context("paragraph tref trim")?;
         Ok(Box::new(Self { alignment, lines, scroll, style, trim }))
     }
 }
 
 #[async_trait]
-impl TuiWidget for ParagraphW {
+impl<X: GXExt> TuiWidget for ParagraphW<X> {
     fn draw(&mut self, frame: &mut Frame, rect: Rect) -> Result<()> {
         let lines = self.lines.t.as_ref().map(|l| &l.0[..]).unwrap_or(&[]);
         let mut p = Paragraph::new(into_borrowed_lines(lines));

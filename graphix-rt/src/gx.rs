@@ -10,7 +10,7 @@ use graphix_compiler::{
     },
     node::genn,
     typ::Type,
-    BindId, Event, ExecCtx, LambdaId, NoUserEvent, Node, REFS,
+    BindId, Event, ExecCtx, LambdaId, Node, REFS,
 };
 use indexmap::IndexMap;
 use log::{debug, error, info};
@@ -29,7 +29,7 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     path::{Component, PathBuf},
     result,
-    sync::{LazyLock, Weak},
+    sync::Weak,
     time::Duration,
 };
 use tokio::{
@@ -41,11 +41,11 @@ use tokio::{
 use triomphe::Arc;
 
 use crate::{
-    Callable, CallableId, CompExp, CompRes, CouldNotResolve, GXConfig, GXEvent, GXHandle,
-    GXRt, Ref, ToGX, UpdateBatch, WriteBatch,
+    Callable, CallableId, CompExp, CompRes, CouldNotResolve, GXConfig, GXEvent, GXExt,
+    GXHandle, GXRt, Ref, ToGX, UpdateBatch, WriteBatch,
 };
 
-fn is_output(n: &Node<GXRt, NoUserEvent>) -> bool {
+fn is_output<X: GXExt>(n: &Node<GXRt<X>, X::UserEvent>) -> bool {
     match &n.spec().kind {
         ExprKind::Bind { .. }
         | ExprKind::Lambda { .. }
@@ -96,27 +96,26 @@ async fn unsubscribe_ready(pending: &VecDeque<(Instant, Dval)>, now: Instant) {
     }
 }
 
-static BATCH: LazyLock<Pool<Vec<GXEvent>>> = LazyLock::new(|| Pool::new(10, 1000000));
-
 struct CallableInt {
     expr: ExprId,
     args: Box<[BindId]>,
 }
 
-pub(super) struct GX {
-    ctx: ExecCtx<GXRt, NoUserEvent>,
-    event: Event<NoUserEvent>,
+pub(super) struct GX<X: GXExt> {
+    ctx: ExecCtx<GXRt<X>, X::UserEvent>,
+    event: Event<X::UserEvent>,
     updated: FxHashMap<ExprId, bool>,
-    nodes: IndexMap<ExprId, Node<GXRt, NoUserEvent>, FxBuildHasher>,
+    nodes: IndexMap<ExprId, Node<GXRt<X>, X::UserEvent>, FxBuildHasher>,
     callables: FxHashMap<CallableId, CallableInt>,
-    sub: tmpsc::Sender<Pooled<Vec<GXEvent>>>,
+    sub: tmpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
     resolvers: Arc<[ModuleResolver]>,
     publish_timeout: Option<Duration>,
     last_rpc_gc: Instant,
+    batch_pool: Pool<Vec<GXEvent<X>>>,
 }
 
-impl GX {
-    pub(super) async fn new(mut rt: GXConfig) -> Result<Self> {
+impl<X: GXExt> GX<X> {
+    pub(super) async fn new(mut cfg: GXConfig<X>) -> Result<Self> {
         let resolvers_default = |r: &mut Vec<ModuleResolver>| match dirs::data_dir() {
             None => r.push(ModuleResolver::Files("".into())),
             Some(dd) => {
@@ -125,32 +124,34 @@ impl GX {
             }
         };
         match std::env::var("GRAPHIX_MODPATH") {
-            Err(_) => resolvers_default(&mut rt.resolvers),
+            Err(_) => resolvers_default(&mut cfg.resolvers),
             Ok(mp) => match ModuleResolver::parse_env(
-                rt.ctx.rt.subscriber.clone(),
-                rt.resolve_timeout,
+                cfg.ctx.rt.subscriber.clone(),
+                cfg.resolve_timeout,
                 &mp,
             ) {
-                Ok(r) => rt.resolvers.extend(r),
+                Ok(r) => cfg.resolvers.extend(r),
                 Err(e) => {
                     error!("failed to parse GRAPHIX_MODPATH, using default {e:?}");
-                    resolvers_default(&mut rt.resolvers)
+                    resolvers_default(&mut cfg.resolvers)
                 }
             },
         };
+        let event = Event::new(cfg.ctx.rt.ext.empty_event());
         let mut t = Self {
-            ctx: rt.ctx,
-            event: Event::new(NoUserEvent),
+            ctx: cfg.ctx,
+            event,
             updated: HashMap::default(),
             nodes: IndexMap::default(),
             callables: HashMap::default(),
-            sub: rt.sub,
-            resolvers: Arc::from(rt.resolvers),
-            publish_timeout: rt.publish_timeout,
+            sub: cfg.sub,
+            resolvers: Arc::from(cfg.resolvers),
+            publish_timeout: cfg.publish_timeout,
             last_rpc_gc: Instant::now(),
+            batch_pool: Pool::new(10, 1000000),
         };
         let st = Instant::now();
-        if let Some(root) = rt.root {
+        if let Some(root) = cfg.root {
             t.compile_root(root).await?;
         }
         info!("root init time: {:?}", st.elapsed());
@@ -163,9 +164,9 @@ impl GX {
         writes: Option<WriteBatch>,
         tasks: &mut Vec<(BindId, Value)>,
         rpcs: &mut Vec<(BindId, RpcCall)>,
-        to_rt: &mut UnboundedReceiver<ToGX>,
-        input: &mut Vec<ToGX>,
-        mut batch: Pooled<Vec<GXEvent>>,
+        to_rt: &mut UnboundedReceiver<ToGX<X>>,
+        input: &mut Vec<ToGX<X>>,
+        mut batch: Pooled<Vec<GXEvent<X>>>,
     ) {
         macro_rules! push_event {
             ($id:expr, $v:expr, $event:ident, $refed:ident, $overflow:ident) => {
@@ -216,6 +217,9 @@ impl GX {
                 let id = wr.id;
                 push_event!(id, wr, writes, published, net_writes)
             }
+        }
+        if let Err(e) = self.ctx.rt.ext.do_cycle(&mut self.event) {
+            error!("could not marshall user events {e:?}")
         }
         for (id, n) in self.nodes.iter_mut() {
             if let Some(init) = self.updated.get(id) {
@@ -280,8 +284,8 @@ impl GX {
     async fn process_input_batch(
         &mut self,
         tasks: &mut Vec<(BindId, Value)>,
-        input: &mut Vec<ToGX>,
-        batch: &mut Pooled<Vec<GXEvent>>,
+        input: &mut Vec<ToGX<X>>,
+        batch: &mut Pooled<Vec<GXEvent<X>>>,
     ) {
         for m in input.drain(..) {
             match m {
@@ -326,6 +330,7 @@ impl GX {
             || self.ctx.rt.net_updates.len() > 0
             || self.ctx.rt.net_writes.len() > 0
             || self.ctx.rt.rpc_overflow.len() > 0
+            || self.ctx.rt.ext.is_ready()
     }
 
     async fn compile_root(&mut self, text: ArcStr) -> Result<()> {
@@ -352,7 +357,7 @@ impl GX {
         Ok(())
     }
 
-    async fn compile(&mut self, rt: GXHandle, text: ArcStr) -> Result<CompRes> {
+    async fn compile(&mut self, rt: GXHandle<X>, text: ArcStr) -> Result<CompRes<X>> {
         let scope = ModPath::root();
         let ori = Origin { parent: None, source: Source::Unspecified, text };
         let exprs = expr::parser::parse(ori.clone())?;
@@ -379,7 +384,7 @@ impl GX {
         Ok(CompRes { exprs, env: self.ctx.env.clone() })
     }
 
-    async fn load(&mut self, rt: GXHandle, file: &PathBuf) -> Result<CompRes> {
+    async fn load(&mut self, rt: GXHandle<X>, file: &PathBuf) -> Result<CompRes<X>> {
         let scope = ModPath::root();
         let st = Instant::now();
         let (ori, exprs) = match file.extension() {
@@ -464,7 +469,7 @@ impl GX {
         Ok(CompRes { exprs: res, env: self.ctx.env.clone() })
     }
 
-    fn compile_callable(&mut self, id: Value, rt: GXHandle) -> Result<Callable> {
+    fn compile_callable(&mut self, id: Value, rt: GXHandle<X>) -> Result<Callable<X>> {
         let id = match id {
             Value::U64(id) => LambdaId::from(id),
             v => bail!("invalid lambda id {v}"),
@@ -498,7 +503,7 @@ impl GX {
         Ok(Callable { expr: eid, rt, env, id: cid, typ: (*lb.typ).clone() })
     }
 
-    fn compile_ref(&mut self, rt: GXHandle, id: BindId) -> Result<Ref> {
+    fn compile_ref(&mut self, rt: GXHandle<X>, id: BindId) -> Result<Ref<X>> {
         let eid = ExprId::new();
         let typ = Type::Any;
         let n = genn::reference(&mut self.ctx, id, typ, eid);
@@ -539,7 +544,7 @@ impl GX {
 
     pub(super) async fn run(
         mut self,
-        mut to_rt: tmpsc::UnboundedReceiver<ToGX>,
+        mut to_rt: tmpsc::UnboundedReceiver<ToGX<X>>,
     ) -> Result<()> {
         let mut tasks = vec![];
         let mut input = vec![];
@@ -626,6 +631,12 @@ impl GX {
                     }
                     peek!(updates, writes, tasks, rpcs);
                 },
+                r = self.ctx.rt.ext.update_sources() => {
+                    if let Err(e) = r {
+                        error!("failed to update custom event sources {e:?}")
+                    }
+                    peek!(updates, writes, tasks, rpcs, input);
+                },
                 () = unsubscribe_ready(&self.ctx.rt.pending_unsubscribe, now) => {
                     while let Some((ts, _)) = self.ctx.rt.pending_unsubscribe.front() {
                         if ts.elapsed() >= Duration::from_secs(1) {
@@ -637,7 +648,7 @@ impl GX {
                     continue 'main
                 },
             }
-            let mut batch = BATCH.take();
+            let mut batch = self.batch_pool.take();
             self.process_input_batch(&mut tasks, &mut input, &mut batch).await;
             self.do_cycle(
                 updates, writes, &mut tasks, &mut rpcs, &mut to_rt, &mut input, batch,

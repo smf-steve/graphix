@@ -188,16 +188,16 @@ pub enum Module {
 /// use anyhow::Result;
 /// use netidx_core::pool::Pooled;
 /// use graphix_compiler::ExecCtx;
-/// use graphix_rt::{GXRt, GXConfigBuilder, GXHandle, GXEvent};
+/// use graphix_rt::{GXRt, GXConfigBuilder, GXHandle, GXEvent, NoExt};
 /// use tokio::sync::mpsc;
 /// use enumflags2::BitFlags;
 ///
 /// async fn start_runtime(
 ///     publisher: Publisher,
 ///     subscriber: Subscriber,
-///     sub: mpsc::Sender<Pooled<Vec<GXEvent>>>
-/// ) -> Result<GXHandle> {
-///     let mut ctx = ExecCtx::new(GXRt::new(publisher, subscriber));
+///     sub: mpsc::Sender<Pooled<Vec<GXEvent<NoExt>>>>
+/// ) -> Result<GXHandle<NoExt>> {
+///     let mut ctx = ExecCtx::new(GXRt::<NoExt>::new(publisher, subscriber));
 ///     let (root, mods) = graphix_stdlib::register(&mut ctx, BitFlags::all())?;
 ///     GXConfigBuilder::default()
 ///        .ctx(ctx)

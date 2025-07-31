@@ -4,21 +4,21 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::GXHandle;
+use graphix_rt::{GXExt, GXHandle};
 use netidx::publisher::Value;
 use ratatui::{layout::Rect, widgets::Gauge, Frame};
 use tokio::try_join;
 
-pub(super) struct GaugeW {
-    gauge_style: TRef<Option<StyleV>>,
-    label: TRef<Option<SpanV>>,
-    ratio: TRef<f64>,
-    style: TRef<Option<StyleV>>,
-    use_unicode: TRef<Option<bool>>,
+pub(super) struct GaugeW<X: GXExt> {
+    gauge_style: TRef<X, Option<StyleV>>,
+    label: TRef<X, Option<SpanV>>,
+    ratio: TRef<X, f64>,
+    style: TRef<X, Option<StyleV>>,
+    use_unicode: TRef<X, Option<bool>>,
 }
 
-impl GaugeW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> GaugeW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, gauge_style), (_, label), (_, ratio), (_, style), (_, use_unicode)] =
             v.cast_to::<[(ArcStr, u64); 5]>()?;
         let (gauge_style, label, ratio, style, use_unicode) = try_join! {
@@ -39,7 +39,7 @@ impl GaugeW {
 }
 
 #[async_trait]
-impl TuiWidget for GaugeW {
+impl<X: GXExt> TuiWidget for GaugeW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

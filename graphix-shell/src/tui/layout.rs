@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
     layout::{Constraint, Layout, Rect, Spacing},
@@ -50,15 +50,15 @@ impl FromValue for SpacingV {
     }
 }
 
-struct ChildW {
-    size_ref: Ref,
+struct ChildW<X: GXExt> {
+    size_ref: Ref<X>,
     last_size: SizeV,
     constraint: Constraint,
     child: TuiW,
 }
 
-impl ChildW {
-    async fn compile(gx: GXHandle, v: Value) -> Result<Self> {
+impl<X: GXExt> ChildW<X> {
+    async fn compile(gx: GXHandle<X>, v: Value) -> Result<Self> {
         let ((_, child), (_, constraint), (_, size)) =
             v.cast_to::<((ArcStr, Value), (ArcStr, ConstraintV), (ArcStr, u64))>()?;
         let child = compile(gx.clone(), child).await.context("compiling child")?;
@@ -68,21 +68,21 @@ impl ChildW {
     }
 }
 
-pub(super) struct LayoutW {
-    gx: GXHandle,
-    children: Vec<ChildW>,
-    children_ref: Ref,
-    direction: TRef<Option<DirectionV>>,
-    flex: TRef<Option<FlexV>>,
-    horizontal_margin: TRef<Option<u16>>,
-    margin: TRef<Option<u16>>,
-    spacing: TRef<Option<SpacingV>>,
-    vertical_margin: TRef<Option<u16>>,
-    focused: TRef<Option<u32>>,
+pub(super) struct LayoutW<X: GXExt> {
+    gx: GXHandle<X>,
+    children: Vec<ChildW<X>>,
+    children_ref: Ref<X>,
+    direction: TRef<X, Option<DirectionV>>,
+    flex: TRef<X, Option<FlexV>>,
+    horizontal_margin: TRef<X, Option<u16>>,
+    margin: TRef<X, Option<u16>>,
+    spacing: TRef<X, Option<SpacingV>>,
+    vertical_margin: TRef<X, Option<u16>>,
+    focused: TRef<X, Option<u32>>,
 }
 
-impl LayoutW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> LayoutW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, children), (_, direction), (_, flex), (_, focused), (_, horizontal_margin), (_, margin), (_, spacing), (_, vertical_margin)] =
             v.cast_to::<[(ArcStr, u64); 8]>().context("layout fields")?;
         let (
@@ -104,17 +104,18 @@ impl LayoutW {
             gx.compile_ref(spacing),
             gx.compile_ref(vertical_margin)
         }?;
-        let direction = TRef::<Option<DirectionV>>::new(direction)
+        let direction = TRef::<X, Option<DirectionV>>::new(direction)
             .context("layout tref direction")?;
-        let flex = TRef::<Option<FlexV>>::new(flex).context("layout tref flex")?;
-        let horizontal_margin = TRef::<Option<u16>>::new(horizontal_margin)
+        let flex = TRef::<X, Option<FlexV>>::new(flex).context("layout tref flex")?;
+        let horizontal_margin = TRef::<X, Option<u16>>::new(horizontal_margin)
             .context("layout tref horizontal_margin")?;
-        let margin = TRef::<Option<u16>>::new(margin).context("layout tref margin")?;
+        let margin = TRef::<X, Option<u16>>::new(margin).context("layout tref margin")?;
         let spacing =
-            TRef::<Option<SpacingV>>::new(spacing).context("layout tref spacing")?;
-        let vertical_margin = TRef::<Option<u16>>::new(vertical_margin)
+            TRef::<X, Option<SpacingV>>::new(spacing).context("layout tref spacing")?;
+        let vertical_margin = TRef::<X, Option<u16>>::new(vertical_margin)
             .context("layout tref vertical_margin")?;
-        let focused = TRef::<Option<u32>>::new(focused).context("layout tref focused")?;
+        let focused =
+            TRef::<X, Option<u32>>::new(focused).context("layout tref focused")?;
         let mut t = Self {
             gx,
             children: vec![],
@@ -150,7 +151,7 @@ impl LayoutW {
 }
 
 #[async_trait]
-impl TuiWidget for LayoutW {
+impl<X: GXExt> TuiWidget for LayoutW<X> {
     async fn handle_event(&mut self, e: Event, v: Value) -> Result<()> {
         let idx = self.focused.t.and_then(|o| o.map(|i| i as usize)).unwrap_or(0);
         if let Some(c) = self.children.get_mut(idx) {

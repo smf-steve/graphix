@@ -17,9 +17,9 @@ use gauge::GaugeW;
 use graphix_compiler::{
     env::Env,
     expr::{ExprId, ModPath},
-    BindId, NoUserEvent,
+    BindId,
 };
-use graphix_rt::{CompExp, GXHandle, GXRt, Ref};
+use graphix_rt::{CompExp, GXExt, GXHandle, GXRt, Ref};
 use input_handler::{event_to_value, InputHandlerW};
 use layout::LayoutW;
 use line_gauge::LineGaugeW;
@@ -38,7 +38,7 @@ use reedline::Signal;
 use scrollbar::ScrollbarW;
 use smallvec::SmallVec;
 use sparkline::SparklineW;
-use std::{borrow::Cow, future::Future, pin::Pin};
+use std::{borrow::Cow, future::Future, marker::PhantomData, pin::Pin};
 use text::TextW;
 use tokio::{select, sync::oneshot, task};
 
@@ -314,13 +314,13 @@ fn into_borrowed_lines<'a>(lines: &'a [Line<'static>]) -> Vec<Line<'a>> {
     lines.iter().map(|l| into_borrowed_line(l)).collect::<Vec<_>>()
 }
 
-struct TRef<T: FromValue> {
-    r: Ref,
+struct TRef<X: GXExt, T: FromValue> {
+    r: Ref<X>,
     t: Option<T>,
 }
 
-impl<T: FromValue> TRef<T> {
-    fn new(mut r: Ref) -> Result<Self> {
+impl<X: GXExt, T: FromValue> TRef<X, T> {
+    fn new(mut r: Ref<X>) -> Result<Self> {
         let t = r.last.take().map(|v| v.cast_to()).transpose()?;
         Ok(TRef { r, t })
     }
@@ -336,7 +336,7 @@ impl<T: FromValue> TRef<T> {
     }
 }
 
-impl<T: Into<Value> + FromValue + Clone> TRef<T> {
+impl<X: GXExt, T: Into<Value> + FromValue + Clone> TRef<X, T> {
     #[allow(dead_code)]
     fn set(&mut self, t: T) -> Result<()> {
         self.t = Some(t.clone());
@@ -360,7 +360,7 @@ trait TuiWidget {
 type TuiW = Box<dyn TuiWidget + Send + Sync + 'static>;
 type CompRes = Pin<Box<dyn Future<Output = Result<TuiW>> + Send + Sync + 'static>>;
 
-fn compile(gx: GXHandle, source: Value) -> CompRes {
+fn compile<X: GXExt>(gx: GXHandle<X>, source: Value) -> CompRes {
     Box::pin(async move {
         match source.cast_to::<(ArcStr, Value)>()? {
             (s, v) if &s == "Text" => TextW::compile(gx, v).await,
@@ -411,17 +411,18 @@ enum FromTui {
 }
 
 #[derive(Debug)]
-pub(super) struct Tui {
+pub(super) struct Tui<X: GXExt> {
     to: mpsc::Sender<ToTui>,
     from: mpsc::UnboundedReceiver<FromTui>,
+    ph: PhantomData<X>,
 }
 
-impl Tui {
+impl<X: GXExt> Tui<X> {
     pub(super) fn start(
-        gx: &GXHandle,
-        env: Env<GXRt, NoUserEvent>,
-        root: CompExp,
-    ) -> Tui {
+        gx: &GXHandle<X>,
+        env: Env<GXRt<X>, X::UserEvent>,
+        root: CompExp<X>,
+    ) -> Self {
         let gx = gx.clone();
         let (to_tx, to_rx) = mpsc::channel(3);
         let (from_tx, from_rx) = mpsc::unbounded();
@@ -430,7 +431,7 @@ impl Tui {
                 error!("tui::run returned {e:?}")
             }
         });
-        Self { to: to_tx, from: from_rx }
+        Self { to: to_tx, from: from_rx, ph: PhantomData }
     }
 
     pub(super) async fn stop(&mut self) {
@@ -462,7 +463,7 @@ fn is_ctrl_c(e: &Event) -> bool {
         .unwrap_or(false)
 }
 
-fn get_id(env: &Env<GXRt, NoUserEvent>, name: &ModPath) -> Result<BindId> {
+fn get_id<X: GXExt>(env: &Env<GXRt<X>, X::UserEvent>, name: &ModPath) -> Result<BindId> {
     Ok(env
         .lookup_bind(&ModPath::root(), name)
         .ok_or_else(|| anyhow!("could not find {name}"))?
@@ -470,7 +471,7 @@ fn get_id(env: &Env<GXRt, NoUserEvent>, name: &ModPath) -> Result<BindId> {
         .id)
 }
 
-fn set_size(gx: &GXHandle, id: BindId, size: SizeV) -> Result<()> {
+fn set_size<X: GXExt>(gx: &GXHandle<X>, id: BindId, size: SizeV) -> Result<()> {
     gx.set(id, size)
 }
 
@@ -494,17 +495,17 @@ fn set_mouse(enable: bool) {
     }
 }
 
-async fn run(
-    gx: GXHandle,
-    env: Env<GXRt, NoUserEvent>,
-    root_exp: CompExp,
+async fn run<X: GXExt>(
+    gx: GXHandle<X>,
+    env: Env<GXRt<X>, X::UserEvent>,
+    root_exp: CompExp<X>,
     mut to_rx: mpsc::Receiver<ToTui>,
     from_tx: mpsc::UnboundedSender<FromTui>,
 ) -> Result<()> {
     let mut terminal = ratatui::init();
     let size = get_id(&env, &["tui", "size"].into())?;
     let event = get_id(&env, &["tui", "event"].into())?;
-    let mut mouse: TRef<bool> =
+    let mut mouse: TRef<X, bool> =
         TRef::new(gx.compile_ref(get_id(&env, &["tui", "mouse"].into())?).await?)?;
     if let Some(b) = mouse.t {
         set_mouse(b)

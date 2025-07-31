@@ -4,7 +4,7 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
     layout::Rect,
@@ -40,18 +40,18 @@ impl FromValue for EventV {
     }
 }
 
-pub(super) struct CalendarW {
-    display_date: TRef<DateV>,
-    events_ref: Ref,
+pub(super) struct CalendarW<X: GXExt> {
+    display_date: TRef<X, DateV>,
+    events_ref: Ref<X>,
     events: CalendarEventStore,
-    show_month: TRef<Option<StyleV>>,
-    show_surrounding: TRef<Option<StyleV>>,
-    show_weekday: TRef<Option<StyleV>>,
-    default_style: TRef<Option<StyleV>>,
+    show_month: TRef<X, Option<StyleV>>,
+    show_surrounding: TRef<X, Option<StyleV>>,
+    show_weekday: TRef<X, Option<StyleV>>,
+    default_style: TRef<X, Option<StyleV>>,
 }
 
-impl CalendarW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> CalendarW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, default_style), (_, display_date), (_, events), (_, show_month), (_, show_surrounding), (_, show_weekday)] =
             v.cast_to::<[(ArcStr, u64); 6]>().context("calendar fields")?;
         let (
@@ -105,7 +105,7 @@ impl CalendarW {
 }
 
 #[async_trait]
-impl TuiWidget for CalendarW {
+impl<X: GXExt> TuiWidget for CalendarW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

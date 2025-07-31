@@ -13,7 +13,7 @@ use graphix_compiler::{
     env::Env,
     expr::{ExprId, ModuleResolver},
     typ::{FnType, Type},
-    BindId, ExecCtx, NoUserEvent,
+    BindId, Event, ExecCtx, NoUserEvent, UserEvent,
 };
 use log::error;
 use netidx::{
@@ -25,7 +25,7 @@ use netidx::{
 use netidx_core::atomic_id;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use std::{path::PathBuf, time::Duration};
+use std::{future, path::PathBuf, time::Duration};
 use tokio::{
     sync::{
         mpsc::{self as tmpsc},
@@ -39,6 +39,78 @@ mod rt;
 use gx::GX;
 pub use rt::GXRt;
 
+/// Trait to extend the event loop
+///
+/// The Graphix event loop has two steps,
+/// - update event sources, polls external async event sources like
+///   netidx, sockets, files, etc
+/// - do cycle, collects all the events and delivers them to the dataflow
+///   graph as a batch of "everything that happened"
+///
+/// As such to extend the event loop you must implement two things. A function
+/// to poll your own external event sources, and a function to take the events
+/// you got from those sources and represent them to the dataflow graph. You
+/// represent them either by setting generic variables (bindid -> value map), or
+/// by setting some custom structures that you define as part of your UserEvent
+/// implementation.
+///
+/// Your Graphix builtins can access both your custom structure, to register new
+/// event sources, etc, and your custom user event structure, to receive events
+/// who's types do not fit nicely as `Value`. If your event payload does fit
+/// nicely as a `Value`, then just use a variable.
+pub trait GXExt: Default + fmt::Debug + Send + Sync + 'static {
+    type UserEvent: UserEvent + Send + Sync + 'static;
+
+    /// Update your custom event sources
+    ///
+    /// Your `update_sources` MUST be cancel safe.
+    fn update_sources(&mut self) -> impl Future<Output = Result<()>> + Send;
+
+    /// Collect events that happened and marshal them into the event structure
+    ///
+    /// for delivery to the dataflow graph. `do_cycle` will be called, and a
+    /// batch of events delivered to the graph until `is_ready` returns false.
+    /// It is possible that a call to `update_sources` will result in
+    /// multiple calls to `do_cycle`, but it is not guaranteed that
+    /// `update_sources` will not be called again before `is_ready`
+    /// returns false.
+    fn do_cycle(&mut self, event: &mut Event<Self::UserEvent>) -> Result<()>;
+
+    /// Return true if there are events ready to deliver
+    fn is_ready(&self) -> bool;
+
+    /// Clear the state
+    fn clear(&mut self);
+
+    /// Create and return an empty custom event structure
+    fn empty_event(&mut self) -> Self::UserEvent;
+}
+
+#[derive(Debug, Default)]
+pub struct NoExt;
+
+impl GXExt for NoExt {
+    type UserEvent = NoUserEvent;
+
+    async fn update_sources(&mut self) -> Result<()> {
+        future::pending().await
+    }
+
+    fn do_cycle(&mut self, _event: &mut Event<Self::UserEvent>) -> Result<()> {
+        Ok(())
+    }
+
+    fn is_ready(&self) -> bool {
+        false
+    }
+
+    fn clear(&mut self) {}
+
+    fn empty_event(&mut self) -> Self::UserEvent {
+        NoUserEvent
+    }
+}
+
 type UpdateBatch = Pooled<Vec<(SubId, subscriber::Event)>>;
 type WriteBatch = Pooled<Vec<WriteRequest>>;
 
@@ -51,39 +123,39 @@ impl fmt::Display for CouldNotResolve {
     }
 }
 
-pub struct CompExp {
+pub struct CompExp<X: GXExt> {
     pub id: ExprId,
     pub typ: Type,
     pub output: bool,
-    rt: GXHandle,
+    rt: GXHandle<X>,
 }
 
-impl Drop for CompExp {
+impl<X: GXExt> Drop for CompExp<X> {
     fn drop(&mut self) {
         let _ = self.rt.0.send(ToGX::Delete { id: self.id });
     }
 }
 
-pub struct CompRes {
-    pub exprs: SmallVec<[CompExp; 1]>,
-    pub env: Env<GXRt, NoUserEvent>,
+pub struct CompRes<X: GXExt> {
+    pub exprs: SmallVec<[CompExp<X>; 1]>,
+    pub env: Env<GXRt<X>, X::UserEvent>,
 }
 
-pub struct Ref {
+pub struct Ref<X: GXExt> {
     pub id: ExprId,
     pub last: Option<Value>,
     pub bid: BindId,
     pub target_bid: Option<BindId>,
-    rt: GXHandle,
+    rt: GXHandle<X>,
 }
 
-impl Drop for Ref {
+impl<X: GXExt> Drop for Ref<X> {
     fn drop(&mut self) {
         let _ = self.rt.0.send(ToGX::Delete { id: self.id });
     }
 }
 
-impl Ref {
+impl<X: GXExt> Ref<X> {
     pub fn set(&self, v: Value) -> Result<()> {
         self.rt.set(self.bid, v)
     }
@@ -98,21 +170,21 @@ impl Ref {
 
 atomic_id!(CallableId);
 
-pub struct Callable {
-    rt: GXHandle,
+pub struct Callable<X: GXExt> {
+    rt: GXHandle<X>,
     id: CallableId,
-    env: Env<GXRt, NoUserEvent>,
+    env: Env<GXRt<X>, X::UserEvent>,
     pub typ: FnType,
     pub expr: ExprId,
 }
 
-impl Drop for Callable {
+impl<X: GXExt> Drop for Callable<X> {
     fn drop(&mut self) {
         let _ = self.rt.0.send(ToGX::DeleteCallable { id: self.id });
     }
 }
 
-impl Callable {
+impl<X: GXExt> Callable<X> {
     /// Call the lambda with args. Argument types and arity will be
     /// checked and an error will be returned if they are wrong.
     pub async fn call(&self, args: ValArray) -> Result<()> {
@@ -138,39 +210,72 @@ impl Callable {
     }
 }
 
-enum ToGX {
-    GetEnv { res: oneshot::Sender<Env<GXRt, NoUserEvent>> },
-    Delete { id: ExprId },
-    Load { path: PathBuf, rt: GXHandle, res: oneshot::Sender<Result<CompRes>> },
-    Compile { text: ArcStr, rt: GXHandle, res: oneshot::Sender<Result<CompRes>> },
-    CompileCallable { id: Value, rt: GXHandle, res: oneshot::Sender<Result<Callable>> },
-    CompileRef { id: BindId, rt: GXHandle, res: oneshot::Sender<Result<Ref>> },
-    Set { id: BindId, v: Value },
-    Call { id: CallableId, args: ValArray },
-    DeleteCallable { id: CallableId },
+enum ToGX<X: GXExt> {
+    GetEnv {
+        res: oneshot::Sender<Env<GXRt<X>, X::UserEvent>>,
+    },
+    Delete {
+        id: ExprId,
+    },
+    Load {
+        path: PathBuf,
+        rt: GXHandle<X>,
+        res: oneshot::Sender<Result<CompRes<X>>>,
+    },
+    Compile {
+        text: ArcStr,
+        rt: GXHandle<X>,
+        res: oneshot::Sender<Result<CompRes<X>>>,
+    },
+    CompileCallable {
+        id: Value,
+        rt: GXHandle<X>,
+        res: oneshot::Sender<Result<Callable<X>>>,
+    },
+    CompileRef {
+        id: BindId,
+        rt: GXHandle<X>,
+        res: oneshot::Sender<Result<Ref<X>>>,
+    },
+    Set {
+        id: BindId,
+        v: Value,
+    },
+    Call {
+        id: CallableId,
+        args: ValArray,
+    },
+    DeleteCallable {
+        id: CallableId,
+    },
 }
 
 #[derive(Clone)]
-pub enum GXEvent {
+pub enum GXEvent<X: GXExt> {
     Updated(ExprId, Value),
-    Env(Env<GXRt, NoUserEvent>),
+    Env(Env<GXRt<X>, X::UserEvent>),
 }
 
 /// A handle to a running GX instance.
 ///
 /// Drop the handle to shutdown the associated background tasks.
-#[derive(Clone)]
-pub struct GXHandle(tmpsc::UnboundedSender<ToGX>);
+pub struct GXHandle<X: GXExt>(tmpsc::UnboundedSender<ToGX<X>>);
 
-impl GXHandle {
-    async fn exec<R, F: FnOnce(oneshot::Sender<R>) -> ToGX>(&self, f: F) -> Result<R> {
+impl<X: GXExt> Clone for GXHandle<X> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<X: GXExt> GXHandle<X> {
+    async fn exec<R, F: FnOnce(oneshot::Sender<R>) -> ToGX<X>>(&self, f: F) -> Result<R> {
         let (tx, rx) = oneshot::channel();
         self.0.send(f(tx)).map_err(|_| anyhow!("runtime is dead"))?;
         Ok(rx.await.map_err(|_| anyhow!("runtime did not respond"))?)
     }
 
     /// Get a copy of the current graphix environment
-    pub async fn get_env(&self) -> Result<Env<GXRt, NoUserEvent>> {
+    pub async fn get_env(&self) -> Result<Env<GXRt<X>, X::UserEvent>> {
         self.exec(|res| ToGX::GetEnv { res }).await
     }
 
@@ -181,7 +286,7 @@ impl GXHandle {
     /// dropped their corresponding expressions will be deleted. Therefore, you
     /// can stop execution of the whole expression by dropping the returned
     /// `CompRes`.
-    pub async fn compile(&self, text: ArcStr) -> Result<CompRes> {
+    pub async fn compile(&self, text: ArcStr) -> Result<CompRes<X>> {
         Ok(self.exec(|tx| ToGX::Compile { text, res: tx, rt: self.clone() }).await??)
     }
 
@@ -194,7 +299,7 @@ impl GXHandle {
     /// the `CompRes` are dropped their corresponding expressions will be
     /// deleted. Therefore, you can stop execution of the whole file by dropping
     /// the returned `CompRes`.
-    pub async fn load(&self, path: PathBuf) -> Result<CompRes> {
+    pub async fn load(&self, path: PathBuf) -> Result<CompRes<X>> {
         Ok(self.exec(|tx| ToGX::Load { path, res: tx, rt: self.clone() }).await??)
     }
 
@@ -202,7 +307,7 @@ impl GXHandle {
     ///
     /// This is how you call a lambda directly from rust. When the returned
     /// `Callable` is dropped the associated callsite will be delete.
-    pub async fn compile_callable(&self, id: Value) -> Result<Callable> {
+    pub async fn compile_callable(&self, id: Value) -> Result<Callable<X>> {
         Ok(self
             .exec(|tx| ToGX::CompileCallable { id, rt: self.clone(), res: tx })
             .await??)
@@ -213,7 +318,7 @@ impl GXHandle {
     ///
     /// This is the same as the deref (*) operator in graphix. When the returned
     /// `Ref` is dropped the compiled code will be deleted.
-    pub async fn compile_ref(&self, id: impl Into<BindId>) -> Result<Ref> {
+    pub async fn compile_ref(&self, id: impl Into<BindId>) -> Result<Ref<X>> {
         Ok(self
             .exec(|tx| ToGX::CompileRef { id: id.into(), res: tx, rt: self.clone() })
             .await??)
@@ -230,7 +335,7 @@ impl GXHandle {
 
 #[derive(Builder)]
 #[builder(pattern = "owned")]
-pub struct GXConfig {
+pub struct GXConfig<X: GXExt> {
     /// The subscribe timeout to use when resolving modules in
     /// netidx. Resolution will fail if the subscription does not
     /// succeed before this timeout elapses.
@@ -240,7 +345,7 @@ pub struct GXConfig {
     #[builder(setter(strip_option), default)]
     publish_timeout: Option<Duration>,
     /// The execution context with any builtins already registered
-    ctx: ExecCtx<GXRt, NoUserEvent>,
+    ctx: ExecCtx<GXRt<X>, X::UserEvent>,
     /// The text of the root module
     #[builder(setter(strip_option), default)]
     root: Option<ArcStr>,
@@ -248,15 +353,15 @@ pub struct GXConfig {
     #[builder(default)]
     resolvers: Vec<ModuleResolver>,
     /// The channel that will receive events from the runtime
-    sub: tmpsc::Sender<Pooled<Vec<GXEvent>>>,
+    sub: tmpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
 }
 
-impl GXConfig {
+impl<X: GXExt> GXConfig<X> {
     /// Create a new config
     pub fn builder(
-        ctx: ExecCtx<GXRt, NoUserEvent>,
-        sub: tmpsc::Sender<Pooled<Vec<GXEvent>>>,
-    ) -> GXConfigBuilder {
+        ctx: ExecCtx<GXRt<X>, X::UserEvent>,
+        sub: tmpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
+    ) -> GXConfigBuilder<X> {
         GXConfigBuilder::default().ctx(ctx).sub(sub)
     }
 
@@ -268,7 +373,7 @@ impl GXConfig {
     /// completely empty, with only the language, no core library, no standard
     /// library. To build a runtime with the full standard library and nothing
     /// else simply pass the output of `graphix_stdlib::register` to start.
-    pub async fn start(self) -> Result<GXHandle> {
+    pub async fn start(self) -> Result<GXHandle<X>> {
         let (init_tx, init_rx) = oneshot::channel();
         let (tx, rx) = tmpsc::unbounded_channel();
         task::spawn(async move {

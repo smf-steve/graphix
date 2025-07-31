@@ -4,7 +4,7 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::GXHandle;
+use graphix_rt::{GXExt, GXHandle};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{layout::Rect, symbols, widgets::LineGauge, Frame};
 use tokio::try_join;
@@ -25,17 +25,17 @@ impl FromValue for LineSetV {
     }
 }
 
-pub(super) struct LineGaugeW {
-    filled_style: TRef<Option<StyleV>>,
-    label: TRef<Option<LineV>>,
-    line_set: TRef<Option<LineSetV>>,
-    ratio: TRef<f64>,
-    style: TRef<Option<StyleV>>,
-    unfilled_style: TRef<Option<StyleV>>,
+pub(super) struct LineGaugeW<X: GXExt> {
+    filled_style: TRef<X, Option<StyleV>>,
+    label: TRef<X, Option<LineV>>,
+    line_set: TRef<X, Option<LineSetV>>,
+    ratio: TRef<X, f64>,
+    style: TRef<X, Option<StyleV>>,
+    unfilled_style: TRef<X, Option<StyleV>>,
 }
 
-impl LineGaugeW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> LineGaugeW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, filled_style), (_, label), (_, line_set), (_, ratio), (_, style), (_, unfilled_style)] =
             v.cast_to::<[(ArcStr, u64); 6]>()?;
         let (filled_style, label, line_set, ratio, style, unfilled_style) = try_join! {
@@ -60,7 +60,7 @@ impl LineGaugeW {
 }
 
 #[async_trait]
-impl TuiWidget for LineGaugeW {
+impl<X: GXExt> TuiWidget for LineGaugeW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

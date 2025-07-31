@@ -7,28 +7,28 @@ use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::Value;
 use ratatui::{layout::Rect, widgets::Tabs, Frame};
 use smallvec::SmallVec;
 use tokio::try_join;
 
-pub(super) struct TabsW {
-    gx: GXHandle,
+pub(super) struct TabsW<X: GXExt> {
+    gx: GXHandle<X>,
     tabs: Vec<(LineV, TuiW)>,
-    tabs_ref: Ref,
-    size_ref: Ref,
+    tabs_ref: Ref<X>,
+    size_ref: Ref<X>,
     last_size: SizeV,
-    divider: TRef<Option<SpanV>>,
-    highlight_style: TRef<Option<StyleV>>,
-    padding_left: TRef<Option<LineV>>,
-    padding_right: TRef<Option<LineV>>,
-    selected: TRef<Option<u32>>,
-    style: TRef<Option<StyleV>>,
+    divider: TRef<X, Option<SpanV>>,
+    highlight_style: TRef<X, Option<StyleV>>,
+    padding_left: TRef<X, Option<LineV>>,
+    padding_right: TRef<X, Option<LineV>>,
+    selected: TRef<X, Option<u32>>,
+    style: TRef<X, Option<StyleV>>,
 }
 
-impl TabsW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> TabsW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, divider), (_, highlight_style), (_, padding_left), (_, padding_right), (_, selected), (_, size), (_, style), (_, tabs)] =
             v.cast_to::<[(ArcStr, u64); 8]>().context("tabs fields")?;
         let (
@@ -50,16 +50,17 @@ impl TabsW {
             gx.compile_ref(style),
             gx.compile_ref(tabs)
         }?;
-        let divider = TRef::<Option<SpanV>>::new(divider).context("tabs tref divider")?;
-        let highlight_style = TRef::<Option<StyleV>>::new(highlight_style)
+        let divider =
+            TRef::<X, Option<SpanV>>::new(divider).context("tabs tref divider")?;
+        let highlight_style = TRef::<X, Option<StyleV>>::new(highlight_style)
             .context("tabs tref highlight_style")?;
-        let padding_left =
-            TRef::<Option<LineV>>::new(padding_left).context("tabs tref padding_left")?;
-        let padding_right = TRef::<Option<LineV>>::new(padding_right)
+        let padding_left = TRef::<X, Option<LineV>>::new(padding_left)
+            .context("tabs tref padding_left")?;
+        let padding_right = TRef::<X, Option<LineV>>::new(padding_right)
             .context("tabs tref padding_right")?;
         let selected =
-            TRef::<Option<u32>>::new(selected).context("tabs tref selected")?;
-        let style = TRef::<Option<StyleV>>::new(style).context("tabs tref style")?;
+            TRef::<X, Option<u32>>::new(selected).context("tabs tref selected")?;
+        let style = TRef::<X, Option<StyleV>>::new(style).context("tabs tref style")?;
         let mut t = Self {
             gx: gx.clone(),
             tabs: vec![],
@@ -94,7 +95,7 @@ impl TabsW {
 }
 
 #[async_trait]
-impl TuiWidget for TabsW {
+impl<X: GXExt> TuiWidget for TabsW<X> {
     async fn handle_event(&mut self, e: Event, v: Value) -> Result<()> {
         let idx = self.selected.t.and_then(|o| o.map(|s| s as usize)).unwrap_or(0);
         if let Some((_, child)) = self.tabs.get_mut(idx) {

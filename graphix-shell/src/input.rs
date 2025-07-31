@@ -1,21 +1,22 @@
 use super::{completion::BComplete, Env, Output};
 use anyhow::{bail, Error, Result};
 use futures::{channel::mpsc, StreamExt};
+use graphix_rt::GXExt;
 use reedline::{
     default_emacs_keybindings, DefaultPrompt, DefaultPromptSegment, Emacs, IdeMenu,
     KeyCode, KeyModifiers, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal,
 };
 use tokio::{sync::oneshot, task};
 
-pub(super) struct InputReader {
-    go: Option<oneshot::Sender<Option<Env>>>,
-    recv: mpsc::UnboundedReceiver<(oneshot::Sender<Option<Env>>, Result<Signal>)>,
+pub(super) struct InputReader<X: GXExt> {
+    go: Option<oneshot::Sender<Option<Env<X>>>>,
+    recv: mpsc::UnboundedReceiver<(oneshot::Sender<Option<Env<X>>>, Result<Signal>)>,
 }
 
-impl InputReader {
+impl<X: GXExt> InputReader<X> {
     pub(super) fn run(
-        mut c_rx: oneshot::Receiver<Option<Env>>,
-    ) -> mpsc::UnboundedReceiver<(oneshot::Sender<Option<Env>>, Result<Signal>)> {
+        mut c_rx: oneshot::Receiver<Option<Env<X>>>,
+    ) -> mpsc::UnboundedReceiver<(oneshot::Sender<Option<Env<X>>>, Result<Signal>)> {
         let (tx, rx) = mpsc::unbounded();
         task::spawn(async move {
             let mut keybinds = default_emacs_keybindings();
@@ -65,8 +66,8 @@ impl InputReader {
 
     pub(super) async fn read_line(
         &mut self,
-        output: &mut Output,
-        env: &mut Option<Env>,
+        output: &mut Output<X>,
+        env: &mut Option<Env<X>>,
     ) -> Result<Signal> {
         match output {
             Output::Tui(tui) => Ok(tui.wait_signal().await),

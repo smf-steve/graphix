@@ -4,7 +4,7 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
     layout::Rect,
@@ -46,18 +46,18 @@ impl FromValue for SparklineBarV {
     }
 }
 
-pub(super) struct SparklineW {
-    absent_value_style: TRef<Option<StyleV>>,
-    absent_value_symbol: TRef<Option<ArcStr>>,
-    data_ref: Ref,
+pub(super) struct SparklineW<X: GXExt> {
+    absent_value_style: TRef<X, Option<StyleV>>,
+    absent_value_symbol: TRef<X, Option<ArcStr>>,
+    data_ref: Ref<X>,
     data: Vec<SparklineBar>,
-    direction: TRef<Option<RenderDirectionV>>,
-    max: TRef<Option<u64>>,
-    style: TRef<Option<StyleV>>,
+    direction: TRef<X, Option<RenderDirectionV>>,
+    max: TRef<X, Option<u64>>,
+    style: TRef<X, Option<StyleV>>,
 }
 
-impl SparklineW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> SparklineW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, absent_value_style), (_, absent_value_symbol), (_, data), (_, direction), (_, max), (_, style)] =
             v.cast_to::<[(ArcStr, u64); 6]>()?;
         let (absent_value_style, absent_value_symbol, data_ref, direction, max, style) =
@@ -101,7 +101,7 @@ impl SparklineW {
 }
 
 #[async_trait]
-impl TuiWidget for SparklineW {
+impl<X: GXExt> TuiWidget for SparklineW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future::try_join_all;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
     layout::Rect,
@@ -183,12 +183,12 @@ impl ShapeV {
     }
 }
 
-struct ShapeRef {
-    r: Ref,
+struct ShapeRef<X: GXExt> {
+    r: Ref<X>,
     shape: Option<ShapeV>,
 }
 
-impl ShapeRef {
+impl<X: GXExt> ShapeRef<X> {
     fn update(&mut self, id: ExprId, v: &Value) -> Result<()> {
         if self.r.id == id {
             self.shape = Some(v.clone().cast_to::<ShapeV>()?);
@@ -197,18 +197,18 @@ impl ShapeRef {
     }
 }
 
-pub(super) struct CanvasW {
-    gx: GXHandle,
-    shapes_ref: Ref,
-    shapes: Vec<ShapeRef>,
-    background_color: TRef<Option<ColorV>>,
-    marker: TRef<Option<MarkerV>>,
-    x_bounds: TRef<BoundsV>,
-    y_bounds: TRef<BoundsV>,
+pub(super) struct CanvasW<X: GXExt> {
+    gx: GXHandle<X>,
+    shapes_ref: Ref<X>,
+    shapes: Vec<ShapeRef<X>>,
+    background_color: TRef<X, Option<ColorV>>,
+    marker: TRef<X, Option<MarkerV>>,
+    x_bounds: TRef<X, BoundsV>,
+    y_bounds: TRef<X, BoundsV>,
 }
 
-impl CanvasW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> CanvasW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, background_color), (_, marker), (_, shapes), (_, x_bounds), (_, y_bounds)] =
             v.cast_to::<[(ArcStr, u64); 5]>()?;
         let (background_color, marker, shapes_ref, x_bounds, y_bounds) = try_join! {
@@ -243,7 +243,7 @@ impl CanvasW {
                     Some(v) => Some(v.cast_to::<ShapeV>()?),
                     None => None,
                 };
-                Ok::<ShapeRef, anyhow::Error>(ShapeRef { r, shape })
+                Ok::<ShapeRef<X>, anyhow::Error>(ShapeRef { r, shape })
             }
         }))
         .await?;
@@ -253,7 +253,7 @@ impl CanvasW {
 }
 
 #[async_trait]
-impl TuiWidget for CanvasW {
+impl<X: GXExt> TuiWidget for CanvasW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

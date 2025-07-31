@@ -7,7 +7,7 @@ use crossterm::event::{
     ModifierKeyCode, MouseButton, MouseEvent, MouseEventKind,
 };
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{Callable, GXHandle, Ref};
+use graphix_rt::{Callable, GXExt, GXHandle, Ref};
 use log::debug;
 use netidx::{protocol::valarray::ValArray, publisher::Value};
 use ratatui::{layout::Rect, Frame};
@@ -356,19 +356,19 @@ pub(super) fn event_to_value(e: &Event) -> Value {
     }
 }
 
-pub(super) struct InputHandlerW {
-    gx: GXHandle,
-    enabled: TRef<Option<bool>>,
-    handle_ref: Ref,
-    handle: Option<Callable>,
-    child_ref: Ref,
+pub(super) struct InputHandlerW<X: GXExt> {
+    gx: GXHandle<X>,
+    enabled: TRef<X, Option<bool>>,
+    handle_ref: Ref<X>,
+    handle: Option<Callable<X>>,
+    child_ref: Ref<X>,
     child: TuiW,
     queued: VecDeque<(Event, Value)>,
     pending: bool,
 }
 
-impl InputHandlerW {
-    pub(crate) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> InputHandlerW<X> {
+    pub(crate) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, child), (_, enabled), (_, handle)] =
             v.cast_to::<[(ArcStr, u64); 3]>().context("input handler fields")?;
         let (child_ref, enabled, handle_ref) = try_join! {
@@ -416,7 +416,7 @@ impl InputHandlerW {
 }
 
 #[async_trait]
-impl TuiWidget for InputHandlerW {
+impl<X: GXExt> TuiWidget for InputHandlerW<X> {
     async fn handle_event(&mut self, e: Event, v: Value) -> Result<()> {
         if self.enabled.t.and_then(|b| b).unwrap_or(true) {
             self.queued.push_back((e, v));

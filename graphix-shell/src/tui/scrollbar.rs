@@ -4,7 +4,7 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
     layout::Rect,
@@ -29,30 +29,30 @@ impl FromValue for ScrollbarOrientationV {
     }
 }
 
-pub(super) struct ScrollbarW {
-    gx: GXHandle,
-    begin_style: TRef<Option<StyleV>>,
-    begin_symbol: TRef<Option<ArcStr>>,
+pub(super) struct ScrollbarW<X: GXExt> {
+    gx: GXHandle<X>,
+    begin_style: TRef<X, Option<StyleV>>,
+    begin_symbol: TRef<X, Option<ArcStr>>,
     child: TuiW,
-    child_ref: Ref,
-    content_length: TRef<Option<usize>>,
-    viewport_length: TRef<Option<usize>>,
-    end_style: TRef<Option<StyleV>>,
-    end_symbol: TRef<Option<ArcStr>>,
-    orientation: TRef<Option<ScrollbarOrientationV>>,
-    position: TRef<Option<u16>>,
-    style: TRef<Option<StyleV>>,
-    thumb_style: TRef<Option<StyleV>>,
-    thumb_symbol: TRef<Option<ArcStr>>,
-    track_style: TRef<Option<StyleV>>,
-    track_symbol: TRef<Option<ArcStr>>,
-    size_ref: Ref,
+    child_ref: Ref<X>,
+    content_length: TRef<X, Option<usize>>,
+    viewport_length: TRef<X, Option<usize>>,
+    end_style: TRef<X, Option<StyleV>>,
+    end_symbol: TRef<X, Option<ArcStr>>,
+    orientation: TRef<X, Option<ScrollbarOrientationV>>,
+    position: TRef<X, Option<u16>>,
+    style: TRef<X, Option<StyleV>>,
+    thumb_style: TRef<X, Option<StyleV>>,
+    thumb_symbol: TRef<X, Option<ArcStr>>,
+    track_style: TRef<X, Option<StyleV>>,
+    track_symbol: TRef<X, Option<ArcStr>>,
+    size_ref: Ref<X>,
     last_size: SizeV,
     state: ScrollbarState,
 }
 
-impl ScrollbarW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> ScrollbarW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, begin_style), (_, begin_symbol), (_, child), (_, content_length), (_, end_style), (_, end_symbol), (_, orientation), (_, position), (_, size), (_, style), (_, thumb_style), (_, thumb_symbol), (_, track_style), (_, track_symbol), (_, viewport_length)] =
             v.cast_to::<[(ArcStr, u64); 15]>().context("scrollbar flds")?;
         let (
@@ -88,34 +88,35 @@ impl ScrollbarW {
             gx.compile_ref(track_symbol),
             gx.compile_ref(viewport_length)
         }?;
-        let begin_style = TRef::<Option<StyleV>>::new(begin_style)
+        let begin_style = TRef::<X, Option<StyleV>>::new(begin_style)
             .context("scrollbar tref begin_style")?;
-        let begin_symbol = TRef::<Option<ArcStr>>::new(begin_symbol)
+        let begin_symbol = TRef::<X, Option<ArcStr>>::new(begin_symbol)
             .context("scrollbar tref begin_symbol")?;
         let child = match child_ref.last.take() {
             Some(v) => compile(gx.clone(), v).await?,
             None => Box::new(EmptyW),
         };
-        let content_length = TRef::<Option<usize>>::new(content_length)
+        let content_length = TRef::<X, Option<usize>>::new(content_length)
             .context("scrollbar tref content_length")?;
-        let end_style =
-            TRef::<Option<StyleV>>::new(end_style).context("scrollbar tref end_style")?;
-        let end_symbol = TRef::<Option<ArcStr>>::new(end_symbol)
+        let end_style = TRef::<X, Option<StyleV>>::new(end_style)
+            .context("scrollbar tref end_style")?;
+        let end_symbol = TRef::<X, Option<ArcStr>>::new(end_symbol)
             .context("scrollbar tref end_symbol")?;
-        let orientation = TRef::<Option<ScrollbarOrientationV>>::new(orientation)
+        let orientation = TRef::<X, Option<ScrollbarOrientationV>>::new(orientation)
             .context("scrollbar tref orientation")?;
         let position =
-            TRef::<Option<u16>>::new(position).context("scrollbar tref position")?;
-        let style = TRef::<Option<StyleV>>::new(style).context("scrollbar tref style")?;
-        let thumb_style = TRef::<Option<StyleV>>::new(thumb_style)
+            TRef::<X, Option<u16>>::new(position).context("scrollbar tref position")?;
+        let style =
+            TRef::<X, Option<StyleV>>::new(style).context("scrollbar tref style")?;
+        let thumb_style = TRef::<X, Option<StyleV>>::new(thumb_style)
             .context("scrollbar tref thumb_style")?;
-        let thumb_symbol = TRef::<Option<ArcStr>>::new(thumb_symbol)
+        let thumb_symbol = TRef::<X, Option<ArcStr>>::new(thumb_symbol)
             .context("scrollbar tref thumb_symbol")?;
-        let track_style = TRef::<Option<StyleV>>::new(track_style)
+        let track_style = TRef::<X, Option<StyleV>>::new(track_style)
             .context("scrollbar tref track_style")?;
-        let track_symbol = TRef::<Option<ArcStr>>::new(track_symbol)
+        let track_symbol = TRef::<X, Option<ArcStr>>::new(track_symbol)
             .context("scrollbar tref track_symbol")?;
-        let viewport_length = TRef::<Option<usize>>::new(viewport_length)
+        let viewport_length = TRef::<X, Option<usize>>::new(viewport_length)
             .context("scrollbar tref viewport_length")?;
         let state = ScrollbarState::new(content_length.t.and_then(|t| t).unwrap_or(50));
         Ok(Box::new(Self {
@@ -143,7 +144,7 @@ impl ScrollbarW {
 }
 
 #[async_trait]
-impl TuiWidget for ScrollbarW {
+impl<X: GXExt> TuiWidget for ScrollbarW<X> {
     async fn handle_event(&mut self, e: Event, v: Value) -> Result<()> {
         self.child.handle_event(e, v).await
     }

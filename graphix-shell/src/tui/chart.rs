@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future::try_join_all;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use log::debug;
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
@@ -110,17 +110,17 @@ impl FromValue for HLConstraintsV {
     }
 }
 
-struct DatasetW {
-    name: TRef<Option<LineV>>,
-    data_ref: Ref,
+struct DatasetW<X: GXExt> {
+    name: TRef<X, Option<LineV>>,
+    data_ref: Ref<X>,
     data: Vec<(f64, f64)>,
-    marker: TRef<Option<MarkerV>>,
-    graph_type: TRef<Option<GraphTypeV>>,
-    style: TRef<Option<StyleV>>,
+    marker: TRef<X, Option<MarkerV>>,
+    graph_type: TRef<X, Option<GraphTypeV>>,
+    style: TRef<X, Option<StyleV>>,
 }
 
-impl DatasetW {
-    async fn compile(gx: &GXHandle, v: Value) -> Result<Self> {
+impl<X: GXExt> DatasetW<X> {
+    async fn compile(gx: &GXHandle<X>, v: Value) -> Result<Self> {
         let [(_, data), (_, graph_type), (_, marker), (_, name), (_, style)] =
             v.cast_to::<[(ArcStr, u64); 5]>()?;
         let (name, data_ref, marker, graph_type, style) = try_join! {
@@ -192,19 +192,19 @@ impl DatasetW {
     }
 }
 
-pub(super) struct ChartW {
-    gx: GXHandle,
-    datasets_ref: Ref,
-    datasets: Vec<DatasetW>,
-    hidden_legend_constraints: TRef<Option<HLConstraintsV>>,
-    legend_position: TRef<Option<LegendPositionV>>,
-    style: TRef<Option<StyleV>>,
-    x_axis: TRef<Option<AxisV>>,
-    y_axis: TRef<Option<AxisV>>,
+pub(super) struct ChartW<X: GXExt> {
+    gx: GXHandle<X>,
+    datasets_ref: Ref<X>,
+    datasets: Vec<DatasetW<X>>,
+    hidden_legend_constraints: TRef<X, Option<HLConstraintsV>>,
+    legend_position: TRef<X, Option<LegendPositionV>>,
+    style: TRef<X, Option<StyleV>>,
+    x_axis: TRef<X, Option<AxisV>>,
+    y_axis: TRef<X, Option<AxisV>>,
 }
 
-impl ChartW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> ChartW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, datasets), (_, hidden_legend_constraints), (_, legend_position), (_, style), (_, x_axis), (_, y_axis)] =
             v.cast_to::<[(ArcStr, u64); 6]>()?;
         let (
@@ -249,7 +249,7 @@ impl ChartW {
 }
 
 #[async_trait]
-impl TuiWidget for ChartW {
+impl<X: GXExt> TuiWidget for ChartW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

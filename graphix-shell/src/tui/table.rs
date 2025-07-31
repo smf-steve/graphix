@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future::try_join_all;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
     layout::Rect,
@@ -89,29 +89,29 @@ impl RowV {
     }
 }
 
-pub(super) struct TableW {
-    gx: GXHandle,
-    cell_highlight_style: TRef<Option<StyleV>>,
-    column_highlight_style: TRef<Option<StyleV>>,
-    column_spacing: TRef<Option<u16>>,
-    flex: TRef<Option<FlexV>>,
-    footer: TRef<Option<RowV>>,
-    header: TRef<Option<RowV>>,
-    highlight_spacing: TRef<Option<HighlightSpacingV>>,
-    highlight_symbol: TRef<Option<ArcStr>>,
-    row_highlight_style: TRef<Option<StyleV>>,
-    rows: Vec<TRef<RowV>>,
-    rows_ref: Ref,
-    selected: TRef<Option<usize>>,
-    selected_cell: TRef<Option<SelectedV>>,
-    selected_column: TRef<Option<usize>>,
+pub(super) struct TableW<X: GXExt> {
+    gx: GXHandle<X>,
+    cell_highlight_style: TRef<X, Option<StyleV>>,
+    column_highlight_style: TRef<X, Option<StyleV>>,
+    column_spacing: TRef<X, Option<u16>>,
+    flex: TRef<X, Option<FlexV>>,
+    footer: TRef<X, Option<RowV>>,
+    header: TRef<X, Option<RowV>>,
+    highlight_spacing: TRef<X, Option<HighlightSpacingV>>,
+    highlight_symbol: TRef<X, Option<ArcStr>>,
+    row_highlight_style: TRef<X, Option<StyleV>>,
+    rows: Vec<TRef<X, RowV>>,
+    rows_ref: Ref<X>,
+    selected: TRef<X, Option<usize>>,
+    selected_cell: TRef<X, Option<SelectedV>>,
+    selected_column: TRef<X, Option<usize>>,
     state: TableState,
-    style: TRef<Option<StyleV>>,
-    widths: TRef<Option<Vec<ConstraintV>>>,
+    style: TRef<X, Option<StyleV>>,
+    widths: TRef<X, Option<Vec<ConstraintV>>>,
 }
 
-impl TableW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> TableW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, cell_highlight_style), (_, column_highlight_style), (_, column_spacing), (_, flex), (_, footer), (_, header), (_, highlight_spacing), (_, highlight_symbol), (_, row_highlight_style), (_, rows), (_, selected), (_, selected_cell), (_, selected_column), (_, style), (_, widths)] =
             v.cast_to::<[(ArcStr, u64); 15]>().context("table fields")?;
         let (
@@ -187,7 +187,7 @@ impl TableW {
             let gx = self.gx.clone();
             async move {
                 let r = gx.compile_ref(id).await?;
-                TRef::<RowV>::new(r)
+                TRef::<X, RowV>::new(r)
             }
         }))
         .await?;
@@ -196,7 +196,7 @@ impl TableW {
 }
 
 #[async_trait]
-impl TuiWidget for TableW {
+impl<X: GXExt> TuiWidget for TableW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

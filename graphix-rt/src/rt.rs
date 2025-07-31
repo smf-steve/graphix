@@ -1,4 +1,4 @@
-use crate::{UpdateBatch, WriteBatch};
+use crate::{GXExt, UpdateBatch, WriteBatch};
 use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
 use chrono::prelude::*;
@@ -36,7 +36,7 @@ pub(super) struct RpcClient {
 }
 
 #[derive(Debug)]
-pub struct GXRt {
+pub struct GXRt<X: GXExt> {
     pub(super) by_ref: FxHashMap<BindId, FxHashMap<ExprId, usize>>,
     pub(super) subscribed: FxHashMap<SubId, FxHashMap<ExprId, usize>>,
     pub(super) published: FxHashMap<Id, FxHashMap<ExprId, usize>>,
@@ -58,9 +58,10 @@ pub struct GXRt {
     pub(super) writes: mpsc::Receiver<WriteBatch>,
     pub(super) rpcs_tx: mpsc::Sender<(BindId, RpcCall)>,
     pub(super) rpcs: mpsc::Receiver<(BindId, RpcCall)>,
+    pub ext: X,
 }
 
-impl GXRt {
+impl<X: GXExt> GXRt<X> {
     pub fn new(publisher: Publisher, subscriber: Subscriber) -> Self {
         let (updates_tx, updates) = mpsc::channel(100);
         let (writes_tx, writes) = mpsc::channel(100);
@@ -80,6 +81,7 @@ impl GXRt {
             published: HashMap::default(),
             change_trackers: HashMap::default(),
             published_rpcs: HashMap::default(),
+            ext: X::default(),
             tasks,
             batch,
             publisher,
@@ -119,7 +121,7 @@ macro_rules! check_changed {
     };
 }
 
-impl Rt for GXRt {
+impl<X: GXExt> Rt for GXRt<X> {
     fn clear(&mut self) {
         let Self {
             by_ref,
@@ -143,7 +145,9 @@ impl Rt for GXRt {
             writes,
             rpcs,
             rpcs_tx,
+            ext,
         } = self;
+        ext.clear();
         by_ref.clear();
         var_updates.clear();
         net_updates.clear();

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use enumflags2::BitFlags;
 use graphix_compiler::ExecCtx;
-use graphix_rt::{GXConfig, GXEvent, GXHandle, GXRt};
+use graphix_rt::{GXConfig, GXEvent, GXHandle, GXRt, NoExt};
 use netidx::pool::Pooled;
 use tokio::sync::mpsc;
 
@@ -10,14 +10,16 @@ mod libtest;
 
 pub struct TestCtx {
     pub _internal_only: netidx::InternalOnly,
-    pub rt: GXHandle,
+    pub rt: GXHandle<NoExt>,
 }
 
-pub async fn init(sub: mpsc::Sender<Pooled<Vec<GXEvent>>>) -> Result<TestCtx> {
+pub async fn init(sub: mpsc::Sender<Pooled<Vec<GXEvent<NoExt>>>>) -> Result<TestCtx> {
     let _ = env_logger::try_init();
     let env = netidx::InternalOnly::new().await?;
-    let mut ctx =
-        ExecCtx::new(GXRt::new(env.publisher().clone(), env.subscriber().clone()));
+    let mut ctx = ExecCtx::new(GXRt::<NoExt>::new(
+        env.publisher().clone(),
+        env.subscriber().clone(),
+    ));
     let (root, mods) = crate::register(&mut ctx, BitFlags::all())?;
     Ok(TestCtx {
         _internal_only: env,

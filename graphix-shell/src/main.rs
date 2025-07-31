@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use flexi_logger::{FileSpec, Logger};
 use graphix_compiler::expr::ModuleResolver;
+use graphix_rt::NoExt;
 use graphix_shell::{Mode, ShellBuilder};
 use log::info;
 use netidx::{
@@ -110,21 +111,22 @@ async fn main() -> Result<()> {
     } else {
         p.get_pub_sub().await?
     };
-    let mut shell = ShellBuilder::default();
-    shell.no_init(p.no_init);
+    let mut shell = ShellBuilder::<NoExt>::default();
+    shell = shell.no_init(p.no_init);
     if let Some(t) = p.publish_timeout {
-        shell.publish_timeout(Duration::from_secs(t));
+        shell = shell.publish_timeout(Duration::from_secs(t));
     }
     if let Some(t) = p.resolve_timeout {
-        shell.resolve_timeout(Duration::from_secs(t));
+        shell = shell.resolve_timeout(Duration::from_secs(t));
     }
     if let Some(f) = &p.file {
-        shell.mode(Mode::File(f.clone()));
+        shell = shell.mode(Mode::File(f.clone()));
         match f.parent() {
             Some(p) if p.as_os_str().is_empty() => (),
             None => (),
             Some(p) => {
-                shell.module_resolvers(vec![ModuleResolver::Files(p.canonicalize()?)]);
+                shell = shell
+                    .module_resolvers(vec![ModuleResolver::Files(p.canonicalize()?)]);
             }
         }
     }

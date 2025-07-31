@@ -5,9 +5,9 @@ use enumflags2::BitFlags;
 use graphix_compiler::{
     expr::{ExprId, ModPath, ModuleResolver},
     typ::{format_with_flags, PrintFlag, TVal, Type},
-    ExecCtx, NoUserEvent,
+    ExecCtx,
 };
-use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXEvent, GXHandle, GXRt};
+use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXEvent, GXExt, GXHandle, GXRt};
 use graphix_stdlib::Module;
 use input::InputReader;
 use netidx::{
@@ -26,7 +26,7 @@ mod completion;
 mod input;
 mod tui;
 
-type Env = graphix_compiler::env::Env<GXRt, NoUserEvent>;
+type Env<X> = graphix_compiler::env::Env<GXRt<X>, <X as GXExt>::UserEvent>;
 
 const TUITYP: LazyLock<Type> = LazyLock::new(|| Type::Ref {
     scope: ModPath::root(),
@@ -34,14 +34,14 @@ const TUITYP: LazyLock<Type> = LazyLock::new(|| Type::Ref {
     params: Arc::from_iter([]),
 });
 
-enum Output {
+enum Output<X: GXExt> {
     None,
-    Tui(Tui),
-    Text(CompExp),
+    Tui(Tui<X>),
+    Text(CompExp<X>),
 }
 
-impl Output {
-    fn from_expr(gx: &GXHandle, env: &Env, e: CompExp) -> Self {
+impl<X: GXExt> Output<X> {
+    fn from_expr(gx: &GXHandle<X>, env: &Env<X>, e: CompExp<X>) -> Self {
         if TUITYP.contains(env, &e.typ).unwrap() {
             Self::Tui(Tui::start(gx, env.clone(), e))
         } else {
@@ -57,7 +57,7 @@ impl Output {
         *self = Self::None
     }
 
-    async fn process_update(&mut self, env: &Env, id: ExprId, v: Value) {
+    async fn process_update(&mut self, env: &Env<X>, id: ExprId, v: Value) {
         match self {
             Self::None => (),
             Self::Tui(tui) => tui.update(id, v).await,
@@ -122,7 +122,8 @@ impl Mode {
 }
 
 #[derive(Builder)]
-pub struct Shell {
+#[builder(pattern = "owned")]
+pub struct Shell<X: GXExt> {
     /// do not run the users init module
     #[builder(default = "false")]
     no_init: bool,
@@ -150,18 +151,42 @@ pub struct Shell {
     /// you can use netidx::InternalOnly to create an internal netidx
     /// environment
     subscriber: Subscriber,
+    /// Provide a closure to register any built-ins you wish to use.
+    ///
+    /// Your closure should register the builtins with the context and return a
+    /// string specifiying any modules you need to load in order to use them.
+    /// For example if you wish to implement a module called m containing
+    /// builtins foo and bar, then you would first implement foo and bar in rust
+    /// and register them with the context. You would add a VFS module resolver
+    /// to the set of resolvers containing prototypes that reference your rust
+    /// builtins. e.g.
+    ///
+    /// ``` ignore
+    /// pub let foo = |x, y| 'foo_builtin;
+    /// pub let bar = |x| 'bar_builtin
+    /// ```
+    ///
+    /// Your VFS resolver would map "/m" -> the above stubs. Your register
+    /// function would then return "mod m\n" to force loading the module at
+    /// startup. Then your user only needs to `use m`
+    #[builder(setter(strip_option), default)]
+    register: Option<Arc<dyn Fn(&mut ExecCtx<GXRt<X>, X::UserEvent>) -> ArcStr>>,
 }
 
-impl Shell {
+impl<X: GXExt> Shell<X> {
     async fn init(
         &mut self,
-        sub: mpsc::Sender<Pooled<Vec<GXEvent>>>,
-    ) -> Result<GXHandle> {
+        sub: mpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
+    ) -> Result<GXHandle<X>> {
         let publisher = self.publisher.clone();
         let subscriber = self.subscriber.clone();
-        let mut ctx = ExecCtx::new(GXRt::new(publisher, subscriber));
+        let mut ctx = ExecCtx::new(GXRt::<X>::new(publisher, subscriber));
         let (root, mods) = graphix_stdlib::register(&mut ctx, self.stdlib_modules)?;
-        let root = ArcStr::from(format!("{root};\nmod tui"));
+        let usermods = self.register.as_mut().map(|f| f(&mut ctx));
+        let root = match usermods {
+            Some(m) => ArcStr::from(format!("{root};\nmod tui;\n{m}")),
+            None => ArcStr::from(format!("{root};\nmod tui")),
+        };
         let mut mods = vec![mods, tui_mods()];
         for res in self.module_resolvers.drain(..) {
             mods.push(res);
@@ -185,11 +210,11 @@ impl Shell {
 
     async fn load_env(
         &mut self,
-        gx: &GXHandle,
-        newenv: &mut Option<Env>,
-        output: &mut Output,
-        exprs: &mut Vec<CompExp>,
-    ) -> Result<Env> {
+        gx: &GXHandle<X>,
+        newenv: &mut Option<Env<X>>,
+        output: &mut Output<X>,
+        exprs: &mut Vec<CompExp<X>>,
+    ) -> Result<Env<X>> {
         let env;
         macro_rules! file_mode {
             ($r:expr) => {{

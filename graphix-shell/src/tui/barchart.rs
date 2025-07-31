@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future::{self, try_join_all};
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref};
 use netidx::publisher::Value;
 use ratatui::{
     layout::Rect,
@@ -15,16 +15,16 @@ use ratatui::{
 use smallvec::{smallvec, SmallVec};
 use tokio::try_join;
 
-struct BarW {
-    label: TRef<Option<LineV>>,
-    style: TRef<Option<StyleV>>,
-    text_value: TRef<Option<ArcStr>>,
-    value: TRef<u64>,
-    value_style: TRef<Option<StyleV>>,
+struct BarW<X: GXExt> {
+    label: TRef<X, Option<LineV>>,
+    style: TRef<X, Option<StyleV>>,
+    text_value: TRef<X, Option<ArcStr>>,
+    value: TRef<X, u64>,
+    value_style: TRef<X, Option<StyleV>>,
 }
 
-impl BarW {
-    async fn compile(gx: &GXHandle, v: Value) -> Result<Self> {
+impl<X: GXExt> BarW<X> {
+    async fn compile(gx: &GXHandle<X>, v: Value) -> Result<Self> {
         let [(_, label), (_, style), (_, text_value), (_, value), (_, value_style)] =
             v.cast_to::<[(ArcStr, u64); 5]>()?;
         let (label, style, text_value, value, value_style) = try_join! {
@@ -70,13 +70,13 @@ impl BarW {
     }
 }
 
-struct BarGroupW {
+struct BarGroupW<X: GXExt> {
     label: Option<LineV>,
-    bars: Vec<BarW>,
+    bars: Vec<BarW<X>>,
 }
 
-impl BarGroupW {
-    async fn compile(gx: &GXHandle, v: Value) -> Result<Self> {
+impl<X: GXExt> BarGroupW<X> {
+    async fn compile(gx: &GXHandle<X>, v: Value) -> Result<Self> {
         let [(_, bars), (_, label)] =
             v.cast_to::<[(ArcStr, Value); 2]>().context("bargroup fields")?;
         let label = label.cast_to::<Option<LineV>>()?;
@@ -89,23 +89,23 @@ impl BarGroupW {
     }
 }
 
-pub(super) struct BarChartW {
-    gx: GXHandle,
-    data_ref: Ref,
-    data: Vec<BarGroupW>,
-    bar_gap: TRef<Option<u16>>,
-    bar_style: TRef<Option<StyleV>>,
-    bar_width: TRef<Option<u16>>,
-    direction: TRef<Option<DirectionV>>,
-    group_gap: TRef<Option<u16>>,
-    label_style: TRef<Option<StyleV>>,
-    max: TRef<Option<u64>>,
-    style: TRef<Option<StyleV>>,
-    value_style: TRef<Option<StyleV>>,
+pub(super) struct BarChartW<X: GXExt> {
+    gx: GXHandle<X>,
+    data_ref: Ref<X>,
+    data: Vec<BarGroupW<X>>,
+    bar_gap: TRef<X, Option<u16>>,
+    bar_style: TRef<X, Option<StyleV>>,
+    bar_width: TRef<X, Option<u16>>,
+    direction: TRef<X, Option<DirectionV>>,
+    group_gap: TRef<X, Option<u16>>,
+    label_style: TRef<X, Option<StyleV>>,
+    max: TRef<X, Option<u64>>,
+    style: TRef<X, Option<StyleV>>,
+    value_style: TRef<X, Option<StyleV>>,
 }
 
-impl BarChartW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> BarChartW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let flds = v.cast_to::<[(ArcStr, u64); 10]>().context("barchart fields")?;
         let [(_, bar_gap), (_, bar_style), (_, bar_width), (_, data), (_, direction), (_, group_gap), (_, label_style), (_, max), (_, style), (_, value_style)] =
             flds;
@@ -133,20 +133,21 @@ impl BarChartW {
             gx.compile_ref(value_style)
         }?;
         let bar_gap =
-            TRef::<Option<u16>>::new(bar_gap).context("barchart tref bar_gap")?;
-        let bar_style =
-            TRef::<Option<StyleV>>::new(bar_style).context("barchart tref bar_style")?;
+            TRef::<X, Option<u16>>::new(bar_gap).context("barchart tref bar_gap")?;
+        let bar_style = TRef::<X, Option<StyleV>>::new(bar_style)
+            .context("barchart tref bar_style")?;
         let bar_width =
-            TRef::<Option<u16>>::new(bar_width).context("barchart tref bar_width")?;
-        let direction = TRef::<Option<DirectionV>>::new(direction)
+            TRef::<X, Option<u16>>::new(bar_width).context("barchart tref bar_width")?;
+        let direction = TRef::<X, Option<DirectionV>>::new(direction)
             .context("barchart tref direction")?;
         let group_gap =
-            TRef::<Option<u16>>::new(group_gap).context("barchart tref group_gap")?;
-        let label_style = TRef::<Option<StyleV>>::new(label_style)
+            TRef::<X, Option<u16>>::new(group_gap).context("barchart tref group_gap")?;
+        let label_style = TRef::<X, Option<StyleV>>::new(label_style)
             .context("barchart tref label_style")?;
-        let max = TRef::<Option<u64>>::new(max).context("barchart tref max")?;
-        let style = TRef::<Option<StyleV>>::new(style).context("barchart tref style")?;
-        let value_style = TRef::<Option<StyleV>>::new(value_style)
+        let max = TRef::<X, Option<u64>>::new(max).context("barchart tref max")?;
+        let style =
+            TRef::<X, Option<StyleV>>::new(style).context("barchart tref style")?;
+        let value_style = TRef::<X, Option<StyleV>>::new(value_style)
             .context("barchart tref value_style")?;
         let mut t = Self {
             gx: gx.clone(),
@@ -178,7 +179,7 @@ impl BarChartW {
 }
 
 #[async_trait]
-impl TuiWidget for BarChartW {
+impl<X: GXExt> TuiWidget for BarChartW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }

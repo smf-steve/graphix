@@ -6,7 +6,7 @@ use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::GXHandle;
+use graphix_rt::{GXExt, GXHandle};
 use netidx::publisher::Value;
 use ratatui::{
     layout::Rect,
@@ -15,20 +15,20 @@ use ratatui::{
 };
 use tokio::try_join;
 
-pub(super) struct ListW {
-    highlight_spacing: TRef<Option<HighlightSpacingV>>,
-    highlight_style: TRef<Option<StyleV>>,
-    highlight_symbol: TRef<Option<ArcStr>>,
-    items: TRef<Vec<LineV>>,
-    repeat_highlight_symbol: TRef<Option<bool>>,
-    scroll: TRef<Option<u32>>,
-    selected: TRef<Option<u32>>,
-    style: TRef<Option<StyleV>>,
+pub(super) struct ListW<X: GXExt> {
+    highlight_spacing: TRef<X, Option<HighlightSpacingV>>,
+    highlight_style: TRef<X, Option<StyleV>>,
+    highlight_symbol: TRef<X, Option<ArcStr>>,
+    items: TRef<X, Vec<LineV>>,
+    repeat_highlight_symbol: TRef<X, Option<bool>>,
+    scroll: TRef<X, Option<u32>>,
+    selected: TRef<X, Option<u32>>,
+    style: TRef<X, Option<StyleV>>,
     state: ListState,
 }
 
-impl ListW {
-    pub(super) async fn compile(gx: GXHandle, v: Value) -> Result<TuiW> {
+impl<X: GXExt> ListW<X> {
+    pub(super) async fn compile(gx: GXHandle<X>, v: Value) -> Result<TuiW> {
         let [(_, highlight_spacing), (_, highlight_style), (_, highlight_symbol), (_, items), (_, repeat_highlight_symbol), (_, scroll), (_, selected), (_, style)] =
             v.cast_to::<[(ArcStr, u64); 8]>().context("list fields")?;
         let (
@@ -76,7 +76,7 @@ impl ListW {
 }
 
 #[async_trait]
-impl TuiWidget for ListW {
+impl<X: GXExt> TuiWidget for ListW<X> {
     async fn handle_event(&mut self, _e: Event, _v: Value) -> Result<()> {
         Ok(())
     }
