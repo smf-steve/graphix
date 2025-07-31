@@ -48,7 +48,6 @@ use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
     future, mem,
-    os::unix::ffi::OsStrExt,
     panic::{catch_unwind, AssertUnwindSafe},
     path::{Component, PathBuf},
     result,
@@ -853,7 +852,7 @@ impl GX {
         let scope = ModPath::root();
         let st = Instant::now();
         let (ori, exprs) = match file.extension() {
-            Some(e) if e.as_bytes() == b"gx" => {
+            Some(e) if e.as_encoded_bytes() == b"gx" => {
                 let file = file.canonicalize()?;
                 let s = fs::read_to_string(&file).await?;
                 let s = if s.starts_with("#!") {
@@ -887,7 +886,7 @@ impl GX {
                 if name.len() != 1 {
                     bail!("invalid module name {file:?}")
                 }
-                let name = String::from_utf8_lossy(name[0].as_bytes());
+                let name = name[0].to_string_lossy();
                 let name = name
                     .parse::<ModPath>()
                     .with_context(|| "parsing module name {file:?}")?;
