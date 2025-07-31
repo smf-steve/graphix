@@ -7,7 +7,7 @@ use graphix_compiler::{
     typ::{format_with_flags, PrintFlag, TVal, Type},
     ExecCtx, NoUserEvent,
 };
-use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXHandle, GXRt, RtEvent};
+use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXEvent, GXHandle, GXRt};
 use graphix_stdlib::Module;
 use input::InputReader;
 use netidx::{
@@ -155,7 +155,7 @@ pub struct Shell {
 impl Shell {
     async fn init(
         &mut self,
-        sub: mpsc::Sender<Pooled<Vec<RtEvent>>>,
+        sub: mpsc::Sender<Pooled<Vec<GXEvent>>>,
     ) -> Result<GXHandle> {
         let publisher = self.publisher.clone();
         let subscriber = self.subscriber.clone();
@@ -254,8 +254,8 @@ impl Shell {
                     Some(mut batch) => {
                         for e in batch.drain(..) {
                             match e {
-                                RtEvent::Updated(id, v) => output.process_update(&env, id, v).await,
-                                RtEvent::Env(e) => {
+                                GXEvent::Updated(id, v) => output.process_update(&env, id, v).await,
+                                GXEvent::Env(e) => {
                                     env = e;
                                     newenv = Some(env.clone());
                                 }

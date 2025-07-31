@@ -2,7 +2,7 @@ use super::init;
 use crate::run;
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
-use graphix_rt::RtEvent;
+use graphix_rt::GXEvent;
 use netidx::publisher::Value;
 use tokio::sync::mpsc;
 
@@ -24,8 +24,8 @@ async fn bind_ref_arith() -> Result<()> {
         Some(mut ev) => {
             for e in ev.drain(..) {
                 match e {
-                    RtEvent::Env(_) => (),
-                    RtEvent::Updated(id, v) => {
+                    GXEvent::Env(_) => (),
+                    GXEvent::Updated(id, v) => {
                         assert_eq!(id, eid);
                         assert_eq!(v, Value::I64(1))
                     }

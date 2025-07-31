@@ -172,10 +172,11 @@ pub enum Module {
     Str,
 }
 
-/// Register selected modules of the standard graphix library and
-/// return a root module that will load them along with a module
-/// resolver that contains the necessary code. You need both of these
-/// for the `rt` module.
+/// Register selected modules of the standard graphix library
+///
+/// and return a root module that will load them along with a module resolver
+/// that contains the necessary code. You need both of these for the `rt`
+/// module.
 ///
 /// Note, core is always included and registered, all the other
 /// modules are optional
@@ -187,14 +188,14 @@ pub enum Module {
 /// use anyhow::Result;
 /// use netidx_core::pool::Pooled;
 /// use graphix_compiler::ExecCtx;
-/// use graphix_rt::{GXRt, GXConfigBuilder, GXHandle, RtEvent};
+/// use graphix_rt::{GXRt, GXConfigBuilder, GXHandle, GXEvent};
 /// use tokio::sync::mpsc;
 /// use enumflags2::BitFlags;
 ///
 /// async fn start_runtime(
 ///     publisher: Publisher,
 ///     subscriber: Subscriber,
-///     sub: mpsc::Sender<Pooled<Vec<RtEvent>>>
+///     sub: mpsc::Sender<Pooled<Vec<GXEvent>>>
 /// ) -> Result<GXHandle> {
 ///     let mut ctx = ExecCtx::new(GXRt::new(publisher, subscriber));
 ///     let (root, mods) = graphix_stdlib::register(&mut ctx, BitFlags::all())?;

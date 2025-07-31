@@ -1,7 +1,7 @@
 use anyhow::Result;
 use enumflags2::BitFlags;
 use graphix_compiler::ExecCtx;
-use graphix_rt::{GXConfig, GXRt, GXHandle, RtEvent};
+use graphix_rt::{GXConfig, GXEvent, GXHandle, GXRt};
 use netidx::pool::Pooled;
 use tokio::sync::mpsc;
 
@@ -13,7 +13,7 @@ pub struct TestCtx {
     pub rt: GXHandle,
 }
 
-pub async fn init(sub: mpsc::Sender<Pooled<Vec<RtEvent>>>) -> Result<TestCtx> {
+pub async fn init(sub: mpsc::Sender<Pooled<Vec<GXEvent>>>) -> Result<TestCtx> {
     let _ = env_logger::try_init();
     let env = netidx::InternalOnly::new().await?;
     let mut ctx =
@@ -49,8 +49,8 @@ macro_rules! run {
                             Some(mut batch) => {
                                 for e in batch.drain(..) {
                                     match e {
-                                        graphix_rt::RtEvent::Env(_) => (),
-                                        graphix_rt::RtEvent::Updated(id, v) => {
+                                        graphix_rt::GXEvent::Env(_) => (),
+                                        graphix_rt::GXEvent::Updated(id, v) => {
                                             assert_eq!(id, eid);
                                             eprintln!("{v}");
                                             assert!($pred(Ok(&v)));

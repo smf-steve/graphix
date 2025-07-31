@@ -1,69 +1,43 @@
-/// A general purpose graphix runtime
-///
-/// This module implements a generic graphix runtime suitable for most
-/// applications, including applications that implement custom graphix
-/// builtins. The graphix interperter is run in a background task, and
-/// can be interacted with via a handle. All features of the standard
-/// library are supported by this runtime.
-///
-/// In special cases where this runtime is not suitable for your
-/// application you can implement your own, see the [Ctx] and
-/// [UserEvent] traits.
-use anyhow::{anyhow, bail, Context, Result};
-use arcstr::{literal, ArcStr};
-use chrono::prelude::*;
-use combine::stream::position::SourcePosition;
-use compact_str::format_compact;
+//! A general purpose graphix runtime
+//!
+//! This module implements a generic graphix runtime suitable for most
+//! applications, including applications that implement custom graphix
+//! builtins. The graphix interperter is run in a background task, and
+//! can be interacted with via a handle. All features of the standard
+//! library are supported by this runtime.
+use anyhow::{anyhow, bail, Result};
+use arcstr::ArcStr;
 use core::fmt;
 use derive_builder::Builder;
-use futures::{channel::mpsc, future::try_join_all, FutureExt, StreamExt};
-use fxhash::{FxBuildHasher, FxHashMap};
 use graphix_compiler::{
-    compile,
     env::Env,
-    expr::{
-        self, Expr, ExprId, ExprKind, ModPath, ModuleKind, ModuleResolver, Origin, Source,
-    },
-    node::genn,
+    expr::{ExprId, ModuleResolver},
     typ::{FnType, Type},
-    BindId, Event, ExecCtx, LambdaId, NoUserEvent, Node, Rt, REFS,
+    BindId, ExecCtx, NoUserEvent,
 };
-use indexmap::IndexMap;
-use log::{debug, error, info};
+use log::error;
 use netidx::{
-    path::Path,
-    pool::{Pool, Pooled},
+    pool::Pooled,
     protocol::valarray::ValArray,
-    publisher::{self, Id, PublishFlags, Publisher, Val, Value, WriteRequest},
-    resolver_client::ChangeTracker,
-    subscriber::{self, Dval, SubId, Subscriber, UpdatesFlags},
+    publisher::{Value, WriteRequest},
+    subscriber::{self, SubId},
 };
 use netidx_core::atomic_id;
-use netidx_protocols::rpc::{
-    self,
-    server::{ArgSpec, RpcCall},
-};
 use serde_derive::{Deserialize, Serialize};
-use smallvec::{smallvec, SmallVec};
-use std::{
-    collections::{hash_map::Entry, HashMap, VecDeque},
-    future, mem,
-    panic::{catch_unwind, AssertUnwindSafe},
-    path::{Component, PathBuf},
-    result,
-    sync::{LazyLock, Weak},
-    time::Duration,
-};
+use smallvec::SmallVec;
+use std::{path::PathBuf, time::Duration};
 use tokio::{
-    fs, select,
     sync::{
-        mpsc::{self as tmpsc, error::SendTimeoutError, UnboundedReceiver},
-        oneshot, Mutex,
+        mpsc::{self as tmpsc},
+        oneshot,
     },
-    task::{self, JoinError, JoinSet},
-    time::{self, Instant},
+    task,
 };
-use triomphe::Arc;
+
+mod gx;
+mod rt;
+use gx::GX;
+pub use rt::GXRt;
 
 type UpdateBatch = Pooled<Vec<(SubId, subscriber::Event)>>;
 type WriteBatch = Pooled<Vec<WriteRequest>>;
@@ -77,387 +51,6 @@ impl fmt::Display for CouldNotResolve {
     }
 }
 
-#[derive(Debug)]
-struct RpcClient {
-    proc: rpc::client::Proc,
-    last_used: Instant,
-}
-
-#[derive(Debug)]
-pub struct GXRt {
-    by_ref: FxHashMap<BindId, FxHashMap<ExprId, usize>>,
-    subscribed: FxHashMap<SubId, FxHashMap<ExprId, usize>>,
-    published: FxHashMap<Id, FxHashMap<ExprId, usize>>,
-    var_updates: VecDeque<(BindId, Value)>,
-    net_updates: VecDeque<(SubId, subscriber::Event)>,
-    net_writes: VecDeque<(Id, WriteRequest)>,
-    rpc_overflow: VecDeque<(BindId, RpcCall)>,
-    rpc_clients: FxHashMap<Path, RpcClient>,
-    published_rpcs: FxHashMap<Path, rpc::server::Proc>,
-    pending_unsubscribe: VecDeque<(Instant, Dval)>,
-    change_trackers: FxHashMap<BindId, Arc<Mutex<ChangeTracker>>>,
-    tasks: JoinSet<(BindId, Value)>,
-    batch: publisher::UpdateBatch,
-    publisher: Publisher,
-    subscriber: Subscriber,
-    updates_tx: mpsc::Sender<UpdateBatch>,
-    updates: mpsc::Receiver<UpdateBatch>,
-    writes_tx: mpsc::Sender<WriteBatch>,
-    writes: mpsc::Receiver<WriteBatch>,
-    rpcs_tx: mpsc::Sender<(BindId, RpcCall)>,
-    rpcs: mpsc::Receiver<(BindId, RpcCall)>,
-}
-
-impl GXRt {
-    pub fn new(publisher: Publisher, subscriber: Subscriber) -> Self {
-        let (updates_tx, updates) = mpsc::channel(100);
-        let (writes_tx, writes) = mpsc::channel(100);
-        let (rpcs_tx, rpcs) = mpsc::channel(100);
-        let batch = publisher.start_batch();
-        let mut tasks = JoinSet::new();
-        tasks.spawn(async { future::pending().await });
-        Self {
-            by_ref: HashMap::default(),
-            var_updates: VecDeque::new(),
-            net_updates: VecDeque::new(),
-            net_writes: VecDeque::new(),
-            rpc_overflow: VecDeque::new(),
-            rpc_clients: HashMap::default(),
-            subscribed: HashMap::default(),
-            pending_unsubscribe: VecDeque::new(),
-            published: HashMap::default(),
-            change_trackers: HashMap::default(),
-            published_rpcs: HashMap::default(),
-            tasks,
-            batch,
-            publisher,
-            subscriber,
-            updates,
-            updates_tx,
-            writes,
-            writes_tx,
-            rpcs_tx,
-            rpcs,
-        }
-    }
-}
-
-macro_rules! or_err {
-    ($bindid:expr, $e:expr) => {
-        match $e {
-            Ok(v) => v,
-            Err(e) => {
-                let e = ArcStr::from(format_compact!("{e:?}").as_str());
-                let e = Value::Error(e);
-                return ($bindid, e);
-            }
-        }
-    };
-}
-
-macro_rules! check_changed {
-    ($id:expr, $resolver:expr, $path:expr, $ct:expr) => {
-        let mut ct = $ct.lock().await;
-        if ct.path() != &$path {
-            *ct = ChangeTracker::new($path.clone());
-        }
-        if !or_err!($id, $resolver.check_changed(&mut *ct).await) {
-            return ($id, Value::Null);
-        }
-    };
-}
-
-impl Rt for GXRt {
-    fn clear(&mut self) {
-        let Self {
-            by_ref,
-            var_updates,
-            net_updates,
-            net_writes,
-            rpc_clients,
-            rpc_overflow,
-            subscribed,
-            published,
-            published_rpcs,
-            pending_unsubscribe,
-            change_trackers,
-            tasks,
-            batch,
-            publisher,
-            subscriber: _,
-            updates_tx,
-            updates,
-            writes_tx,
-            writes,
-            rpcs,
-            rpcs_tx,
-        } = self;
-        by_ref.clear();
-        var_updates.clear();
-        net_updates.clear();
-        net_writes.clear();
-        rpc_overflow.clear();
-        rpc_clients.clear();
-        subscribed.clear();
-        published.clear();
-        published_rpcs.clear();
-        pending_unsubscribe.clear();
-        change_trackers.clear();
-        *tasks = JoinSet::new();
-        tasks.spawn(async { future::pending().await });
-        *batch = publisher.start_batch();
-        let (tx, rx) = mpsc::channel(3);
-        *updates_tx = tx;
-        *updates = rx;
-        let (tx, rx) = mpsc::channel(100);
-        *writes_tx = tx;
-        *writes = rx;
-        let (tx, rx) = mpsc::channel(100);
-        *rpcs_tx = tx;
-        *rpcs = rx
-    }
-
-    fn call_rpc(&mut self, name: Path, args: Vec<(ArcStr, Value)>, id: BindId) {
-        let now = Instant::now();
-        let proc = match self.rpc_clients.entry(name) {
-            Entry::Occupied(mut e) => {
-                let cl = e.get_mut();
-                cl.last_used = now;
-                Ok(cl.proc.clone())
-            }
-            Entry::Vacant(e) => {
-                match rpc::client::Proc::new(&self.subscriber, e.key().clone()) {
-                    Err(e) => Err(e),
-                    Ok(proc) => {
-                        let cl = RpcClient { last_used: now, proc: proc.clone() };
-                        e.insert(cl);
-                        Ok(proc)
-                    }
-                }
-            }
-        };
-        self.tasks.spawn(async move {
-            macro_rules! err {
-                ($e:expr) => {{
-                    let e = format_compact!("{:?}", $e);
-                    (id, Value::Error(e.as_str().into()))
-                }};
-            }
-            match proc {
-                Err(e) => err!(e),
-                Ok(proc) => match proc.call(args).await {
-                    Err(e) => err!(e),
-                    Ok(res) => (id, res),
-                },
-            }
-        });
-    }
-
-    fn publish_rpc(
-        &mut self,
-        name: Path,
-        doc: Value,
-        spec: Vec<ArgSpec>,
-        id: BindId,
-    ) -> Result<()> {
-        use rpc::server::Proc;
-        let e = match self.published_rpcs.entry(name) {
-            Entry::Vacant(e) => e,
-            Entry::Occupied(_) => bail!("already published"),
-        };
-        let proc = Proc::new(
-            &self.publisher,
-            e.key().clone(),
-            doc,
-            spec,
-            move |c| Some((id, c)),
-            Some(self.rpcs_tx.clone()),
-        )?;
-        e.insert(proc);
-        Ok(())
-    }
-
-    fn unpublish_rpc(&mut self, name: Path) {
-        self.published_rpcs.remove(&name);
-    }
-
-    fn subscribe(&mut self, flags: UpdatesFlags, path: Path, ref_by: ExprId) -> Dval {
-        let dval =
-            self.subscriber.subscribe_updates(path, [(flags, self.updates_tx.clone())]);
-        *self.subscribed.entry(dval.id()).or_default().entry(ref_by).or_default() += 1;
-        dval
-    }
-
-    fn unsubscribe(&mut self, _path: Path, dv: Dval, ref_by: ExprId) {
-        if let Some(exprs) = self.subscribed.get_mut(&dv.id()) {
-            if let Some(cn) = exprs.get_mut(&ref_by) {
-                *cn -= 1;
-                if *cn == 0 {
-                    exprs.remove(&ref_by);
-                }
-            }
-            if exprs.is_empty() {
-                self.subscribed.remove(&dv.id());
-            }
-        }
-        self.pending_unsubscribe.push_back((Instant::now(), dv));
-    }
-
-    fn list(&mut self, id: BindId, path: Path) {
-        let ct = self
-            .change_trackers
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(ChangeTracker::new(path.clone()))));
-        let ct = Arc::clone(ct);
-        let resolver = self.subscriber.resolver();
-        self.tasks.spawn(async move {
-            check_changed!(id, resolver, path, ct);
-            let mut paths = or_err!(id, resolver.list(path).await);
-            let paths = paths.drain(..).map(|p| Value::String(p.into()));
-            (id, Value::Array(ValArray::from_iter_exact(paths)))
-        });
-    }
-
-    fn list_table(&mut self, id: BindId, path: Path) {
-        let ct = self
-            .change_trackers
-            .entry(id)
-            .or_insert_with(|| Arc::new(Mutex::new(ChangeTracker::new(path.clone()))));
-        let ct = Arc::clone(ct);
-        let resolver = self.subscriber.resolver();
-        self.tasks.spawn(async move {
-            check_changed!(id, resolver, path, ct);
-            let mut tbl = or_err!(id, resolver.table(path).await);
-            let cols = tbl.cols.drain(..).map(|(name, count)| {
-                Value::Array(ValArray::from([
-                    Value::String(name.into()),
-                    Value::V64(count.0),
-                ]))
-            });
-            let cols = Value::Array(ValArray::from_iter_exact(cols));
-            let rows = tbl.rows.drain(..).map(|name| Value::String(name.into()));
-            let rows = Value::Array(ValArray::from_iter_exact(rows));
-            let tbl = Value::Array(ValArray::from([
-                Value::Array(ValArray::from([Value::String(literal!("columns")), cols])),
-                Value::Array(ValArray::from([Value::String(literal!("rows")), rows])),
-            ]));
-            (id, tbl)
-        });
-    }
-
-    fn stop_list(&mut self, id: BindId) {
-        self.change_trackers.remove(&id);
-    }
-
-    fn publish(&mut self, path: Path, value: Value, ref_by: ExprId) -> Result<Val> {
-        let val = self.publisher.publish_with_flags_and_writes(
-            PublishFlags::empty(),
-            path,
-            value,
-            Some(self.writes_tx.clone()),
-        )?;
-        let id = val.id();
-        *self.published.entry(id).or_default().entry(ref_by).or_default() += 1;
-        Ok(val)
-    }
-
-    fn update(&mut self, val: &Val, value: Value) {
-        val.update(&mut self.batch, value);
-    }
-
-    fn unpublish(&mut self, val: Val, ref_by: ExprId) {
-        if let Some(refs) = self.published.get_mut(&val.id()) {
-            if let Some(cn) = refs.get_mut(&ref_by) {
-                *cn -= 1;
-                if *cn == 0 {
-                    refs.remove(&ref_by);
-                }
-            }
-            if refs.is_empty() {
-                self.published.remove(&val.id());
-            }
-        }
-    }
-
-    fn set_timer(&mut self, id: BindId, timeout: Duration) {
-        self.tasks
-            .spawn(time::sleep(timeout).map(move |()| (id, Value::DateTime(Utc::now()))));
-    }
-
-    fn ref_var(&mut self, id: BindId, ref_by: ExprId) {
-        *self.by_ref.entry(id).or_default().entry(ref_by).or_default() += 1;
-    }
-
-    fn unref_var(&mut self, id: BindId, ref_by: ExprId) {
-        if let Some(refs) = self.by_ref.get_mut(&id) {
-            if let Some(cn) = refs.get_mut(&ref_by) {
-                *cn -= 1;
-                if *cn == 0 {
-                    refs.remove(&ref_by);
-                }
-            }
-            if refs.is_empty() {
-                self.by_ref.remove(&id);
-            }
-        }
-    }
-
-    fn set_var(&mut self, id: BindId, value: Value) {
-        self.var_updates.push_back((id, value.clone()));
-    }
-}
-
-fn is_output(n: &Node<GXRt, NoUserEvent>) -> bool {
-    match &n.spec().kind {
-        ExprKind::Bind { .. }
-        | ExprKind::Lambda { .. }
-        | ExprKind::Use { .. }
-        | ExprKind::Connect { .. }
-        | ExprKind::Module { .. }
-        | ExprKind::TypeDef { .. } => false,
-        _ => true,
-    }
-}
-
-async fn or_never(b: bool) {
-    if !b {
-        future::pending().await
-    }
-}
-
-async fn join_or_wait(
-    js: &mut JoinSet<(BindId, Value)>,
-) -> result::Result<(BindId, Value), JoinError> {
-    match js.join_next().await {
-        None => future::pending().await,
-        Some(r) => r,
-    }
-}
-
-async fn maybe_next<T>(go: bool, ch: &mut mpsc::Receiver<T>) -> T {
-    if go {
-        match ch.next().await {
-            None => future::pending().await,
-            Some(v) => v,
-        }
-    } else {
-        future::pending().await
-    }
-}
-
-async fn unsubscribe_ready(pending: &VecDeque<(Instant, Dval)>, now: Instant) {
-    if pending.len() == 0 {
-        future::pending().await
-    } else {
-        let (ts, _) = pending.front().unwrap();
-        let one = Duration::from_secs(1);
-        let elapsed = now - *ts;
-        if elapsed < one {
-            time::sleep(one - elapsed).await
-        }
-    }
-}
-
 pub struct CompExp {
     pub id: ExprId,
     pub typ: Type,
@@ -467,7 +60,7 @@ pub struct CompExp {
 
 impl Drop for CompExp {
     fn drop(&mut self) {
-        let _ = self.rt.0.send(ToRt::Delete { id: self.id });
+        let _ = self.rt.0.send(ToGX::Delete { id: self.id });
     }
 }
 
@@ -475,14 +68,6 @@ pub struct CompRes {
     pub exprs: SmallVec<[CompExp; 1]>,
     pub env: Env<GXRt, NoUserEvent>,
 }
-
-#[derive(Clone)]
-pub enum RtEvent {
-    Updated(ExprId, Value),
-    Env(Env<GXRt, NoUserEvent>),
-}
-
-static BATCH: LazyLock<Pool<Vec<RtEvent>>> = LazyLock::new(|| Pool::new(10, 1000000));
 
 pub struct Ref {
     pub id: ExprId,
@@ -494,7 +79,7 @@ pub struct Ref {
 
 impl Drop for Ref {
     fn drop(&mut self) {
-        let _ = self.rt.0.send(ToRt::Delete { id: self.id });
+        let _ = self.rt.0.send(ToGX::Delete { id: self.id });
     }
 }
 
@@ -523,7 +108,7 @@ pub struct Callable {
 
 impl Drop for Callable {
     fn drop(&mut self) {
-        let _ = self.rt.0.send(ToRt::DeleteCallable { id: self.id });
+        let _ = self.rt.0.send(ToGX::DeleteCallable { id: self.id });
     }
 }
 
@@ -548,12 +133,12 @@ impl Callable {
     pub async fn call_unchecked(&self, args: ValArray) -> Result<()> {
         self.rt
             .0
-            .send(ToRt::Call { id: self.id, args })
+            .send(ToGX::Call { id: self.id, args })
             .map_err(|_| anyhow!("runtime is dead"))
     }
 }
 
-enum ToRt {
+enum ToGX {
     GetEnv { res: oneshot::Sender<Env<GXRt, NoUserEvent>> },
     Delete { id: ExprId },
     Load { path: PathBuf, rt: GXHandle, res: oneshot::Sender<Result<CompRes>> },
@@ -565,566 +150,20 @@ enum ToRt {
     DeleteCallable { id: CallableId },
 }
 
-struct CallableInt {
-    expr: ExprId,
-    args: Box<[BindId]>,
-}
-
-struct GX {
-    ctx: ExecCtx<GXRt, NoUserEvent>,
-    event: Event<NoUserEvent>,
-    updated: FxHashMap<ExprId, bool>,
-    nodes: IndexMap<ExprId, Node<GXRt, NoUserEvent>, FxBuildHasher>,
-    callables: FxHashMap<CallableId, CallableInt>,
-    sub: tmpsc::Sender<Pooled<Vec<RtEvent>>>,
-    resolvers: Arc<[ModuleResolver]>,
-    publish_timeout: Option<Duration>,
-    last_rpc_gc: Instant,
-}
-
-impl GX {
-    async fn new(mut rt: GXConfig) -> Result<Self> {
-        let resolvers_default = |r: &mut Vec<ModuleResolver>| match dirs::data_dir() {
-            None => r.push(ModuleResolver::Files("".into())),
-            Some(dd) => {
-                r.push(ModuleResolver::Files("".into()));
-                r.push(ModuleResolver::Files(dd.join("graphix")));
-            }
-        };
-        match std::env::var("GRAPHIX_MODPATH") {
-            Err(_) => resolvers_default(&mut rt.resolvers),
-            Ok(mp) => match ModuleResolver::parse_env(
-                rt.ctx.rt.subscriber.clone(),
-                rt.resolve_timeout,
-                &mp,
-            ) {
-                Ok(r) => rt.resolvers.extend(r),
-                Err(e) => {
-                    error!("failed to parse GRAPHIX_MODPATH, using default {e:?}");
-                    resolvers_default(&mut rt.resolvers)
-                }
-            },
-        };
-        let mut t = Self {
-            ctx: rt.ctx,
-            event: Event::new(NoUserEvent),
-            updated: HashMap::default(),
-            nodes: IndexMap::default(),
-            callables: HashMap::default(),
-            sub: rt.sub,
-            resolvers: Arc::from(rt.resolvers),
-            publish_timeout: rt.publish_timeout,
-            last_rpc_gc: Instant::now(),
-        };
-        let st = Instant::now();
-        if let Some(root) = rt.root {
-            t.compile_root(root).await?;
-        }
-        info!("root init time: {:?}", st.elapsed());
-        Ok(t)
-    }
-
-    async fn do_cycle(
-        &mut self,
-        updates: Option<UpdateBatch>,
-        writes: Option<WriteBatch>,
-        tasks: &mut Vec<(BindId, Value)>,
-        rpcs: &mut Vec<(BindId, RpcCall)>,
-        to_rt: &mut UnboundedReceiver<ToRt>,
-        input: &mut Vec<ToRt>,
-        mut batch: Pooled<Vec<RtEvent>>,
-    ) {
-        macro_rules! push_event {
-            ($id:expr, $v:expr, $event:ident, $refed:ident, $overflow:ident) => {
-                match self.event.$event.entry($id) {
-                    Entry::Vacant(e) => {
-                        e.insert($v);
-                        if let Some(exps) = self.ctx.rt.$refed.get(&$id) {
-                            for id in exps.keys() {
-                                self.updated.entry(*id).or_insert(false);
-                            }
-                        }
-                    }
-                    Entry::Occupied(_) => {
-                        self.ctx.rt.$overflow.push_back(($id, $v));
-                    }
-                }
-            };
-        }
-        for _ in 0..self.ctx.rt.var_updates.len() {
-            let (id, v) = self.ctx.rt.var_updates.pop_front().unwrap();
-            push_event!(id, v, variables, by_ref, var_updates)
-        }
-        for (id, v) in tasks.drain(..) {
-            push_event!(id, v, variables, by_ref, var_updates)
-        }
-        for _ in 0..self.ctx.rt.rpc_overflow.len() {
-            let (id, v) = self.ctx.rt.rpc_overflow.pop_front().unwrap();
-            push_event!(id, v, rpc_calls, by_ref, rpc_overflow)
-        }
-        for (id, v) in rpcs.drain(..) {
-            push_event!(id, v, rpc_calls, by_ref, rpc_overflow)
-        }
-        for _ in 0..self.ctx.rt.net_updates.len() {
-            let (id, v) = self.ctx.rt.net_updates.pop_front().unwrap();
-            push_event!(id, v, netidx, subscribed, net_updates)
-        }
-        if let Some(mut updates) = updates {
-            for (id, v) in updates.drain(..) {
-                push_event!(id, v, netidx, subscribed, net_updates)
-            }
-        }
-        for _ in 0..self.ctx.rt.net_writes.len() {
-            let (id, v) = self.ctx.rt.net_writes.pop_front().unwrap();
-            push_event!(id, v, writes, published, net_writes)
-        }
-        if let Some(mut writes) = writes {
-            for wr in writes.drain(..) {
-                let id = wr.id;
-                push_event!(id, wr, writes, published, net_writes)
-            }
-        }
-        for (id, n) in self.nodes.iter_mut() {
-            if let Some(init) = self.updated.get(id) {
-                let mut clear: SmallVec<[BindId; 16]> = smallvec![];
-                self.event.init = *init;
-                if self.event.init {
-                    REFS.with_borrow_mut(|refs| {
-                        refs.clear();
-                        n.refs(refs);
-                        refs.with_external_refs(|id| {
-                            if let Some(v) = self.ctx.cached.get(&id) {
-                                if let Entry::Vacant(e) = self.event.variables.entry(id) {
-                                    e.insert(v.clone());
-                                    clear.push(id);
-                                }
-                            }
-                        });
-                    });
-                }
-                let res = catch_unwind(AssertUnwindSafe(|| {
-                    n.update(&mut self.ctx, &mut self.event)
-                }));
-                for id in clear {
-                    self.event.variables.remove(&id);
-                }
-                match res {
-                    Ok(None) => (),
-                    Ok(Some(v)) => batch.push(RtEvent::Updated(*id, v)),
-                    Err(e) => {
-                        error!("could not update exprid: {id:?}, panic: {e:?}")
-                    }
-                }
-            }
-        }
-        loop {
-            match self.sub.send_timeout(batch, Duration::from_millis(100)).await {
-                Ok(()) => break,
-                Err(SendTimeoutError::Closed(_)) => {
-                    error!("could not send batch");
-                    break;
-                }
-                Err(SendTimeoutError::Timeout(b)) => {
-                    batch = b;
-                    // prevent deadlock on input
-                    while let Ok(m) = to_rt.try_recv() {
-                        input.push(m);
-                    }
-                    self.process_input_batch(tasks, input, &mut batch).await;
-                }
-            }
-        }
-        self.event.clear();
-        self.updated.clear();
-        if self.ctx.rt.batch.len() > 0 {
-            let batch =
-                mem::replace(&mut self.ctx.rt.batch, self.ctx.rt.publisher.start_batch());
-            let timeout = self.publish_timeout;
-            task::spawn(async move { batch.commit(timeout).await });
-        }
-    }
-
-    async fn process_input_batch(
-        &mut self,
-        tasks: &mut Vec<(BindId, Value)>,
-        input: &mut Vec<ToRt>,
-        batch: &mut Pooled<Vec<RtEvent>>,
-    ) {
-        for m in input.drain(..) {
-            match m {
-                ToRt::GetEnv { res } => {
-                    let _ = res.send(self.ctx.env.clone());
-                }
-                ToRt::Compile { text, rt, res } => {
-                    let _ = res.send(self.compile(rt, text).await);
-                }
-                ToRt::Load { path, rt, res } => {
-                    let _ = res.send(self.load(rt, &path).await);
-                }
-                ToRt::Delete { id } => {
-                    if let Some(mut n) = self.nodes.shift_remove(&id) {
-                        n.delete(&mut self.ctx);
-                    }
-                    debug!("delete {id:?}");
-                    batch.push(RtEvent::Env(self.ctx.env.clone()));
-                }
-                ToRt::CompileCallable { id, rt, res } => {
-                    let _ = res.send(self.compile_callable(id, rt));
-                }
-                ToRt::CompileRef { id, rt, res } => {
-                    let _ = res.send(self.compile_ref(rt, id));
-                }
-                ToRt::Set { id, v } => {
-                    self.ctx.cached.insert(id, v.clone());
-                    tasks.push((id, v))
-                }
-                ToRt::DeleteCallable { id } => self.delete_callable(id),
-                ToRt::Call { id, args } => {
-                    if let Err(e) = self.call_callable(id, args, tasks) {
-                        error!("calling callable {id:?} failed with {e:?}")
-                    }
-                }
-            }
-        }
-    }
-
-    fn cycle_ready(&self) -> bool {
-        self.ctx.rt.var_updates.len() > 0
-            || self.ctx.rt.net_updates.len() > 0
-            || self.ctx.rt.net_writes.len() > 0
-            || self.ctx.rt.rpc_overflow.len() > 0
-    }
-
-    async fn compile_root(&mut self, text: ArcStr) -> Result<()> {
-        let scope = ModPath::root();
-        let ori = Origin { parent: None, source: Source::Unspecified, text };
-        let exprs =
-            expr::parser::parse(ori.clone()).context("parsing the root module")?;
-        let exprs =
-            try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
-                .await
-                .context(CouldNotResolve)?;
-        let nodes = exprs
-            .iter()
-            .map(|e| {
-                compile(&mut self.ctx, &scope, e.clone())
-                    .with_context(|| format!("compiling root expression {e}"))
-            })
-            .collect::<Result<SmallVec<[_; 4]>>>()
-            .with_context(|| ori.clone())?;
-        for (e, n) in exprs.iter().zip(nodes.into_iter()) {
-            self.updated.insert(e.id, true);
-            self.nodes.insert(e.id, n);
-        }
-        Ok(())
-    }
-
-    async fn compile(&mut self, rt: GXHandle, text: ArcStr) -> Result<CompRes> {
-        let scope = ModPath::root();
-        let ori = Origin { parent: None, source: Source::Unspecified, text };
-        let exprs = expr::parser::parse(ori.clone())?;
-        let exprs =
-            try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
-                .await
-                .context(CouldNotResolve)?;
-        let nodes = exprs
-            .iter()
-            .map(|e| compile(&mut self.ctx, &scope, e.clone()))
-            .collect::<Result<SmallVec<[_; 4]>>>()
-            .with_context(|| ori.clone())?;
-        let exprs = exprs
-            .iter()
-            .zip(nodes.into_iter())
-            .map(|(e, n)| {
-                let output = is_output(&n);
-                let typ = n.typ().clone();
-                self.updated.insert(e.id, true);
-                self.nodes.insert(e.id, n);
-                CompExp { id: e.id, output, typ, rt: rt.clone() }
-            })
-            .collect::<SmallVec<[_; 1]>>();
-        Ok(CompRes { exprs, env: self.ctx.env.clone() })
-    }
-
-    async fn load(&mut self, rt: GXHandle, file: &PathBuf) -> Result<CompRes> {
-        let scope = ModPath::root();
-        let st = Instant::now();
-        let (ori, exprs) = match file.extension() {
-            Some(e) if e.as_encoded_bytes() == b"gx" => {
-                let file = file.canonicalize()?;
-                let s = fs::read_to_string(&file).await?;
-                let s = if s.starts_with("#!") {
-                    if let Some(i) = s.find('\n') {
-                        &s[i..]
-                    } else {
-                        s.as_str()
-                    }
-                } else {
-                    s.as_str()
-                };
-                let ori = Origin {
-                    parent: None,
-                    source: Source::File(file),
-                    text: ArcStr::from(s),
-                };
-                (ori.clone(), expr::parser::parse(ori)?)
-            }
-            Some(e) => bail!("invalid file extension {e:?}"),
-            None => {
-                let name = file
-                    .components()
-                    .map(|c| match c {
-                        Component::RootDir
-                        | Component::CurDir
-                        | Component::ParentDir
-                        | Component::Prefix(_) => bail!("invalid module name {file:?}"),
-                        Component::Normal(s) => Ok(s),
-                    })
-                    .collect::<Result<Box<[_]>>>()?;
-                if name.len() != 1 {
-                    bail!("invalid module name {file:?}")
-                }
-                let name = name[0].to_string_lossy();
-                let name = name
-                    .parse::<ModPath>()
-                    .with_context(|| "parsing module name {file:?}")?;
-                let name = Path::basename(&*name)
-                    .ok_or_else(|| anyhow!("invalid module name {file:?}"))?;
-                let name = ArcStr::from(name);
-                let ori = Origin {
-                    parent: None,
-                    source: Source::Internal(name.clone()),
-                    text: literal!(""),
-                };
-                let kind = ExprKind::Module {
-                    export: true,
-                    name,
-                    value: ModuleKind::Unresolved,
-                };
-                let exprs = Arc::from(vec![Expr {
-                    id: ExprId::new(),
-                    ori: Arc::new(ori.clone()),
-                    pos: SourcePosition::default(),
-                    kind,
-                }]);
-                (ori, exprs)
-            }
-        };
-        info!("parse time: {:?}", st.elapsed());
-        let st = Instant::now();
-        let exprs =
-            try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
-                .await
-                .context(CouldNotResolve)?;
-        info!("resolve time: {:?}", st.elapsed());
-        let mut res = smallvec![];
-        for e in exprs.iter() {
-            let top_id = e.id;
-            let n =
-                compile(&mut self.ctx, &scope, e.clone()).with_context(|| ori.clone())?;
-            let has_out = is_output(&n);
-            let typ = n.typ().clone();
-            self.nodes.insert(top_id, n);
-            self.updated.insert(top_id, true);
-            res.push(CompExp { id: top_id, output: has_out, typ, rt: rt.clone() })
-        }
-        Ok(CompRes { exprs: res, env: self.ctx.env.clone() })
-    }
-
-    fn compile_callable(&mut self, id: Value, rt: GXHandle) -> Result<Callable> {
-        let id = match id {
-            Value::U64(id) => LambdaId::from(id),
-            v => bail!("invalid lambda id {v}"),
-        };
-        let lb = self.ctx.env.lambdas.get(&id).and_then(Weak::upgrade);
-        let lb = lb.ok_or_else(|| anyhow!("unknown lambda {id:?}"))?;
-        let args = lb.typ.args.iter();
-        let args = args
-            .map(|a| {
-                if a.label.as_ref().map(|(_, opt)| *opt).unwrap_or(false) {
-                    bail!("can't call lambda with an optional argument from rust")
-                } else {
-                    Ok(BindId::new())
-                }
-            })
-            .collect::<Result<Box<[_]>>>()?;
-        let eid = ExprId::new();
-        let argn = lb.typ.args.iter().zip(args.iter());
-        let argn = argn
-            .map(|(arg, id)| genn::reference(&mut self.ctx, *id, arg.typ.clone(), eid))
-            .collect::<Vec<_>>();
-        let fnode = genn::constant(Value::U64(id.inner()));
-        let mut n = genn::apply(fnode, argn, lb.typ.clone(), eid);
-        self.event.init = true;
-        n.update(&mut self.ctx, &mut self.event);
-        self.event.clear();
-        let cid = CallableId::new();
-        self.callables.insert(cid, CallableInt { expr: eid, args });
-        self.nodes.insert(eid, n);
-        let env = self.ctx.env.clone();
-        Ok(Callable { expr: eid, rt, env, id: cid, typ: (*lb.typ).clone() })
-    }
-
-    fn compile_ref(&mut self, rt: GXHandle, id: BindId) -> Result<Ref> {
-        let eid = ExprId::new();
-        let typ = Type::Any;
-        let n = genn::reference(&mut self.ctx, id, typ, eid);
-        self.nodes.insert(eid, n);
-        let target_bid = self.ctx.env.byref_chain.get(&id).copied();
-        Ok(Ref {
-            id: eid,
-            bid: id,
-            target_bid,
-            last: self.ctx.cached.get(&id).cloned(),
-            rt,
-        })
-    }
-
-    fn call_callable(
-        &mut self,
-        id: CallableId,
-        args: ValArray,
-        tasks: &mut Vec<(BindId, Value)>,
-    ) -> Result<()> {
-        let c =
-            self.callables.get(&id).ok_or_else(|| anyhow!("unknown callable {id:?}"))?;
-        if args.len() != c.args.len() {
-            bail!("expected {} arguments", c.args.len());
-        }
-        let a = c.args.iter().zip(args.iter()).map(|(id, v)| (*id, v.clone()));
-        tasks.extend(a);
-        Ok(())
-    }
-
-    fn delete_callable(&mut self, id: CallableId) {
-        if let Some(c) = self.callables.remove(&id) {
-            if let Some(mut n) = self.nodes.shift_remove(&c.expr) {
-                n.delete(&mut self.ctx)
-            }
-        }
-    }
-
-    async fn run(mut self, mut to_rt: tmpsc::UnboundedReceiver<ToRt>) -> Result<()> {
-        let mut tasks = vec![];
-        let mut input = vec![];
-        let mut rpcs = vec![];
-        let onemin = Duration::from_secs(60);
-        'main: loop {
-            let now = Instant::now();
-            let ready = self.cycle_ready();
-            let mut updates = None;
-            let mut writes = None;
-            macro_rules! peek {
-                (updates) => {
-                    if self.ctx.rt.net_updates.is_empty() {
-                        while let Ok(Some(mut up)) = self.ctx.rt.updates.try_next() {
-                            match &mut updates {
-                                None => updates = Some(up),
-                                Some(prev) => prev.extend(up.drain(..)),
-                            }
-                        }
-                    }
-                };
-                (writes) => {
-                    if self.ctx.rt.net_writes.is_empty() {
-                        if let Ok(Some(wr)) = self.ctx.rt.writes.try_next() {
-                            writes = Some(wr);
-                        }
-                    }
-                };
-                (tasks) => {
-                    while let Some(Ok(up)) = self.ctx.rt.tasks.try_join_next() {
-                        tasks.push(up);
-                    }
-                };
-                (rpcs) => {
-                    if self.ctx.rt.rpc_overflow.is_empty() {
-                        while let Ok(Some(up)) = self.ctx.rt.rpcs.try_next() {
-                            rpcs.push(up);
-                        }
-                    }
-                };
-                (input) => {
-                    while let Ok(m) = to_rt.try_recv() {
-                        input.push(m);
-                    }
-                };
-                ($($item:tt),+) => {{
-                    $(peek!($item));+
-                }};
-            }
-            select! {
-                rp = maybe_next(
-                    self.ctx.rt.rpc_overflow.is_empty(),
-                    &mut self.ctx.rt.rpcs
-                ) => {
-                    rpcs.push(rp);
-                    peek!(updates, tasks, writes, rpcs, input)
-                }
-                wr = maybe_next(
-                    self.ctx.rt.net_writes.is_empty(),
-                    &mut self.ctx.rt.writes
-                ) => {
-                    writes = Some(wr);
-                    peek!(updates, tasks, rpcs, input);
-                },
-                up = maybe_next(
-                    self.ctx.rt.net_updates.is_empty(),
-                    &mut self.ctx.rt.updates
-                ) => {
-                    updates = Some(up);
-                    peek!(updates, writes, tasks, rpcs, input);
-                },
-                up = join_or_wait(&mut self.ctx.rt.tasks) => {
-                    if let Ok(up) = up {
-                        tasks.push(up);
-                    }
-                    peek!(updates, writes, tasks, rpcs, input)
-                },
-                _ = or_never(ready) => {
-                    peek!(updates, writes, tasks, rpcs, input)
-                },
-                n = to_rt.recv_many(&mut input, 100000) => {
-                    if n == 0 {
-                        break 'main Ok(())
-                    }
-                    peek!(updates, writes, tasks, rpcs);
-                },
-                () = unsubscribe_ready(&self.ctx.rt.pending_unsubscribe, now) => {
-                    while let Some((ts, _)) = self.ctx.rt.pending_unsubscribe.front() {
-                        if ts.elapsed() >= Duration::from_secs(1) {
-                            self.ctx.rt.pending_unsubscribe.pop_front();
-                        } else {
-                            break
-                        }
-                    }
-                    continue 'main
-                },
-            }
-            let mut batch = BATCH.take();
-            self.process_input_batch(&mut tasks, &mut input, &mut batch).await;
-            self.do_cycle(
-                updates, writes, &mut tasks, &mut rpcs, &mut to_rt, &mut input, batch,
-            )
-            .await;
-            if !self.ctx.rt.rpc_clients.is_empty() {
-                if now - self.last_rpc_gc >= onemin {
-                    self.last_rpc_gc = now;
-                    self.ctx.rt.rpc_clients.retain(|_, c| now - c.last_used <= onemin);
-                }
-            }
-        }
-    }
+#[derive(Clone)]
+pub enum GXEvent {
+    Updated(ExprId, Value),
+    Env(Env<GXRt, NoUserEvent>),
 }
 
 /// A handle to a running GX instance.
 ///
 /// Drop the handle to shutdown the associated background tasks.
 #[derive(Clone)]
-pub struct GXHandle(tmpsc::UnboundedSender<ToRt>);
+pub struct GXHandle(tmpsc::UnboundedSender<ToGX>);
 
 impl GXHandle {
-    async fn exec<R, F: FnOnce(oneshot::Sender<R>) -> ToRt>(&self, f: F) -> Result<R> {
+    async fn exec<R, F: FnOnce(oneshot::Sender<R>) -> ToGX>(&self, f: F) -> Result<R> {
         let (tx, rx) = oneshot::channel();
         self.0.send(f(tx)).map_err(|_| anyhow!("runtime is dead"))?;
         Ok(rx.await.map_err(|_| anyhow!("runtime did not respond"))?)
@@ -1132,7 +171,7 @@ impl GXHandle {
 
     /// Get a copy of the current graphix environment
     pub async fn get_env(&self) -> Result<Env<GXRt, NoUserEvent>> {
-        self.exec(|res| ToRt::GetEnv { res }).await
+        self.exec(|res| ToGX::GetEnv { res }).await
     }
 
     /// Compile and execute the specified graphix expression.
@@ -1143,7 +182,7 @@ impl GXHandle {
     /// can stop execution of the whole expression by dropping the returned
     /// `CompRes`.
     pub async fn compile(&self, text: ArcStr) -> Result<CompRes> {
-        Ok(self.exec(|tx| ToRt::Compile { text, res: tx, rt: self.clone() }).await??)
+        Ok(self.exec(|tx| ToGX::Compile { text, res: tx, rt: self.clone() }).await??)
     }
 
     /// Load and execute the specified graphix module.
@@ -1156,7 +195,7 @@ impl GXHandle {
     /// deleted. Therefore, you can stop execution of the whole file by dropping
     /// the returned `CompRes`.
     pub async fn load(&self, path: PathBuf) -> Result<CompRes> {
-        Ok(self.exec(|tx| ToRt::Load { path, res: tx, rt: self.clone() }).await??)
+        Ok(self.exec(|tx| ToGX::Load { path, res: tx, rt: self.clone() }).await??)
     }
 
     /// Compile a callable interface to the specified lambda id.
@@ -1165,7 +204,7 @@ impl GXHandle {
     /// `Callable` is dropped the associated callsite will be delete.
     pub async fn compile_callable(&self, id: Value) -> Result<Callable> {
         Ok(self
-            .exec(|tx| ToRt::CompileCallable { id, rt: self.clone(), res: tx })
+            .exec(|tx| ToGX::CompileCallable { id, rt: self.clone(), res: tx })
             .await??)
     }
 
@@ -1176,7 +215,7 @@ impl GXHandle {
     /// `Ref` is dropped the compiled code will be deleted.
     pub async fn compile_ref(&self, id: impl Into<BindId>) -> Result<Ref> {
         Ok(self
-            .exec(|tx| ToRt::CompileRef { id: id.into(), res: tx, rt: self.clone() })
+            .exec(|tx| ToGX::CompileRef { id: id.into(), res: tx, rt: self.clone() })
             .await??)
     }
 
@@ -1185,7 +224,7 @@ impl GXHandle {
     /// triggering updates of all dependent node trees.
     pub fn set<T: Into<Value>>(&self, id: BindId, v: T) -> Result<()> {
         let v = v.into();
-        self.0.send(ToRt::Set { id, v }).map_err(|_| anyhow!("runtime is dead"))
+        self.0.send(ToGX::Set { id, v }).map_err(|_| anyhow!("runtime is dead"))
     }
 }
 
@@ -1209,28 +248,26 @@ pub struct GXConfig {
     #[builder(default)]
     resolvers: Vec<ModuleResolver>,
     /// The channel that will receive events from the runtime
-    sub: tmpsc::Sender<Pooled<Vec<RtEvent>>>,
+    sub: tmpsc::Sender<Pooled<Vec<GXEvent>>>,
 }
 
 impl GXConfig {
     /// Create a new config
     pub fn builder(
         ctx: ExecCtx<GXRt, NoUserEvent>,
-        sub: tmpsc::Sender<Pooled<Vec<RtEvent>>>,
+        sub: tmpsc::Sender<Pooled<Vec<GXEvent>>>,
     ) -> GXConfigBuilder {
         GXConfigBuilder::default().ctx(ctx).sub(sub)
     }
 
-    /// Start the graphix runtime with the specified config, return a
-    /// handle capable of interacting with it.
+    /// Start the graphix runtime with the specified config,
     ///
-    /// root is the text of the root module you wish to initially
-    /// load. This will define the environment for the rest of the
-    /// code compiled by this runtime. The runtime starts completely
-    /// empty, with only the language, no core library, no standard
-    /// library. To build a runtime with the full standard library and
-    /// nothing else simply pass the output of
-    /// `graphix_stdlib::register` to start.
+    /// return a handle capable of interacting with it. root is the text of the
+    /// root module you wish to initially load. This will define the environment
+    /// for the rest of the code compiled by this runtime. The runtime starts
+    /// completely empty, with only the language, no core library, no standard
+    /// library. To build a runtime with the full standard library and nothing
+    /// else simply pass the output of `graphix_stdlib::register` to start.
     pub async fn start(self) -> Result<GXHandle> {
         let (init_tx, init_rx) = oneshot::channel();
         let (tx, rx) = tmpsc::unbounded_channel();
