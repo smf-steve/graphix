@@ -199,7 +199,7 @@ run!(slice, SLICE, |v: Result<&Value>| {
 });
 
 #[cfg(test)]
-const FILTER: &str = r#"
+const FILTER0: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];
   filter(array::iter(a), |x| x > 7)
@@ -207,10 +207,26 @@ const FILTER: &str = r#"
 "#;
 
 #[cfg(test)]
-run!(filter, FILTER, |v: Result<&Value>| {
+run!(filter0, FILTER0, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(8)) => true,
         _ => false,
+    }
+});
+
+#[cfg(test)]
+const FILTER1: &str = r#"
+{
+  let a = [1, 2, 3, 4, 5, 6, 7, 8];
+  filter(array::iter(a), |x| str::len(x) > 7)
+}
+"#;
+
+#[cfg(test)]
+run!(filter1, FILTER1, |v: Result<&Value>| {
+    match v {
+        Ok(_) => false,
+        Err(_) => true,
     }
 });
 
@@ -556,18 +572,34 @@ run!(array_iterq, ARRAY_ITERQ, |v: Result<&Value>| {
 });
 
 #[cfg(test)]
-const ARRAY_FOLD: &str = r#"
+const ARRAY_FOLD0: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  array::fold(a, 0, |acc: i64, x: i64| x + acc)
+  array::fold(a, 0, |acc, x| x + acc)
 }
 "#;
 
 #[cfg(test)]
-run!(array_fold, ARRAY_FOLD, |v: Result<&Value>| {
+run!(array_fold0, ARRAY_FOLD0, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(55)) => true,
         _ => false,
+    }
+});
+
+#[cfg(test)]
+const ARRAY_FOLD1: &str = r#"
+{
+  let a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  array::fold(a, 0, |acc, x| str::len(x) + acc)
+}
+"#;
+
+#[cfg(test)]
+run!(array_fold1, ARRAY_FOLD1, |v: Result<&Value>| {
+    match v {
+        Err(_) => true,
+        Ok(_) => false,
     }
 });
 
@@ -689,7 +721,7 @@ run!(array_flatten, ARRAY_FLATTEN, |v: Result<&Value>| {
 });
 
 #[cfg(test)]
-const ARRAY_GROUP: &str = r#"
+const ARRAY_GROUP0: &str = r#"
 {
     let a = array::iter([1, 2, 3]);
     array::group(a, |_, v| v == 3)
@@ -697,13 +729,45 @@ const ARRAY_GROUP: &str = r#"
 "#;
 
 #[cfg(test)]
-run!(array_group, ARRAY_GROUP, |v: Result<&Value>| {
+run!(array_group0, ARRAY_GROUP0, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
             [Value::I64(1), Value::I64(2), Value::I64(3)] => true,
             _ => false,
         },
         _ => false,
+    }
+});
+
+#[cfg(test)]
+const ARRAY_GROUP1: &str = r#"
+{
+    let a = array::iter([1, 2, 3]);
+    array::group(a, |x, v| (str::len(x) == 2) || (v == 3))
+}
+"#;
+
+#[cfg(test)]
+run!(array_group1, ARRAY_GROUP1, |v: Result<&Value>| {
+    match v {
+        Ok(_) => false,
+        Err(_) => true,
+    }
+});
+
+#[cfg(test)]
+const ARRAY_GROUP2: &str = r#"
+{
+    let a = array::iter([1, 2, 3]);
+    array::group(a, |v| v == 3)
+}
+"#;
+
+#[cfg(test)]
+run!(array_group2, ARRAY_GROUP2, |v: Result<&Value>| {
+    match v {
+        Ok(_) => false,
+        Err(_) => true,
     }
 });
 
@@ -1278,7 +1342,7 @@ run!(net_pub_sub, NET_PUB_SUB, |v: Result<&Value>| {
 });
 
 #[cfg(test)]
-const NET_WRITE: &str = r#"
+const NET_WRITE0: &str = r#"
 {
   let p = "/local/foo";
   let x = 42;
@@ -1290,13 +1354,33 @@ const NET_WRITE: &str = r#"
 "#;
 
 #[cfg(test)]
-run!(net_write, NET_WRITE, |v: Result<&Value>| {
+run!(net_write0, NET_WRITE0, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
             [Value::I64(42), Value::I64(43)] => true,
             _ => false,
         },
         _ => false,
+    }
+});
+
+#[cfg(test)]
+const NET_WRITE1: &str = r#"
+{
+  let p = "/local/foo";
+  let x = 42;
+  net::publish(#on_write:|v: string| x <- cast<i64>(v)?, p, x);
+  let s = cast<i64>(net::subscribe(p)?)?;
+  net::write(p, once(s + 1));
+  array::group(s, |n, _| n == 2)
+}
+"#;
+
+#[cfg(test)]
+run!(net_write1, NET_WRITE1, |v: Result<&Value>| {
+    match v {
+        Ok(_) => false,
+        Err(_) => true,
     }
 });
 
@@ -1347,7 +1431,7 @@ run!(net_list_table, NET_LIST_TABLE, |v: Result<&Value>| {
 });
 
 #[cfg(test)]
-const NET_RPC: &str = r#"
+const NET_RPC0: &str = r#"
 {
   let get_val = "/local/get_val";
   let set_val = "/local/set_val";
@@ -1374,7 +1458,7 @@ const NET_RPC: &str = r#"
 "#;
 
 #[cfg(test)]
-run!(net_rpc, NET_RPC, |v: Result<&Value>| {
+run!(net_rpc0, NET_RPC0, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(42)) => true,
         _ => false,
