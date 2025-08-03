@@ -490,7 +490,7 @@ impl<X: GXExt> GX<X> {
             .map(|(arg, id)| genn::reference(&mut self.ctx, *id, arg.typ.clone(), eid))
             .collect::<Vec<_>>();
         let fnode = genn::constant(Value::U64(id.inner()));
-        let mut n = genn::apply(fnode, argn, lb.typ.clone(), eid);
+        let mut n = genn::apply(fnode, argn, &lb.typ, eid);
         self.event.init = true;
         n.update(&mut self.ctx, &mut self.event);
         self.event.clear();

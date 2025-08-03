@@ -13,7 +13,7 @@ pub mod typ;
 use crate::{
     env::Env,
     expr::{ExprId, ModPath},
-    typ::{FnType, Type},
+    typ::{FnType, TVar, Type},
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -54,6 +54,30 @@ fn set_trace(b: bool) {
 }
 
 #[allow(dead_code)]
+fn with_trace<F: FnOnce() -> Result<R>, R>(enable: bool, spec: &Expr, f: F) -> Result<R> {
+    let set = if enable {
+        eprintln!("trace enabled at {}, spec: {}", spec.pos, spec);
+        let prev = trace();
+        set_trace(true);
+        !prev
+    } else {
+        false
+    };
+    let r = match f() {
+        Err(e) => {
+            eprintln!("traced at {} failed with {e:?}", spec.pos);
+            Err(e)
+        }
+        r => r,
+    };
+    if set {
+        eprintln!("trace disabled at {}", spec.pos);
+        set_trace(false)
+    }
+    r
+}
+
+#[allow(dead_code)]
 fn trace() -> bool {
     TRACE.load(Ordering::Relaxed)
 }
@@ -72,6 +96,7 @@ macro_rules! tdbg {
 thread_local! {
     /// thread local shared refs structure
     pub static REFS: RefCell<Refs> = RefCell::new(Refs::new());
+    static KNOWN: RefCell<FxHashMap<ArcStr, TVar>> = RefCell::new(HashMap::default());
 }
 
 atomic_id!(LambdaId);
@@ -144,7 +169,7 @@ pub enum PrintFlag {
 }
 
 thread_local! {
-    static PRINT_FLAGS: Cell<BitFlags<PrintFlag>> = Cell::new(PrintFlag::ReplacePrims.into());
+    static PRINT_FLAGS: Cell<BitFlags<PrintFlag>> = Cell::new(PrintFlag::ReplacePrims | PrintFlag::NoSource);
 }
 
 /// For the duration of the closure F change the way type variables

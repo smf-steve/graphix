@@ -2,18 +2,20 @@ use super::{compiler::compile, Nop};
 use crate::{
     env::LambdaDef,
     expr::{self, Arg, Expr, ExprId, ModPath},
+    format_with_flags,
     node::pattern::StructPatternNode,
-    typ::{FnArgType, FnType, TVar, Type},
-    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Update, UserEvent,
+    trace,
+    typ::{FnArgType, FnType, Type},
+    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, PrintFlag, Refs, Rt, Update,
+    UserEvent, KNOWN,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
 use compact_str::format_compact;
-use fxhash::FxHashMap;
 use netidx::{subscriber::Value, utils::Either};
 use parking_lot::RwLock;
 use smallvec::{smallvec, SmallVec};
-use std::{cell::RefCell, collections::HashMap, sync::Arc as SArc};
+use std::sync::Arc as SArc;
 use triomphe::Arc;
 
 #[derive(Debug)]
@@ -46,11 +48,31 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for GXLambda<R, E> {
         ctx: &mut ExecCtx<R, E>,
         args: &mut [Node<R, E>],
     ) -> Result<()> {
+        if trace() {
+            format_with_flags(PrintFlag::DerefTVars, || {
+                eprintln!("lambda tc typ {}", self.typ);
+            });
+        }
         for (arg, FnArgType { typ, .. }) in args.iter_mut().zip(self.typ.args.iter()) {
             wrap!(arg, arg.typecheck(ctx))?;
             wrap!(arg, typ.check_contains(&ctx.env, &arg.typ()))?;
         }
-        wrap!(self.body, self.body.typecheck(ctx))?;
+        if trace() {
+            format_with_flags(PrintFlag::DerefTVars, || {
+                eprintln!("body {}", self.body.typ());
+                eprintln!("body spec {}", self.body.spec());
+            });
+        }
+        wrap!(self.body, self.body.typecheck(ctx)).map_err(|e| {
+            eprintln!("failing spec: {}", self.body.spec());
+            e
+        })?;
+        if trace() {
+            format_with_flags(PrintFlag::DerefTVars, || {
+                eprintln!("body {}", self.body.typ());
+                eprintln!("body spec {}", self.body.spec());
+            });
+        }
         wrap!(self.body, self.typ.rtype.check_contains(&ctx.env, &self.body.typ()))?;
         for (tv, tc) in self.typ.constraints.read().iter() {
             tc.check_contains(&ctx.env, &Type::TVar(tv.clone()))?
@@ -265,9 +287,6 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                 Some((styp, _)) => Arc::new(styp.clone().scope_refs(&_scope)),
             },
         };
-        thread_local! {
-            static KNOWN: RefCell<FxHashMap<ArcStr, TVar>> = RefCell::new(HashMap::default());
-        }
         KNOWN.with_borrow_mut(|known| {
             known.clear();
             typ.alias_tvars(known);
@@ -344,7 +363,6 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
     }
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
-        self.typ.unbind_tvars();
         let mut faux_args: Vec<Node<R, E>> = self
             .def
             .argspec

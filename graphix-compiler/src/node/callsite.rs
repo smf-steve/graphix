@@ -2,9 +2,9 @@ use super::{compiler::compile, Nop};
 use crate::{
     env::LambdaDef,
     expr::{Expr, ExprId, ModPath},
-    typ::{FnArgType, FnType, Type},
+    typ::{FnArgType, FnType, TVar, Type},
     wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, Refs, Rt, Update, UserEvent,
-    REFS,
+    KNOWN, REFS,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
@@ -85,7 +85,7 @@ fn compile_apply_args<R: Rt, E: UserEvent>(
 #[derive(Debug)]
 pub(crate) struct CallSite<R: Rt, E: UserEvent> {
     pub(super) spec: TArc<Expr>,
-    pub(super) ftype: TArc<FnType>,
+    pub(super) ftype: FnType,
     pub(super) fnode: Node<R, E>,
     pub(super) args: Vec<Node<R, E>>,
     pub(super) arg_spec: FxHashMap<ArcStr, bool>, // true if arg is using the default value
@@ -104,7 +104,14 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
     ) -> Result<Node<R, E>> {
         let fnode = compile(ctx, (**f).clone(), scope, top_id)?;
         let ftype = match &fnode.typ() {
-            Type::Fn(ftype) => ftype.clone(),
+            Type::Fn(ftype) => {
+                let ft = ftype.reset_tvars();
+                KNOWN.with_borrow_mut(|known| {
+                    known.clear();
+                    ft.alias_tvars(known);
+                });
+                ft
+            }
             typ => {
                 bail!("at {} {f} has {typ}, expected a function", spec.pos)
             }
@@ -277,12 +284,29 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
     }
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
-        for n in self.args.iter_mut() {
-            wrap!(n, n.typecheck(ctx))?
+        // propagate auto constraints to this callsite. auto constraints are
+        // discovered during the lambda typecheck
+        match self.fnode.typ() {
+            Type::Fn(ftype) => {
+                *self.ftype.constraints.write() = ftype
+                    .constraints
+                    .read()
+                    .iter()
+                    .map(|(tv, tc)| (TVar::empty_named(tv.name.clone()), tc.clone()))
+                    .collect();
+                KNOWN.with_borrow_mut(|known| {
+                    known.clear();
+                    self.ftype.alias_tvars(known);
+                });
+            }
+            t => bail!("expected a function type saw {t}"),
         }
-        self.ftype.unbind_tvars();
-        for (arg, FnArgType { typ, .. }) in self.args.iter().zip(self.ftype.args.iter()) {
-            wrap!(arg, typ.check_contains(&ctx.env, &arg.typ()))?;
+        for (n, FnArgType { typ, .. }) in self.args.iter_mut().zip(self.ftype.args.iter())
+        {
+            // associate the fntype arg with the arg before typechecking the arg
+            typ.contains(&ctx.env, n.typ())?;
+            wrap!(n, n.typecheck(ctx))?;
+            wrap!(n, typ.check_contains(&ctx.env, n.typ()))?;
         }
         for (tv, tc) in self.ftype.constraints.read().iter() {
             wrap!(self, tc.check_contains(&ctx.env, &Type::TVar(tv.clone())))?;

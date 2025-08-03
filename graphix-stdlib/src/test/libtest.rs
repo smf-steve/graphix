@@ -408,6 +408,19 @@ run!(array_map1, ARRAY_MAP1, |v: Result<&Value>| {
 });
 
 #[cfg(test)]
+const ARRAY_MAP2: &str = r#"
+  array::map([1, 2], |x| str::len(x))
+"#;
+
+#[cfg(test)]
+run!(array_map2, ARRAY_MAP2, |v: Result<&Value>| {
+    match v {
+        Err(_) => true,
+        Ok(_) => false,
+    }
+});
+
+#[cfg(test)]
 const ARRAY_FILTER: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];

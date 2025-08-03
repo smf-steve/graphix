@@ -6,14 +6,13 @@ use graphix_compiler::{
     err, errf,
     expr::{Expr, ExprId, ModPath},
     node::genn,
-    typ::FnType,
+    typ::Type,
     Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Refs, Rt, UserEvent,
 };
 use netidx::subscriber::Value;
 use netidx_value::FromValue;
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 use tokio::time::Instant;
-use triomphe::Arc as TArc;
 
 #[derive(Debug)]
 struct IsErr;
@@ -344,7 +343,6 @@ struct Filter<R: Rt, E: UserEvent> {
     ready: bool,
     queue: VecDeque<Value>,
     pred: Node<R, E>,
-    typ: TArc<FnType>,
     top_id: ExprId,
     fid: BindId,
     x: BindId,
@@ -357,16 +355,20 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Filter<R, E> {
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
-            [arg, fnode] => {
-                let (x, xn) = genn::bind(ctx, scope, "x", arg.typ().clone(), top_id);
+            [_, _] => {
+                let (x, xn) =
+                    genn::bind(ctx, scope, "x", typ.args[0].typ.clone(), top_id);
                 let fid = BindId::new();
-                let fnode = genn::reference(ctx, fid, fnode.typ().clone(), top_id);
-                let typ = TArc::new(typ.clone());
-                let pred = genn::apply(fnode, vec![xn], typ.clone(), top_id);
+                let ptyp = match &typ.args[1].typ {
+                    Type::Fn(ft) => ft.clone(),
+                    t => bail!("expected a function not {t}"),
+                };
+                let fnode = genn::reference(ctx, fid, Type::Fn(ptyp.clone()), top_id);
+                let pred = genn::apply(fnode, vec![xn], &ptyp, top_id);
                 let queue = VecDeque::new();
                 let out = BindId::new();
                 ctx.rt.ref_var(out, top_id);
-                Ok(Box::new(Self { ready: true, queue, pred, typ, fid, x, out, top_id }))
+                Ok(Box::new(Self { ready: true, queue, pred, fid, x, out, top_id }))
             }
             _ => bail!("expected two arguments"),
         })
@@ -431,13 +433,8 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Filter<R, E> {
     fn typecheck(
         &mut self,
         ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
+        _from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
-        for n in from.iter_mut() {
-            n.typecheck(ctx)?;
-        }
-        self.typ.args[0].typ.check_contains(&ctx.env, &from[0].typ())?;
-        self.typ.args[1].typ.check_contains(&ctx.env, &from[1].typ())?;
         self.pred.typecheck(ctx)
     }
 

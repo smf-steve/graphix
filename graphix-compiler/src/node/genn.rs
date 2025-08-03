@@ -2,11 +2,10 @@ use super::{callsite::CallSite, Constant, Nop, Ref, NOP};
 use crate::{
     expr::{ExprId, ModPath},
     typ::{FnType, Type},
-    BindId, ExecCtx, Node, Rt, UserEvent,
+    BindId, ExecCtx, Node, Rt, UserEvent, KNOWN,
 };
 use netidx::publisher::{Typ, Value};
 use std::collections::HashMap;
-use triomphe::Arc;
 
 /// generate a no op with the specific type
 pub fn nop<R: Rt, E: UserEvent>(typ: Type) -> Node<R, E> {
@@ -49,12 +48,17 @@ pub fn constant<R: Rt, E: UserEvent>(v: Value) -> Node<R, E> {
 pub fn apply<R: Rt, E: UserEvent>(
     fnode: Node<R, E>,
     args: Vec<Node<R, E>>,
-    typ: Arc<FnType>,
+    typ: &FnType,
     top_id: ExprId,
 ) -> Node<R, E> {
+    let ftype = typ.reset_tvars();
+    KNOWN.with_borrow_mut(|known| {
+        known.clear();
+        ftype.alias_tvars(known);
+    });
     Box::new(CallSite {
         spec: NOP.clone(),
-        ftype: typ.clone(),
+        ftype,
         args,
         arg_spec: HashMap::default(),
         fnode,

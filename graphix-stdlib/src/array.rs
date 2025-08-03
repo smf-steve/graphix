@@ -1,5 +1,5 @@
 use crate::{deftype, CachedArgs, CachedVals, EvalCached};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
 use graphix_compiler::{
@@ -52,7 +52,6 @@ pub struct MapQ<R: Rt, E: UserEvent, T: MapFn<R, E>> {
     scope: ModPath,
     predid: BindId,
     top_id: ExprId,
-    ftyp: TArc<FnType>,
     mftyp: TArc<FnType>,
     etyp: Type,
     slots: Vec<Slot<R, E>>,
@@ -73,8 +72,6 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> BuiltIn<R, E> for MapQ<R, E, T> {
                     )),
                     predid: BindId::new(),
                     top_id,
-                    ftyp: TArc::new(typ.clone()),
-
                     etyp: match &typ.args[0].typ {
                         Type::Array(et) => (**et).clone(),
                         t => bail!("expected array not {t}"),
@@ -126,7 +123,7 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
                         Type::Fn(self.mftyp.clone()),
                         self.top_id,
                     );
-                    let pred = genn::apply(fnode, fargs, self.mftyp.clone(), self.top_id);
+                    let pred = genn::apply(fnode, fargs, &self.mftyp, self.top_id);
                     self.slots.push(Slot { id, pred, cur: None });
                 }
                 (Some(a), true)
@@ -171,23 +168,13 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
     fn typecheck(
         &mut self,
         ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
+        _from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
-        for n in from.iter_mut() {
-            n.typecheck(ctx)?;
-        }
-        self.ftyp
-            .args
-            .get(0)
-            .map(|a| a.typ.clone())
-            .ok_or_else(|| anyhow!("expected 2 arguments"))?
-            .check_contains(&ctx.env, &from[0].typ())?;
-        Type::Fn(self.mftyp.clone()).check_contains(&ctx.env, &from[1].typ())?;
         let (_, node) = genn::bind(ctx, &self.scope, "x", self.etyp.clone(), self.top_id);
         let fargs = vec![node];
         let ft = self.mftyp.clone();
         let fnode = genn::reference(ctx, self.predid, Type::Fn(ft.clone()), self.top_id);
-        let mut node = genn::apply(fnode, fargs, ft, self.top_id);
+        let mut node = genn::apply(fnode, fargs, &ft, self.top_id);
         let r = node.typecheck(ctx);
         node.delete(ctx);
         r
@@ -434,12 +421,8 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Fold<R, E> {
                             Type::Fn(self.mftype.clone()),
                             self.top_id,
                         );
-                        let node = genn::apply(
-                            fnode,
-                            vec![n, x],
-                            self.mftype.clone(),
-                            self.top_id,
-                        );
+                        let node =
+                            genn::apply(fnode, vec![n, x], &self.mftype, self.top_id);
                         self.nodes.push(node);
                     }
                 }
@@ -497,20 +480,13 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Fold<R, E> {
     fn typecheck(
         &mut self,
         ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
+        _from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
-        for n in from.iter_mut() {
-            n.typecheck(ctx)?;
-        }
-        Type::Array(triomphe::Arc::new(self.etyp.clone()))
-            .check_contains(&ctx.env, &from[0].typ())?;
-        self.ityp.check_contains(&ctx.env, &from[1].typ())?;
-        Type::Fn(self.mftype.clone()).check_contains(&ctx.env, &from[2].typ())?;
         let mut n = genn::reference(ctx, self.initid, self.ityp.clone(), self.top_id);
         let x = genn::reference(ctx, BindId::new(), self.etyp.clone(), self.top_id);
         let fnode =
             genn::reference(ctx, self.fid, Type::Fn(self.mftype.clone()), self.top_id);
-        n = genn::apply(fnode, vec![n, x], self.mftype.clone(), self.top_id);
+        n = genn::apply(fnode, vec![n, x], &self.mftype, self.top_id);
         let r = n.typecheck(ctx);
         n.delete(ctx);
         r
@@ -865,8 +841,6 @@ pub(super) struct Group<R: Rt, E: UserEvent> {
     queue: VecDeque<Value>,
     buf: SmallVec<[Value; 16]>,
     pred: Node<R, E>,
-    mftyp: TArc<FnType>,
-    etyp: Type,
     ready: bool,
     pid: BindId,
     nid: BindId,
@@ -879,13 +853,13 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
-            [arg, _] => {
+            [_, _] => {
                 let scope =
                     ModPath(scope.0.append(
                         format_compact!("fn{}", LambdaId::new().inner()).as_str(),
                     ));
                 let n_typ = Type::Primitive(Typ::I64.into());
-                let etyp = arg.typ().clone();
+                let etyp = typ.args[0].typ.clone();
                 let mftyp = match &typ.args[1].typ {
                     Type::Fn(ft) => ft.clone(),
                     t => bail!("expected function not {t}"),
@@ -894,12 +868,10 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
                 let (xid, x) = genn::bind(ctx, &scope, "x", etyp.clone(), top_id);
                 let pid = BindId::new();
                 let fnode = genn::reference(ctx, pid, Type::Fn(mftyp.clone()), top_id);
-                let pred = genn::apply(fnode, vec![n, x], mftyp.clone(), top_id);
+                let pred = genn::apply(fnode, vec![n, x], &mftyp, top_id);
                 Ok(Box::new(Self {
                     queue: VecDeque::new(),
                     buf: smallvec![],
-                    mftyp,
-                    etyp,
                     pred,
                     ready: true,
                     pid,
@@ -965,15 +937,9 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Group<R, E> {
     fn typecheck(
         &mut self,
         ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
+        _from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
-        for n in from.iter_mut() {
-            n.typecheck(ctx)?
-        }
-        self.etyp.check_contains(&ctx.env, &from[0].typ())?;
-        Type::Fn(self.mftyp.clone()).check_contains(&ctx.env, &from[1].typ())?;
-        self.pred.typecheck(ctx)?;
-        Ok(())
+        self.pred.typecheck(ctx)
     }
 
     fn refs(&self, refs: &mut Refs) {

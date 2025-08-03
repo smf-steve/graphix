@@ -157,6 +157,15 @@ impl Default for Source {
     }
 }
 
+impl Source {
+    pub fn is_file(&self) -> bool {
+        match self {
+            Self::File(_) => true,
+            Self::Netidx(_) | Self::Internal(_) | Self::Unspecified => false,
+        }
+    }
+}
+
 // hallowed are the ori
 #[derive(Debug, Clone, PartialEq, PartialOrd, Default)]
 pub struct Origin {

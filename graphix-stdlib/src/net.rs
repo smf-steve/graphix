@@ -6,12 +6,12 @@ use graphix_compiler::{
     errf,
     expr::{ExprId, ModPath},
     node::genn,
-    typ::{FnType, Type},
+    typ::Type,
     Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Rt, UserEvent,
 };
 use netidx::{
     path::Path,
-    publisher::{Typ, Val},
+    publisher::Val,
     subscriber::{self, Dval, UpdatesFlags, Value},
 };
 use netidx_core::utils::Either;
@@ -19,7 +19,6 @@ use netidx_protocols::rpc::server::{self, ArgSpec};
 use netidx_value::ValArray;
 use smallvec::{smallvec, SmallVec};
 use std::{collections::VecDeque, sync::Arc};
-use triomphe::Arc as TArc;
 
 fn as_path(v: Value) -> Option<Path> {
     match v.cast_to::<String>() {
@@ -383,7 +382,6 @@ struct Publish<R: Rt, E: UserEvent> {
     args: CachedVals,
     current: Option<(Path, Val)>,
     top_id: ExprId,
-    mftyp: TArc<FnType>,
     x: BindId,
     pid: BindId,
     on_write: Node<R, E>,
@@ -407,11 +405,10 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Publish<R, E> {
                 };
                 let (x, xn) = genn::bind(ctx, &scope, "x", Type::Any, top_id);
                 let fnode = genn::reference(ctx, pid, Type::Fn(mftyp.clone()), top_id);
-                let on_write = genn::apply(fnode, vec![xn], mftyp.clone(), top_id);
+                let on_write = genn::apply(fnode, vec![xn], &mftyp, top_id);
                 Ok(Box::new(Publish {
                     args: CachedVals::new(from),
                     current: None,
-                    mftyp,
                     top_id,
                     pid,
                     x,
@@ -483,14 +480,8 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Publish<R, E> {
     fn typecheck(
         &mut self,
         ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
+        _from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
-        for n in from.iter_mut() {
-            n.typecheck(ctx)?;
-        }
-        Type::Fn(self.mftyp.clone()).check_contains(&ctx.env, &from[0].typ())?;
-        Type::Primitive(Typ::String.into()).check_contains(&ctx.env, &from[1].typ())?;
-        Type::Any.check_contains(&ctx.env, &from[2].typ())?;
         self.on_write.typecheck(ctx)
     }
 
@@ -525,7 +516,6 @@ struct PublishRpc<R: Rt, E: UserEvent> {
     f: Node<R, E>,
     pid: BindId,
     x: BindId,
-    typ: TArc<FnType>,
     queue: VecDeque<server::RpcCall>,
     argbuf: SmallVec<[(ArcStr, Value); 6]>,
     ready: bool,
@@ -556,7 +546,7 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for PublishRpc<R, E> {
                 let (x, xn) =
                     genn::bind(ctx, &scope, "x", mftyp.args[0].typ.clone(), top_id);
                 let fnode = genn::reference(ctx, pid, Type::Fn(mftyp.clone()), top_id);
-                let f = genn::apply(fnode, vec![xn], mftyp, top_id);
+                let f = genn::apply(fnode, vec![xn], &mftyp, top_id);
                 Ok(Box::new(PublishRpc {
                     queue: VecDeque::new(),
                     args: CachedVals::new(from),
@@ -565,7 +555,6 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for PublishRpc<R, E> {
                     top_id,
                     f,
                     pid,
-                    typ: TArc::new(typ.clone()),
                     argbuf: smallvec![],
                     ready: true,
                     current: None,
@@ -669,15 +658,8 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for PublishRpc<R, E> {
     fn typecheck(
         &mut self,
         ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
+        _from: &mut [Node<R, E>],
     ) -> Result<()> {
-        for n in from.iter_mut() {
-            n.typecheck(ctx)?;
-        }
-        self.typ.args[0].typ.check_contains(&ctx.env, &from[0].typ())?;
-        self.typ.args[1].typ.check_contains(&ctx.env, &from[1].typ())?;
-        self.typ.args[2].typ.check_contains(&ctx.env, &from[2].typ())?;
-        self.typ.args[3].typ.check_contains(&ctx.env, &from[3].typ())?;
         self.f.typecheck(ctx)
     }
 
