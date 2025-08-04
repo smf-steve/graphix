@@ -366,6 +366,7 @@ pub(crate) struct Bind<R: Rt, E: UserEvent> {
     typ: Type,
     pattern: StructPatternNode,
     node: Node<R, E>,
+    top_id: ExprId,
 }
 
 impl<R: Rt, E: UserEvent> Bind<R, E> {
@@ -406,7 +407,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
                 }
             });
         }
-        Ok(Box::new(Self { spec, typ, pattern, node }))
+        Ok(Box::new(Self { spec, typ, pattern, node, top_id }))
     }
 }
 
@@ -415,7 +416,10 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Bind<R, E> {
         if let Some(v) = self.node.update(ctx, event) {
             self.pattern.bind(&v, &mut |id, v| {
                 event.variables.insert(id, v.clone());
-                ctx.set_var_now(id, v);
+                ctx.cached.insert(id, v);
+                if self.spec.id == self.top_id {
+                    ctx.rt.notify_set(id);
+                }
             })
         }
         None

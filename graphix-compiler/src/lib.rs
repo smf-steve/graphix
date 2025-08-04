@@ -421,18 +421,13 @@ pub trait Rt: Debug + 'static {
     /// presented as a new batch.
     fn set_var(&mut self, id: BindId, value: Value);
 
-    /// Called by the ExecCtx when set_var_now is called on it
+    /// Notify the RT that a top level variable has been set internally
     ///
-    /// Set the variable right now for the current cycle. This is called when
-    /// the compiler knows that nothing can depend on the variable before the
-    /// current node, and as a result the only nodes that can depend on the
-    /// variable have yet to be executed. It is therefore safe to skip the extra
-    /// cycle and set the variable in the event now. The Rt must make sure to
-    /// wake up any nodes that depend on the variable, but it need not wake up
-    /// nodes before the current node.
-    ///
-    /// The runtime can assume that the event has already been updated.
-    fn set_var_now(&mut self, id: BindId);
+    /// This is called when the compiler has determined that it's safe to set a
+    /// variable without waiting a cycle. When the updated variable is a
+    /// toplevel node this method is called to notify the runtime that needs to
+    /// update any dependent toplevel nodes.
+    fn notify_set(&mut self, id: BindId);
 
     /// This must return results from the same path in the call order.
     ///
@@ -515,11 +510,6 @@ impl<R: Rt, E: UserEvent> ExecCtx<R, E> {
     pub fn set_var(&mut self, id: BindId, v: Value) {
         self.cached.insert(id, v.clone());
         self.rt.set_var(id, v)
-    }
-
-    pub fn set_var_now(&mut self, id: BindId, v: Value) {
-        self.cached.insert(id, v);
-        self.rt.set_var_now(id);
     }
 
     fn tag(&mut self, s: &ArcStr) -> ArcStr {

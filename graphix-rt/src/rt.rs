@@ -366,7 +366,7 @@ impl<X: GXExt> Rt for GXRt<X> {
         self.var_updates.push_back((id, value.clone()));
     }
 
-    fn set_var_now(&mut self, id: BindId) {
+    fn notify_set(&mut self, id: BindId) {
         if let Some(refed) = self.by_ref.get(&id) {
             for eid in refed.keys() {
                 self.updated.entry(*eid).or_default();
