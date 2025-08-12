@@ -1,6 +1,6 @@
 [package]
 name = "graphix-shell"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["Eric Stokes <eestokes@pm.me>"]
 edition = "2024"
 license = "MIT"
@@ -24,10 +24,10 @@ path = "src/main.rs"
 [features]
 default = []
 krb5_iov = [
-  "graphix-compiler/krb5_iov",
-  "graphix-rt/krb5_iov",
-  "graphix-stdlib/krb5_iov",
-  "netidx/krb5_iov"
+    "graphix-compiler/krb5_iov",
+    "graphix-rt/krb5_iov",
+    "graphix-stdlib/krb5_iov",
+    "netidx/krb5_iov",
 ]
 
 [dependencies]
@@ -44,9 +44,9 @@ enumflags2 = { workspace = true }
 flexi_logger = { workspace = true }
 futures = { workspace = true }
 fxhash = { workspace = true }
-graphix-compiler = { version = "0.1.0", path = "../graphix-compiler" }
-graphix-rt = { version = "0.1.0", path = "../graphix-rt" }
-graphix-stdlib = { version = "0.1.0", path = "../graphix-stdlib" }
+graphix-compiler = { version = "0.1.8", path = "../graphix-compiler" }
+graphix-rt = { version = "0.1.8", path = "../graphix-rt" }
+graphix-stdlib = { version = "0.1.8", path = "../graphix-stdlib" }
 log = { workspace = true }
 netidx = { workspace = true }
 parking_lot = { workspace = true }
