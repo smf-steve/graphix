@@ -43,7 +43,10 @@ enum Output<X: GXExt> {
 
 impl<X: GXExt> Output<X> {
     fn from_expr(gx: &GXHandle<X>, env: &Env<X>, e: CompExp<X>) -> Self {
-        if TUITYP.contains(env, &e.typ).unwrap() {
+        if TUITYP.contains(env, &e.typ).unwrap()
+            && e.typ != Type::Bottom
+            && e.typ != Type::Any
+        {
             Self::Tui(Tui::start(gx, env.clone(), e))
         } else {
             Self::Text(e)

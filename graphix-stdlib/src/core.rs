@@ -10,7 +10,7 @@ use graphix_compiler::{
     Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Refs, Rt, UserEvent,
 };
 use netidx::subscriber::Value;
-use netidx_value::FromValue;
+use netidx_value::{FromValue, NakedValue};
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 use tokio::time::Instant;
 
@@ -868,23 +868,52 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Dbg {
         }
         from[1].update(ctx, event).map(|v| {
             match self.dest {
-                LogDest::Stderr => eprintln!("{} dbg({}): {v}", self.spec.pos, self.spec),
-                LogDest::Stdout => println!("{} dbg({}): {v}", self.spec.pos, self.spec),
+                LogDest::Stderr => {
+                    eprintln!("{} dbg({}): {}", self.spec.pos, self.spec, NakedValue(&v))
+                }
+                LogDest::Stdout => {
+                    println!("{} dbg({}): {}", self.spec.pos, self.spec, NakedValue(&v))
+                }
                 LogDest::Log(level) => match level {
                     Level::Trace => {
-                        log::trace!("{} dbg({}): {v}", self.spec.pos, self.spec)
+                        log::trace!(
+                            "{} dbg({}): {}",
+                            self.spec.pos,
+                            self.spec,
+                            NakedValue(&v)
+                        )
                     }
                     Level::Debug => {
-                        log::debug!("{} dbg({}): {v}", self.spec.pos, self.spec)
+                        log::debug!(
+                            "{} dbg({}): {}",
+                            self.spec.pos,
+                            self.spec,
+                            NakedValue(&v)
+                        )
                     }
                     Level::Info => {
-                        log::info!("{} dbg({}): {v}", self.spec.pos, self.spec)
+                        log::info!(
+                            "{} dbg({}): {}",
+                            self.spec.pos,
+                            self.spec,
+                            NakedValue(&v)
+                        )
                     }
                     Level::Warn => {
-                        log::warn!("{} dbg({}): {v}", self.spec.pos, self.spec)
+                        log::warn!(
+                            "{} dbg({}): {}",
+                            self.spec.pos,
+                            self.spec,
+                            NakedValue(&v)
+                        )
                     }
                     Level::Error => {
-                        log::error!("{} dbg({}): {v}", self.spec.pos, self.spec)
+                        log::error!(
+                            "{} dbg({}): {}",
+                            self.spec.pos,
+                            self.spec,
+                            NakedValue(&v)
+                        )
                     }
                 },
             };
@@ -898,16 +927,16 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Dbg {
 #[derive(Debug)]
 struct Log {
     scope: ModPath,
-    dest: Level,
+    dest: LogDest,
 }
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Log {
     const NAME: &str = "log";
-    deftype!("core", "fn(?#level:Log, 'a) -> 'a");
+    deftype!("core", "fn(?#dest:Log, 'a) -> _");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, scope, _, _| {
-            Ok(Box::new(Self { scope: scope.clone(), dest: Level::Info }))
+            Ok(Box::new(Self { scope: scope.clone(), dest: LogDest::Stdout }))
         })
     }
 }
@@ -920,17 +949,111 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Log {
         event: &mut Event<E>,
     ) -> Option<Value> {
         if let Some(v) = from[0].update(ctx, event)
-            && let Ok(d) = v.cast_to::<Level>()
+            && let Ok(d) = v.cast_to::<LogDest>()
         {
             self.dest = d;
         }
         if let Some(v) = from[1].update(ctx, event) {
             match self.dest {
-                Level::Trace => log::trace!("{}: {v}", self.scope),
-                Level::Debug => log::debug!("{}: {v}", self.scope),
-                Level::Info => log::info!("{}: {v}", self.scope),
-                Level::Warn => log::warn!("{}: {v}", self.scope),
-                Level::Error => log::error!("{}: {v}", self.scope),
+                LogDest::Stdout => println!("{}: {}", self.scope, NakedValue(&v)),
+                LogDest::Stderr => eprintln!("{}: {}", self.scope, NakedValue(&v)),
+                LogDest::Log(lvl) => match lvl {
+                    Level::Trace => log::trace!("{}: {}", self.scope, NakedValue(&v)),
+                    Level::Debug => log::debug!("{}: {}", self.scope, NakedValue(&v)),
+                    Level::Info => log::info!("{}: {}", self.scope, NakedValue(&v)),
+                    Level::Warn => log::warn!("{}: {}", self.scope, NakedValue(&v)),
+                    Level::Error => log::error!("{}: {}", self.scope, NakedValue(&v)),
+                },
+            }
+        }
+        None
+    }
+
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
+}
+
+#[derive(Debug)]
+struct Print {
+    dest: LogDest,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Print {
+    const NAME: &str = "print";
+    deftype!("core", "fn(?#dest:Log, 'a) -> _");
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|_, _, _, _, _| Ok(Box::new(Self { dest: LogDest::Stdout })))
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for Print {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if let Some(v) = from[0].update(ctx, event)
+            && let Ok(d) = v.cast_to::<LogDest>()
+        {
+            self.dest = d;
+        }
+        if let Some(v) = from[1].update(ctx, event) {
+            match self.dest {
+                LogDest::Stdout => print!("{}", NakedValue(&v)),
+                LogDest::Stderr => eprint!("{}", NakedValue(&v)),
+                LogDest::Log(lvl) => match lvl {
+                    Level::Trace => log::trace!("{}", NakedValue(&v)),
+                    Level::Debug => log::debug!("{}", NakedValue(&v)),
+                    Level::Info => log::info!("{}", NakedValue(&v)),
+                    Level::Warn => log::warn!("{}", NakedValue(&v)),
+                    Level::Error => log::error!("{}", NakedValue(&v)),
+                },
+            }
+        }
+        None
+    }
+
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
+}
+
+#[derive(Debug)]
+struct Println {
+    dest: LogDest,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Println {
+    const NAME: &str = "println";
+    deftype!("core", "fn(?#dest:Log, 'a) -> _");
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|_, _, _, _, _| Ok(Box::new(Self { dest: LogDest::Stdout })))
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for Println {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if let Some(v) = from[0].update(ctx, event)
+            && let Ok(d) = v.cast_to::<LogDest>()
+        {
+            self.dest = d;
+        }
+        if let Some(v) = from[1].update(ctx, event) {
+            match self.dest {
+                LogDest::Stdout => println!("{}", NakedValue(&v)),
+                LogDest::Stderr => eprintln!("{}", NakedValue(&v)),
+                LogDest::Log(lvl) => match lvl {
+                    Level::Trace => log::trace!("{}", NakedValue(&v)),
+                    Level::Debug => log::debug!("{}", NakedValue(&v)),
+                    Level::Info => log::info!("{}", NakedValue(&v)),
+                    Level::Warn => log::warn!("{}", NakedValue(&v)),
+                    Level::Error => log::error!("{}", NakedValue(&v)),
+                },
             }
         }
         None
@@ -961,6 +1084,8 @@ pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<A
     ctx.register_builtin::<ToError>()?;
     ctx.register_builtin::<Dbg>()?;
     ctx.register_builtin::<Log>()?;
+    ctx.register_builtin::<Print>()?;
+    ctx.register_builtin::<Println>()?;
     ctx.register_builtin::<Throttle>()?;
     Ok(literal!(include_str!("core.gx")))
 }
