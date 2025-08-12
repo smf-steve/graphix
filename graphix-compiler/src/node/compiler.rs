@@ -2,6 +2,7 @@ use super::{
     array::{Array, ArrayRef, ArraySlice},
     callsite::CallSite,
     data::{Struct, StructRef, StructWith, Tuple, TupleRef, Variant},
+    dynamic::DynamicModule,
     lambda::Lambda,
     op::{Add, And, Div, Eq, Gt, Gte, Lt, Lte, Mod, Mul, Ne, Not, Or, Sub},
     select::Select,
@@ -9,7 +10,7 @@ use super::{
     StringInterpolate, TypeCast, TypeDef, Use,
 };
 use crate::{
-    expr::{Expr, ExprId, ExprKind, ModPath, ModuleKind},
+    expr::{self, Expr, ExprId, ExprKind, ModPath, ModuleKind},
     ExecCtx, Node, Rt, UserEvent,
 };
 use anyhow::{bail, Context, Result};
@@ -52,7 +53,7 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
             let scope = ModPath(scope.append(&name));
             match value {
                 ModuleKind::Unresolved => {
-                    bail!("at {} you must resolve external modules", spec.pos)
+                    bail!("external modules are not allowed in this context")
                 }
                 ModuleKind::Resolved(exprs) => {
                     let res =
@@ -68,6 +69,15 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
                     ctx.env.modules.insert_cow(scope.clone());
                     Ok(res)
                 }
+                ModuleKind::Dynamic { sandbox, sig, source } => DynamicModule::compile(
+                    ctx,
+                    spec.clone(),
+                    &scope,
+                    sandbox.clone(),
+                    sig.clone(),
+                    source.clone(),
+                    top_id,
+                ),
             }
         }
         ExprKind::Use { name } => Use::compile(ctx, spec.clone(), scope, name),
@@ -102,7 +112,7 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         ExprKind::TypeCast { expr, typ } => {
             TypeCast::compile(ctx, spec.clone(), scope, top_id, expr, typ)
         }
-        ExprKind::TypeDef { name, params, typ } => {
+        ExprKind::TypeDef(expr::TypeDef { name, params, typ }) => {
             TypeDef::compile(ctx, spec.clone(), scope, name, params, typ)
         }
         ExprKind::Not { expr } => Not::compile(ctx, spec.clone(), scope, top_id, expr),

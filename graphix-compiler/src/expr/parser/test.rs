@@ -13,6 +13,16 @@ fn parse_typexpr(s: &str) -> anyhow::Result<Type> {
 }
 
 #[allow(unused)]
+fn parse_dynamic_module(s: &str) -> anyhow::Result<ModuleKind> {
+    dynamic_module()
+        .skip(spaces())
+        .skip(eof())
+        .easy_parse(position::Stream::new(s))
+        .map(|(r, _)| r)
+        .map_err(|e| anyhow::anyhow!(format!("{}", e)))
+}
+
+#[allow(unused)]
 fn parse_doc(s: &str) -> anyhow::Result<Option<ArcStr>> {
     doc_comment()
         .skip(spaces())
@@ -1311,8 +1321,9 @@ fn tupleref() {
 
 #[test]
 fn prop0() {
+    // mod a dynamic { sandbox unrestricted; sig { mod a { type A = _ }}; source u32:0 }
     let s = r#"
-  re::split(#pat:r'\\s*', r'foo, bar, baz')
+dynamic { sandbox blacklist [ a, a ]; sig { val a: _}; source u32:0 }
 "#;
-    dbg!(parse_one(s).unwrap());
+    dbg!(parse_dynamic_module(s).unwrap());
 }
