@@ -6,11 +6,11 @@ use graphix_compiler::{
     err, errf,
     expr::{Expr, ExprId, ModPath},
     node::genn,
-    typ::Type,
+    typ::{TVal, Type},
     Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Refs, Rt, UserEvent,
 };
 use netidx::subscriber::Value;
-use netidx_value::{FromValue, NakedValue};
+use netidx_value::FromValue;
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 use tokio::time::Instant;
 
@@ -867,53 +867,29 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Dbg {
             self.dest = d;
         }
         from[1].update(ctx, event).map(|v| {
+            let tv = TVal { env: &ctx.env, typ: from[1].typ(), v: &v };
             match self.dest {
                 LogDest::Stderr => {
-                    eprintln!("{} dbg({}): {}", self.spec.pos, self.spec, NakedValue(&v))
+                    eprintln!("{} dbg({}): {}", self.spec.pos, self.spec, tv)
                 }
                 LogDest::Stdout => {
-                    println!("{} dbg({}): {}", self.spec.pos, self.spec, NakedValue(&v))
+                    println!("{} dbg({}): {}", self.spec.pos, self.spec, tv)
                 }
                 LogDest::Log(level) => match level {
                     Level::Trace => {
-                        log::trace!(
-                            "{} dbg({}): {}",
-                            self.spec.pos,
-                            self.spec,
-                            NakedValue(&v)
-                        )
+                        log::trace!("{} dbg({}): {}", self.spec.pos, self.spec, tv)
                     }
                     Level::Debug => {
-                        log::debug!(
-                            "{} dbg({}): {}",
-                            self.spec.pos,
-                            self.spec,
-                            NakedValue(&v)
-                        )
+                        log::debug!("{} dbg({}): {}", self.spec.pos, self.spec, tv)
                     }
                     Level::Info => {
-                        log::info!(
-                            "{} dbg({}): {}",
-                            self.spec.pos,
-                            self.spec,
-                            NakedValue(&v)
-                        )
+                        log::info!("{} dbg({}): {}", self.spec.pos, self.spec, tv)
                     }
                     Level::Warn => {
-                        log::warn!(
-                            "{} dbg({}): {}",
-                            self.spec.pos,
-                            self.spec,
-                            NakedValue(&v)
-                        )
+                        log::warn!("{} dbg({}): {}", self.spec.pos, self.spec, tv)
                     }
                     Level::Error => {
-                        log::error!(
-                            "{} dbg({}): {}",
-                            self.spec.pos,
-                            self.spec,
-                            NakedValue(&v)
-                        )
+                        log::error!("{} dbg({}): {}", self.spec.pos, self.spec, tv)
                     }
                 },
             };
@@ -954,15 +930,16 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Log {
             self.dest = d;
         }
         if let Some(v) = from[1].update(ctx, event) {
+            let tv = TVal { env: &ctx.env, typ: from[1].typ(), v: &v };
             match self.dest {
-                LogDest::Stdout => println!("{}: {}", self.scope, NakedValue(&v)),
-                LogDest::Stderr => eprintln!("{}: {}", self.scope, NakedValue(&v)),
+                LogDest::Stdout => println!("{}: {}", self.scope, tv),
+                LogDest::Stderr => eprintln!("{}: {}", self.scope, tv),
                 LogDest::Log(lvl) => match lvl {
-                    Level::Trace => log::trace!("{}: {}", self.scope, NakedValue(&v)),
-                    Level::Debug => log::debug!("{}: {}", self.scope, NakedValue(&v)),
-                    Level::Info => log::info!("{}: {}", self.scope, NakedValue(&v)),
-                    Level::Warn => log::warn!("{}: {}", self.scope, NakedValue(&v)),
-                    Level::Error => log::error!("{}: {}", self.scope, NakedValue(&v)),
+                    Level::Trace => log::trace!("{}: {}", self.scope, tv),
+                    Level::Debug => log::debug!("{}: {}", self.scope, tv),
+                    Level::Info => log::info!("{}: {}", self.scope, tv),
+                    Level::Warn => log::warn!("{}: {}", self.scope, tv),
+                    Level::Error => log::error!("{}: {}", self.scope, tv),
                 },
             }
         }
@@ -972,95 +949,71 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Log {
     fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
-#[derive(Debug)]
-struct Print {
-    dest: LogDest,
-}
-
-impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Print {
-    const NAME: &str = "print";
-    deftype!("core", "fn(?#dest:Log, 'a) -> _");
-
-    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
-        Arc::new(|_, _, _, _, _| Ok(Box::new(Self { dest: LogDest::Stdout })))
-    }
-}
-
-impl<R: Rt, E: UserEvent> Apply<R, E> for Print {
-    fn update(
-        &mut self,
-        ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
-        event: &mut Event<E>,
-    ) -> Option<Value> {
-        if let Some(v) = from[0].update(ctx, event)
-            && let Ok(d) = v.cast_to::<LogDest>()
-        {
-            self.dest = d;
+macro_rules! printfn {
+    ($type:ident, $name:literal, $print:ident, $eprint:ident) => {
+        #[derive(Debug)]
+        struct $type {
+            dest: LogDest,
+            buf: String,
         }
-        if let Some(v) = from[1].update(ctx, event) {
-            match self.dest {
-                LogDest::Stdout => print!("{}", NakedValue(&v)),
-                LogDest::Stderr => eprint!("{}", NakedValue(&v)),
-                LogDest::Log(lvl) => match lvl {
-                    Level::Trace => log::trace!("{}", NakedValue(&v)),
-                    Level::Debug => log::debug!("{}", NakedValue(&v)),
-                    Level::Info => log::info!("{}", NakedValue(&v)),
-                    Level::Warn => log::warn!("{}", NakedValue(&v)),
-                    Level::Error => log::error!("{}", NakedValue(&v)),
-                },
+
+        impl<R: Rt, E: UserEvent> BuiltIn<R, E> for $type {
+            const NAME: &str = $name;
+            deftype!("core", "fn(?#dest:Log, 'a) -> _");
+
+            fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+                Arc::new(|_, _, _, _, _| {
+                    Ok(Box::new(Self { dest: LogDest::Stdout, buf: String::new() }))
+                })
             }
         }
-        None
-    }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
-}
-
-#[derive(Debug)]
-struct Println {
-    dest: LogDest,
-}
-
-impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Println {
-    const NAME: &str = "println";
-    deftype!("core", "fn(?#dest:Log, 'a) -> _");
-
-    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
-        Arc::new(|_, _, _, _, _| Ok(Box::new(Self { dest: LogDest::Stdout })))
-    }
-}
-
-impl<R: Rt, E: UserEvent> Apply<R, E> for Println {
-    fn update(
-        &mut self,
-        ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
-        event: &mut Event<E>,
-    ) -> Option<Value> {
-        if let Some(v) = from[0].update(ctx, event)
-            && let Ok(d) = v.cast_to::<LogDest>()
-        {
-            self.dest = d;
-        }
-        if let Some(v) = from[1].update(ctx, event) {
-            match self.dest {
-                LogDest::Stdout => println!("{}", NakedValue(&v)),
-                LogDest::Stderr => eprintln!("{}", NakedValue(&v)),
-                LogDest::Log(lvl) => match lvl {
-                    Level::Trace => log::trace!("{}", NakedValue(&v)),
-                    Level::Debug => log::debug!("{}", NakedValue(&v)),
-                    Level::Info => log::info!("{}", NakedValue(&v)),
-                    Level::Warn => log::warn!("{}", NakedValue(&v)),
-                    Level::Error => log::error!("{}", NakedValue(&v)),
-                },
+        impl<R: Rt, E: UserEvent> Apply<R, E> for $type {
+            fn update(
+                &mut self,
+                ctx: &mut ExecCtx<R, E>,
+                from: &mut [Node<R, E>],
+                event: &mut Event<E>,
+            ) -> Option<Value> {
+                use std::fmt::Write;
+                if let Some(v) = from[0].update(ctx, event)
+                    && let Ok(d) = v.cast_to::<LogDest>()
+                {
+                    self.dest = d;
+                }
+                if let Some(v) = from[1].update(ctx, event) {
+                    self.buf.clear();
+                    match v {
+                        Value::String(s) => write!(self.buf, "{s}"),
+                        v => write!(
+                            self.buf,
+                            "{}",
+                            TVal { env: &ctx.env, typ: &from[1].typ(), v: &v }
+                        ),
+                    }
+                    .unwrap();
+                    match self.dest {
+                        LogDest::Stdout => $print!("{}", self.buf),
+                        LogDest::Stderr => $eprint!("{}", self.buf),
+                        LogDest::Log(lvl) => match lvl {
+                            Level::Trace => log::trace!("{}", self.buf),
+                            Level::Debug => log::debug!("{}", self.buf),
+                            Level::Info => log::info!("{}", self.buf),
+                            Level::Warn => log::warn!("{}", self.buf),
+                            Level::Error => log::error!("{}", self.buf),
+                        },
+                    }
+                }
+                None
             }
-        }
-        None
-    }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
+            fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
+        }
+    };
 }
+
+printfn!(Print, "print", print, eprint);
+printfn!(Println, "println", println, eprintln);
 
 pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Queue>()?;
