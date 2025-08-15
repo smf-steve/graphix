@@ -1,12 +1,15 @@
 use crate::{deftype, CachedArgs, CachedVals, EvalCached};
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
-use graphix_compiler::{err, errf, ExecCtx, Rt, UserEvent};
-use netidx::{path::Path, subscriber::Value, utils};
+use escaping::Escape;
+use graphix_compiler::{
+    err, errf, Apply, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Rt, UserEvent,
+};
+use netidx::{path::Path, subscriber::Value};
 use netidx_value::ValArray;
 use smallvec::SmallVec;
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::Arc};
 
 #[derive(Debug, Default)]
 struct StartsWithEv;
@@ -353,14 +356,177 @@ impl EvalCached for StringConcatEv {
 
 type StringConcat = CachedArgs<StringConcatEv>;
 
-#[derive(Debug, Default)]
-struct StringEscapeEv {
-    to_escape: SmallVec<[char; 8]>,
+fn build_escape(esc: Value) -> Result<Escape> {
+    fn escape_non_printing(c: char) -> bool {
+        c.is_control()
+    }
+    let [(_, to_escape), (_, escape_char), (_, tr)] =
+        esc.cast_to::<[(ArcStr, Value); 3]>().context("parse escape")?;
+    let escape_char = {
+        let s = escape_char.cast_to::<ArcStr>().context("escape char")?;
+        if s.len() != 1 {
+            bail!("expected a single escape char")
+        }
+        s.chars().next().unwrap()
+    };
+    let to_escape = match to_escape {
+        Value::String(s) => s.chars().collect::<SmallVec<[char; 32]>>(),
+        _ => bail!("escape: expected a string"),
+    };
+    let tr =
+        tr.cast_to::<SmallVec<[(ArcStr, ArcStr); 8]>>().context("escape: parsing tr")?;
+    for (k, _) in &tr {
+        if k.len() != 1 {
+            bail!("escape: tr key {k} is invalid, expected 1 character");
+        }
+    }
+    let tr = tr
+        .into_iter()
+        .map(|(k, v)| (k.chars().next().unwrap(), v))
+        .collect::<SmallVec<[_; 8]>>();
+    let tr = tr.iter().map(|(c, s)| (*c, s.as_str())).collect::<SmallVec<[_; 8]>>();
+    Escape::new(escape_char, &to_escape, &tr, Some(escape_non_printing))
 }
 
-impl EvalCached for StringEscapeEv {
-    const NAME: &str = "string_escape";
-    deftype!("str", "fn(?#to_escape:string, ?#escape:string, string) -> [string, error]");
+macro_rules! escape_fn {
+    ($name:ident, $builtin_name:literal, $escape:ident) => {
+        #[derive(Debug)]
+        struct $name {
+            escape: Option<Escape>,
+            args: CachedVals,
+        }
+
+        impl<R: Rt, E: UserEvent> BuiltIn<R, E> for $name {
+            const NAME: &str = $builtin_name;
+            deftype!("str", "fn(?#esc:Escape, string) -> [string, error]");
+
+            fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+                Arc::new(|_, _, _, from, _| {
+                    Ok(Box::new(Self { escape: None, args: CachedVals::new(from) }))
+                })
+            }
+        }
+
+        impl<R: Rt, E: UserEvent> Apply<R, E> for $name {
+            fn update(
+                &mut self,
+                ctx: &mut ExecCtx<R, E>,
+                from: &mut [Node<R, E>],
+                event: &mut Event<E>,
+            ) -> Option<Value> {
+                let mut up = [false; 2];
+                self.args.update_diff(&mut up, ctx, from, event);
+                if up[0] {
+                    match &self.args.0[0] {
+                        Some(esc) => match build_escape(esc.clone()) {
+                            Err(e) => return errf!("escape: invalid argument {e:?}"),
+                            Ok(esc) => self.escape = Some(esc),
+                        },
+                        _ => return None,
+                    };
+                }
+                match (up, &self.escape, &self.args.0[1]) {
+                    ([_, true], Some(esc), Some(Value::String(s))) => {
+                        Some(Value::String(ArcStr::from(esc.$escape(&s))))
+                    }
+                    (_, _, _) => None,
+                }
+            }
+
+            fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
+                self.escape = None;
+                self.args.clear();
+            }
+        }
+    };
+}
+
+escape_fn!(StringEscape, "string_escape", escape);
+escape_fn!(StringUnescape, "string_unescape", unescape);
+
+macro_rules! string_split {
+    ($name:ident, $final_name:ident, $builtin:literal, $fn:ident) => {
+        #[derive(Debug, Default)]
+        struct $name;
+
+        impl EvalCached for $name {
+            const NAME: &str = $builtin;
+            deftype!("str", "fn(#pat:string, string) -> Array<string>");
+
+            fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+                // this is a fairly common case, so we check it before doing any real work
+                for p in &from.0[..] {
+                    if p.is_none() {
+                        return None;
+                    }
+                }
+                let pat = match &from.0[0] {
+                    Some(Value::String(s)) => s,
+                    _ => return err!("split: expected string"),
+                };
+                match &from.0[1] {
+                    Some(Value::String(s)) => Some(Value::Array(ValArray::from_iter(
+                        s.$fn(&**pat).map(|s| Value::String(ArcStr::from(s))),
+                    ))),
+                    _ => err!("split: expected a string"),
+                }
+            }
+        }
+
+        type $final_name = CachedArgs<$name>;
+    };
+}
+
+string_split!(StringSplitEv, StringSplit, "string_split", split);
+string_split!(StringRSplitEv, StringRSplit, "string_rsplit", rsplit);
+
+macro_rules! string_splitn {
+    ($name:ident, $final_name:ident, $builtin:literal, $fn:ident) => {
+        #[derive(Debug, Default)]
+        struct $name;
+
+        impl EvalCached for $name {
+            const NAME: &str = $builtin;
+            deftype!("str", "fn(#pat:string, #n:i64, string) -> [Array<string>, error]");
+
+            fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+                // this is a fairly common case, so we check it before doing any real work
+                for p in &from.0[..] {
+                    if p.is_none() {
+                        return None;
+                    }
+                }
+                let pat = match &from.0[0] {
+                    Some(Value::String(s)) => s,
+                    _ => return err!("split: expected string"),
+                };
+                let n = match &from.0[1] {
+                    Some(Value::I64(n)) if *n > 0 => *n as usize,
+                    Some(v) => return errf!("splitn: {v} must be a number > 0"),
+                    None => return None,
+                };
+                match &from.0[2] {
+                    Some(Value::String(s)) => Some(Value::Array(ValArray::from_iter(
+                        s.$fn(n, &**pat).map(|s| Value::String(ArcStr::from(s))),
+                    ))),
+                    _ => err!("split: expected a string"),
+                }
+            }
+        }
+
+        type $final_name = CachedArgs<$name>;
+    };
+}
+
+string_splitn!(StringSplitNEv, StringSplitN, "string_splitn", splitn);
+string_splitn!(StringRSplitNEv, StringRSplitN, "string_rsplitn", rsplitn);
+
+#[derive(Debug, Default)]
+struct StringSplitEscapedEv;
+
+impl EvalCached for StringSplitEscapedEv {
+    const NAME: &str = "string_split_escaped";
+    deftype!("str", "fn(#esc:string, #sep:string, string) -> [Array<string>, error]");
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         // this is a fairly common case, so we check it before doing any real work
@@ -369,83 +535,65 @@ impl EvalCached for StringEscapeEv {
                 return None;
             }
         }
-        match &from.0[0] {
-            Some(Value::String(s)) => {
-                self.to_escape.clear();
-                self.to_escape.extend(s.chars());
-            }
-            _ => return err!("escape: expected a string"),
-        }
-        let ec = match &from.0[1] {
+        let esc = match &from.0[0] {
             Some(Value::String(s)) if s.len() == 1 => s.chars().next().unwrap(),
-            _ => return err!("escape: expected a single escape char"),
+            _ => return err!("split_escaped: invalid escape char"),
+        };
+        let sep = match &from.0[1] {
+            Some(Value::String(s)) if s.len() == 1 => s.chars().next().unwrap(),
+            _ => return err!("split_escaped: invalid separator"),
         };
         match &from.0[2] {
-            Some(Value::String(s)) => {
-                Some(Value::String(utils::escape(s, ec, &self.to_escape).into()))
-            }
-            _ => err!("escape: expected a string"),
-        }
-    }
-}
-
-type StringEscape = CachedArgs<StringEscapeEv>;
-
-#[derive(Debug, Default)]
-struct StringUnescapeEv;
-
-impl EvalCached for StringUnescapeEv {
-    const NAME: &str = "string_unescape";
-    deftype!("str", "fn(?#escape:string, string) -> string");
-
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
-        // this is a fairly common case, so we check it before doing any real work
-        for p in &from.0[..] {
-            if p.is_none() {
-                return None;
-            }
-        }
-        let ec = match &from.0[0] {
-            Some(Value::String(s)) if s.len() == 1 => s.chars().next().unwrap(),
-            _ => return err!("escape: expected a single escape char"),
-        };
-        match &from.0[1] {
-            Some(Value::String(s)) => Some(Value::String(utils::unescape(s, ec).into())),
-            _ => err!("escape: expected a string"),
-        }
-    }
-}
-
-type StringUnescape = CachedArgs<StringUnescapeEv>;
-
-#[derive(Debug, Default)]
-struct StringSplitEv;
-
-impl EvalCached for StringSplitEv {
-    const NAME: &str = "string_split";
-    deftype!("str", "fn(#pat:string, string) -> Array<string>");
-
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
-        // this is a fairly common case, so we check it before doing any real work
-        for p in &from.0[..] {
-            if p.is_none() {
-                return None;
-            }
-        }
-        let pat = match &from.0[0] {
-            Some(Value::String(s)) => s,
-            _ => return err!("split: expected string"),
-        };
-        match &from.0[1] {
             Some(Value::String(s)) => Some(Value::Array(ValArray::from_iter(
-                s.split(&**pat).map(|s| Value::String(ArcStr::from(s))),
+                escaping::split(s, esc, sep).map(|s| Value::String(ArcStr::from(s))),
             ))),
             _ => err!("split: expected a string"),
         }
     }
 }
 
-type StringSplit = CachedArgs<StringSplitEv>;
+type StringSplitEscaped = CachedArgs<StringSplitEscapedEv>;
+
+#[derive(Debug, Default)]
+struct StringSplitNEscapedEv;
+
+impl EvalCached for StringSplitNEscapedEv {
+    const NAME: &str = "string_splitn_escaped";
+    deftype!(
+        "str",
+        "fn(#n:i64, #esc:string, #sep:string, string) -> [Array<string>, error]"
+    );
+
+    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+        // this is a fairly common case, so we check it before doing any real work
+        for p in &from.0[..] {
+            if p.is_none() {
+                return None;
+            }
+        }
+        let n = match &from.0[0] {
+            Some(Value::I64(n)) if *n > 0 => *n as usize,
+            Some(v) => return errf!("splitn_escaped: invalid n {v}"),
+            None => return None,
+        };
+        let esc = match &from.0[1] {
+            Some(Value::String(s)) if s.len() == 1 => s.chars().next().unwrap(),
+            _ => return err!("split_escaped: invalid escape char"),
+        };
+        let sep = match &from.0[2] {
+            Some(Value::String(s)) if s.len() == 1 => s.chars().next().unwrap(),
+            _ => return err!("split_escaped: invalid separator"),
+        };
+        match &from.0[3] {
+            Some(Value::String(s)) => Some(Value::Array(ValArray::from_iter(
+                escaping::splitn(s, esc, n, sep).map(|s| Value::String(ArcStr::from(s))),
+            ))),
+            _ => err!("split: expected a string"),
+        }
+    }
+}
+
+type StringSplitNEscaped = CachedArgs<StringSplitNEscapedEv>;
 
 #[derive(Debug, Default)]
 struct StringSplitOnceEv;
@@ -665,8 +813,13 @@ pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<A
     ctx.register_builtin::<StringEscape>()?;
     ctx.register_builtin::<StringUnescape>()?;
     ctx.register_builtin::<StringSplit>()?;
+    ctx.register_builtin::<StringRSplit>()?;
+    ctx.register_builtin::<StringSplitN>()?;
+    ctx.register_builtin::<StringRSplitN>()?;
     ctx.register_builtin::<StringSplitOnce>()?;
     ctx.register_builtin::<StringRSplitOnce>()?;
+    ctx.register_builtin::<StringSplitEscaped>()?;
+    ctx.register_builtin::<StringSplitNEscaped>()?;
     ctx.register_builtin::<StringToLower>()?;
     ctx.register_builtin::<StringToUpper>()?;
     ctx.register_builtin::<Sprintf>()?;

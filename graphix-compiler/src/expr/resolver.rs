@@ -14,7 +14,7 @@ use log::info;
 use netidx::{
     path::Path,
     subscriber::{Event, Subscriber},
-    utils::{self, Either},
+    utils::Either,
 };
 use netidx_value::Value;
 use std::{path::PathBuf, pin::Pin, str::FromStr, time::Duration};
@@ -41,7 +41,7 @@ impl ModuleResolver {
         s: &str,
     ) -> Result<Vec<Self>> {
         let mut res = vec![];
-        for l in utils::split_escaped(s, '\\', ',') {
+        for l in escaping::split(s, '\\', ',') {
             let l = l.trim();
             if let Some(s) = l.strip_prefix("netidx:") {
                 let base = Path::from_str(s);

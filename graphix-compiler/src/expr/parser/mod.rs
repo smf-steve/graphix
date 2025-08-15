@@ -23,6 +23,7 @@ use combine::{
     token, unexpected_any, value, EasyParser, ParseError, Parser, RangeStream,
 };
 use compact_str::CompactString;
+use escaping::Escape;
 use fxhash::FxHashSet;
 use netidx::{
     path::Path,
@@ -30,7 +31,7 @@ use netidx::{
     utils::Either,
 };
 use netidx_value::parser::{
-    escaped_string, int, value as parse_value, VAL_CAN_ESC, VAL_ESC, VAL_TR,
+    escaped_string, int, value as parse_value, VAL_ESC, VAL_MUST_ESC,
 };
 use parking_lot::RwLock;
 use smallvec::{smallvec, SmallVec};
@@ -40,10 +41,20 @@ use triomphe::Arc;
 #[cfg(test)]
 mod test;
 
-pub const GRAPHIX_ESC: [char; 4] = ['"', '\\', '[', ']'];
-const GRAPHIX_CAN_ESC: [char; 8] = ['"', '\\', '[', ']', '0', 'n', 't', 'r'];
-const GRAPHIX_TR: [(char, char); 4] =
-    [('n', '\n'), ('0', '\0'), ('t', '\t'), ('r', '\r')];
+fn escape_generic(c: char) -> bool {
+    c.is_control()
+}
+
+pub const GRAPHIX_MUST_ESC: [char; 4] = ['"', '\\', '[', ']'];
+pub static GRAPHIX_ESC: LazyLock<Escape> = LazyLock::new(|| {
+    Escape::new(
+        '\\',
+        &['"', '\\', '[', ']', '\n', '\r', '\t', '\0'],
+        &[('\n', "n"), ('\r', "r"), ('\t', "t"), ('\0', "0")],
+        Some(escape_generic),
+    )
+    .unwrap()
+});
 pub const RESERVED: LazyLock<FxHashSet<&str>> = LazyLock::new(|| {
     FxHashSet::from_iter([
         "true", "false", "ok", "null", "mod", "let", "select", "pub", "type", "fn",
@@ -258,7 +269,7 @@ parser! {
                 token('"'),
                 many(choice((
                     attempt(between(token('['), sptoken(']'), expr()).map(Intp::Expr)),
-                    (position(), escaped_string(&GRAPHIX_ESC, &GRAPHIX_CAN_ESC, &GRAPHIX_TR))
+                    (position(), escaped_string(&GRAPHIX_MUST_ESC, &GRAPHIX_ESC))
                     .then(|(pos, s)| {
                         if s.is_empty() {
                             unexpected_any("empty string").right()
@@ -989,11 +1000,13 @@ where
     I::Error: ParseError<I::Token, I::Range, I::Position>,
     I::Range: Range,
 {
-    (
-        position(),
-        parse_value(&VAL_ESC, &VAL_CAN_ESC, &VAL_TR).skip(not_followed_by(token('_'))),
-    )
-        .map(|(pos, v)| ExprKind::Constant(v).to_expr(pos))
+    (position(), parse_value(&VAL_MUST_ESC, &VAL_ESC).skip(not_followed_by(token('_'))))
+        .then(|(pos, v)| match v {
+            Value::String(_) => {
+                unexpected_any("parse error in string interpolation").left()
+            }
+            v => value(ExprKind::Constant(v).to_expr(pos)).right(),
+        })
 }
 
 fn reference<I>() -> impl Parser<I, Output = Expr>
@@ -1240,8 +1253,10 @@ where
     I::Error: ParseError<I::Token, I::Range, I::Position>,
     I::Range: Range,
 {
-    const ESC: [char; 2] = ['\'', '\\'];
-    (position(), between(string("r\'"), token('\''), escaped_string(&ESC, &ESC, &[])))
+    static MUST_ESC: [char; 2] = ['\\', '\''];
+    static ESC: LazyLock<Escape> =
+        LazyLock::new(|| Escape::new('\\', &MUST_ESC, &[], None).unwrap());
+    (position(), between(string("r\'"), token('\''), escaped_string(&MUST_ESC, &ESC)))
         .map(|(pos, s): (_, String)| {
             ExprKind::Constant(Value::String(s.into())).to_expr(pos)
         })
@@ -1351,7 +1366,7 @@ parser! {
             attempt(tuple_pattern()),
             attempt(struct_pattern()),
             attempt(variant_pattern()),
-            attempt(parse_value(&VAL_ESC, &VAL_CAN_ESC, &VAL_TR).skip(not_followed_by(token('_'))))
+            attempt(parse_value(&VAL_MUST_ESC, &VAL_ESC).skip(not_followed_by(token('_'))))
                 .map(|v| StructurePattern::Literal(v)),
             attempt(sptoken('_')).map(|_| StructurePattern::Ignore),
             spfname().map(|name| StructurePattern::Bind(name)),

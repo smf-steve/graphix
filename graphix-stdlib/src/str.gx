@@ -37,15 +37,48 @@ pub let join = |#sep, @args| 'string_join;
 /// concatenate the specified strings into a single string
 pub let concat = |@args| 'string_concat;
 
+type Escape = {
+    escape: string,
+    escape_char: string,
+    tr: Array<(string, string)>
+};
+
+/// the default escaping config escapes \, /, \n, \r, \t, \0, and non printable
+/// characters to unicode \u{HHHH} format
+let default_escape: Escape = {
+    escape: "\\/\n\r\t\0",
+    escape_char: "\\",
+    tr: [("\n", "n"), ("\r", "r"), ("\t", "t"), ("\0", "0")]
+};
+
 /// escape all the charachters in #to_escape in s with the escape charachter #escape.
 /// The escape charachter must appear in #to_escape
-pub let escape = |#to_escape = "/", #escape = "\\", s| 'string_escape;
+pub let escape = |#esc = default_escape, s| 'string_escape;
 
 /// unescape all the charachters in s escaped by the specified #escape charachter
-pub let unescape = |#escape = "\\", s| 'string_unescape;
+pub let unescape = |#esc = default_escape, s| 'string_unescape;
 
 /// split the string by the specified #pat and return an array of each part
 pub let split = |#pat, s| 'string_split;
+
+/// reverse split the string by the specified #pat and return an array of each part
+pub let rsplit = |#pat, s| 'string_rsplit;
+
+/// split the string at most #n times by the specified #pat and return an array of
+/// each part
+pub let splitn = |#pat, #n, s| 'string_splitn;
+
+/// reverse split the string at most #n times by the specified #pat and return an array of
+/// each part
+pub let rsplitn = |#pat, #n, s| 'string_rsplitn;
+
+/// give an escape character #esc, and a #sep character, split the string s into an array
+/// of parts delimited by it's non escaped separator characters.
+pub let split_escaped = |#esc, #sep, s| 'string_split_escaped;
+
+/// give an escape character #esc, and a #sep character, split the string s into an array
+/// of at most #n parts delimited by it's non escaped separator characters.
+pub let splitn_escaped = |#n, #esc, #sep, s| 'string_splitn_escaped;
 
 /// split the string once from the beginning by #pat and return a
 /// tuple of strings, or return null if #pat was not found in the string

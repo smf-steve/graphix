@@ -2,11 +2,8 @@ use crate::expr::{
     parser, Bind, Expr, ExprKind, Lambda, ModuleKind, Sandbox, SigItem, TypeDef,
 };
 use compact_str::{format_compact, CompactString};
-use netidx::{
-    path::Path,
-    utils::{self, Either},
-};
-use netidx_value::Value;
+use netidx::{path::Path, utils::Either};
+use netidx_value::{parser::VAL_ESC, Value};
 use std::fmt::{self, Formatter, Write};
 
 use super::Sig;
@@ -609,7 +606,10 @@ impl fmt::Display for ExprKind {
         }
         let exp = |export| if export { "pub " } else { "" };
         match self {
-            ExprKind::Constant(v) => v.fmt_ext(f, &parser::GRAPHIX_ESC, true),
+            ExprKind::Constant(v @ Value::String(_)) => {
+                v.fmt_ext(f, &parser::GRAPHIX_ESC, true)
+            }
+            ExprKind::Constant(v) => v.fmt_ext(f, &VAL_ESC, true),
             ExprKind::Bind(b) => {
                 let Bind { doc, pattern, typ, export, value } = &**b;
                 if let Some(doc) = doc {
@@ -757,7 +757,7 @@ impl fmt::Display for ExprKind {
                 for s in args.iter() {
                     match &s.kind {
                         ExprKind::Constant(Value::String(s)) if s.len() > 0 => {
-                            let es = utils::escape(&*s, '\\', &parser::GRAPHIX_ESC);
+                            let es = parser::GRAPHIX_ESC.escape(&*s);
                             write!(f, "{es}",)?;
                         }
                         s => {

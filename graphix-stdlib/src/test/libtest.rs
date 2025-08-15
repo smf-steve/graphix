@@ -1142,6 +1142,105 @@ run!(str_split, STR_SPLIT, |v: Result<&Value>| {
 });
 
 #[cfg(test)]
+const STR_RSPLIT: &str = r#"
+{
+  let a = str::rsplit(#pat:",", "foo, bar, baz");
+  array::map(a, |s| str::trim(s))
+}
+"#;
+
+#[cfg(test)]
+run!(str_rsplit, STR_RSPLIT, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::String(s0), Value::String(s1), Value::String(s2)] => {
+                s0 == "baz" && s1 == "bar" && s2 == "foo"
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+#[cfg(test)]
+const STR_SPLITN: &str = r#"
+{
+  let a = str::splitn(#pat:",", #n:2, "foo, bar, baz")?;
+  array::map(a, |s| str::trim(s))
+}
+"#;
+
+#[cfg(test)]
+run!(str_splitn, STR_SPLITN, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::String(s0), Value::String(s1)] => s0 == "foo" && s1 == "bar, baz",
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+#[cfg(test)]
+const STR_RSPLITN: &str = r#"
+{
+  let a = str::rsplitn(#pat:",", #n:2, "foo, bar, baz")?;
+  array::map(a, |s| str::trim(s))
+}
+"#;
+
+#[cfg(test)]
+run!(str_rsplitn, STR_RSPLITN, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::String(s0), Value::String(s1)] => s0 == "baz" && s1 == "foo, bar",
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+#[cfg(test)]
+const STR_SPLIT_ESCAPED: &str = r#"
+{
+  let a = str::split_escaped(#esc:"\\", #sep:",", "foo\\, bar, baz")?;
+  array::map(a, |s| str::trim(s))
+}
+"#;
+
+#[cfg(test)]
+run!(str_split_escaped, STR_SPLIT_ESCAPED, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::String(s0), Value::String(s1)] => s0 == "foo\\, bar" && s1 == "baz",
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+#[cfg(test)]
+const STR_SPLITN_ESCAPED: &str = r#"
+{
+  let a = str::splitn_escaped(#n:2, #esc:"\\", #sep:",", "foo\\, bar, baz, bam")?;
+  array::map(a, |s| str::trim(s))
+}
+"#;
+
+#[cfg(test)]
+run!(str_splitn_escaped, STR_SPLITN_ESCAPED, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::String(s0), Value::String(s1)] => {
+                s0 == "foo\\, bar" && s1 == "baz, bam"
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+#[cfg(test)]
 const STR_SPLIT_ONCE: &str = r#"
   str::split_once(#pat:", ", "foo, bar, baz")
 "#;

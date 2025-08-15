@@ -163,11 +163,11 @@ impl TVar {
         }))
     }
 
-    pub fn read(&self) -> RwLockReadGuard<TVarInnerInner> {
+    pub fn read<'a>(&'a self) -> RwLockReadGuard<'a, TVarInnerInner> {
         self.typ.read()
     }
 
-    pub fn write(&self) -> RwLockWriteGuard<TVarInnerInner> {
+    pub fn write<'a>(&'a self) -> RwLockWriteGuard<'a, TVarInnerInner> {
         self.typ.write()
     }
 
