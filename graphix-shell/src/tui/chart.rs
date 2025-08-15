@@ -1,6 +1,5 @@
 use super::{
-    into_borrowed_line, layout::ConstraintV, AlignmentV, LineV, StyleV, TRef, TuiW,
-    TuiWidget,
+    into_borrowed_line, layout::ConstraintV, AlignmentV, LineV, StyleV, TuiW, TuiWidget,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
@@ -8,7 +7,7 @@ use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future::try_join_all;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXExt, GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref, TRef};
 use log::debug;
 use netidx::publisher::{FromValue, Value};
 use ratatui::{

@@ -1,11 +1,11 @@
-use super::{into_borrowed_line, DirectionV, LineV, StyleV, TRef, TuiW, TuiWidget};
+use super::{into_borrowed_line, DirectionV, LineV, StyleV, TuiW, TuiWidget};
 use anyhow::{Context, Result};
 use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future::{self, try_join_all};
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXExt, GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref, TRef};
 use netidx::publisher::Value;
 use ratatui::{
     layout::Rect,

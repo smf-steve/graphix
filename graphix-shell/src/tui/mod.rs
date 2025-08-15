@@ -19,7 +19,7 @@ use graphix_compiler::{
     expr::{ExprId, ModPath},
     BindId,
 };
-use graphix_rt::{CompExp, GXExt, GXHandle, GXRt, Ref};
+use graphix_rt::{CompExp, GXExt, GXHandle, GXRt, TRef};
 use input_handler::{event_to_value, InputHandlerW};
 use layout::LayoutW;
 use line_gauge::LineGaugeW;
@@ -312,42 +312,6 @@ fn into_borrowed_line<'a>(line: &'a Line<'static>) -> Line<'a> {
 
 fn into_borrowed_lines<'a>(lines: &'a [Line<'static>]) -> Vec<Line<'a>> {
     lines.iter().map(|l| into_borrowed_line(l)).collect::<Vec<_>>()
-}
-
-struct TRef<X: GXExt, T: FromValue> {
-    r: Ref<X>,
-    t: Option<T>,
-}
-
-impl<X: GXExt, T: FromValue> TRef<X, T> {
-    fn new(mut r: Ref<X>) -> Result<Self> {
-        let t = r.last.take().map(|v| v.cast_to()).transpose()?;
-        Ok(TRef { r, t })
-    }
-
-    fn update(&mut self, id: ExprId, v: &Value) -> Result<Option<&mut T>> {
-        if self.r.id == id {
-            let v = v.clone().cast_to()?;
-            self.t = Some(v);
-            Ok(self.t.as_mut())
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-impl<X: GXExt, T: Into<Value> + FromValue + Clone> TRef<X, T> {
-    #[allow(dead_code)]
-    fn set(&mut self, t: T) -> Result<()> {
-        self.t = Some(t.clone());
-        self.r.set(t.into())
-    }
-
-    #[allow(dead_code)]
-    fn set_deref(&mut self, t: T) -> Result<()> {
-        self.t = Some(t.clone());
-        self.r.set_deref(t.into())
-    }
 }
 
 #[async_trait]

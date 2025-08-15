@@ -1,11 +1,11 @@
-use super::{compile, DirectionV, FlexV, SizeV, TRef, TuiW, TuiWidget};
+use super::{compile, DirectionV, FlexV, SizeV, TuiW, TuiWidget};
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use futures::future;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXExt, GXHandle, Ref};
+use graphix_rt::{GXExt, GXHandle, Ref, TRef};
 use netidx::publisher::{FromValue, Value};
 use ratatui::{
     layout::{Constraint, Layout, Rect, Spacing},

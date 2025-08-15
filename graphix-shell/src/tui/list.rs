@@ -1,12 +1,10 @@
-use super::{
-    into_borrowed_line, HighlightSpacingV, LineV, StyleV, TRef, TuiW, TuiWidget,
-};
+use super::{into_borrowed_line, HighlightSpacingV, LineV, StyleV, TuiW, TuiWidget};
 use anyhow::{Context, Result};
 use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXExt, GXHandle};
+use graphix_rt::{GXExt, GXHandle, TRef};
 use netidx::publisher::Value;
 use ratatui::{
     layout::Rect,

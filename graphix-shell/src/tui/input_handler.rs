@@ -1,4 +1,4 @@
-use super::{compile, EmptyW, TRef, TuiW, TuiWidget};
+use super::{compile, EmptyW, TuiW, TuiWidget};
 use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use async_trait::async_trait;
@@ -7,7 +7,7 @@ use crossterm::event::{
     ModifierKeyCode, MouseButton, MouseEvent, MouseEventKind,
 };
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{Callable, GXExt, GXHandle, Ref};
+use graphix_rt::{Callable, GXExt, GXHandle, Ref, TRef};
 use log::debug;
 use netidx::{protocol::valarray::ValArray, publisher::Value};
 use ratatui::{layout::Rect, Frame};

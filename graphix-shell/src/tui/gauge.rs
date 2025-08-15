@@ -1,10 +1,10 @@
-use super::{SpanV, StyleV, TRef, TuiW, TuiWidget};
+use super::{SpanV, StyleV, TuiW, TuiWidget};
 use anyhow::{Context, Result};
 use arcstr::ArcStr;
 use async_trait::async_trait;
 use crossterm::event::Event;
 use graphix_compiler::expr::ExprId;
-use graphix_rt::{GXExt, GXHandle};
+use graphix_rt::{GXExt, GXHandle, TRef};
 use netidx::publisher::Value;
 use ratatui::{layout::Rect, widgets::Gauge, Frame};
 use tokio::try_join;

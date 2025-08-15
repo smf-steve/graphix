@@ -23,6 +23,7 @@ use netidx::{
     subscriber::{self, SubId},
 };
 use netidx_core::atomic_id;
+use netidx_value::FromValue;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{future, path::PathBuf, time::Duration};
@@ -165,6 +166,40 @@ impl<X: GXExt> Ref<X> {
             self.rt.set(id, v)?
         }
         Ok(())
+    }
+}
+
+pub struct TRef<X: GXExt, T: FromValue> {
+    pub r: Ref<X>,
+    pub t: Option<T>,
+}
+
+impl<X: GXExt, T: FromValue> TRef<X, T> {
+    pub fn new(mut r: Ref<X>) -> Result<Self> {
+        let t = r.last.take().map(|v| v.cast_to()).transpose()?;
+        Ok(TRef { r, t })
+    }
+
+    pub fn update(&mut self, id: ExprId, v: &Value) -> Result<Option<&mut T>> {
+        if self.r.id == id {
+            let v = v.clone().cast_to()?;
+            self.t = Some(v);
+            Ok(self.t.as_mut())
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl<X: GXExt, T: Into<Value> + FromValue + Clone> TRef<X, T> {
+    pub fn set(&mut self, t: T) -> Result<()> {
+        self.t = Some(t.clone());
+        self.r.set(t.into())
+    }
+
+    pub fn set_deref(&mut self, t: T) -> Result<()> {
+        self.t = Some(t.clone());
+        self.r.set_deref(t.into())
     }
 }
 
