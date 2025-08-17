@@ -31,10 +31,10 @@ fxhash = "0.2"
 immutable-chunkmap = "2"
 indexmap = "2"
 log = "0.4"
-netidx-core = { version = "0.29.0" }
-netidx-protocols = { version = "0.29.0" }
-netidx-value = { version = "0.29.0" }
-netidx = { version = "0.29.0", default-features = false }
+netidx-core = { path = "../netidx/netidx-core", version = "0.29.0" }
+netidx-protocols = { path = "../netidx/netidx-protocols", version = "0.29.0" }
+netidx-value = { path = "../netidx/netidx-value", version = "0.29.0" }
+netidx = { path = "../netidx/netidx", version = "0.29.0", default-features = false }
 parking_lot = "0.12.1"
 rand = "0.9"
 ratatui = { version = "0.29", features = ["widget-calendar"] }
