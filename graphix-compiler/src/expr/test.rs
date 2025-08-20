@@ -377,13 +377,15 @@ macro_rules! bind {
     ($inner:expr) => {
         (
             $inner,
+            any::<bool>(),
             option::of(arcstr()),
             structure_pattern(),
             any::<bool>(),
             option::of(typexp()),
         )
-            .prop_map(|(value, doc, p, exp, typ)| {
+            .prop_map(|(value, rec, doc, p, exp, typ)| {
                 ExprKind::Bind(Arc::new(Bind {
+                    rec,
                     doc,
                     export: exp,
                     pattern: p,
@@ -1143,12 +1145,25 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
             dbg!(name0 == name1)
         }
         (ExprKind::Bind(b0), ExprKind::Bind(b1)) => {
-            let Bind { doc: d0, pattern: p0, export: export0, value: value0, typ: typ0 } =
-                &**b0;
-            let Bind { doc: d1, pattern: p1, export: export1, value: value1, typ: typ1 } =
-                &**b1;
+            let Bind {
+                rec: r0,
+                doc: d0,
+                pattern: p0,
+                export: export0,
+                value: value0,
+                typ: typ0,
+            } = &**b0;
+            let Bind {
+                rec: r1,
+                doc: d1,
+                pattern: p1,
+                export: export1,
+                value: value1,
+                typ: typ1,
+            } = &**b1;
             dbg!(
-                dbg!(check_structure_pattern(p0, p1))
+                dbg!(r0 == r1)
+                    && dbg!(check_structure_pattern(p0, p1))
                     && dbg!(d0 == d1)
                     && dbg!(export0 == export1)
                     && dbg!(check_type_opt(typ0, typ1))

@@ -378,26 +378,51 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
         top_id: ExprId,
         b: &expr::Bind,
     ) -> Result<Node<R, E>> {
-        let expr::Bind { doc, pattern, typ, export: _, value } = b;
-        let node = compile(ctx, value.clone(), &scope, top_id)?;
-        let typ = match typ {
-            Some(typ) => typ.scope_refs(scope),
-            None => {
-                let typ = node.typ().clone();
-                let ptyp = pattern.infer_type_predicate(&ctx.env)?;
-                if !ptyp.contains(&ctx.env, &typ)? {
-                    format_with_flags(PrintFlag::DerefTVars, || {
-                        bail!(
-                            "at {} match error {typ} can't be matched by {ptyp}",
-                            spec.pos
-                        )
-                    })?
-                }
-                typ
+        let expr::Bind { rec, doc, pattern, typ, export: _, value } = b;
+        let (node, pattern, typ) = if *rec {
+            if !pattern.single_bind().is_some() {
+                bail!("at {} can't use rec on a complex pattern", spec.pos)
             }
+            match value {
+                Expr { kind: ExprKind::Lambda(_), .. } => (),
+                _ => bail!("let rec may only be used for lambdas"),
+            }
+            let typ = match typ {
+                Some(typ) => typ.scope_refs(scope),
+                None => Type::empty_tvar(),
+            };
+            let pattern = StructPatternNode::compile(ctx, &typ, pattern, scope)
+                .with_context(|| format!("at {}", spec.pos))?;
+            let node = compile(ctx, value.clone(), &scope, top_id)?;
+            let ntyp = node.typ();
+            if !typ.contains(&ctx.env, ntyp)? {
+                format_with_flags(PrintFlag::DerefTVars, || {
+                    bail!("at {} error {} can't be matched by {typ}", ntyp, spec.pos)
+                })?
+            }
+            (node, pattern, typ)
+        } else {
+            let node = compile(ctx, value.clone(), &scope, top_id)?;
+            let typ = match typ {
+                Some(typ) => typ.scope_refs(scope),
+                None => {
+                    let typ = node.typ().clone();
+                    let ptyp = pattern.infer_type_predicate(&ctx.env)?;
+                    if !ptyp.contains(&ctx.env, &typ)? {
+                        format_with_flags(PrintFlag::DerefTVars, || {
+                            bail!(
+                                "at {} match error {typ} can't be matched by {ptyp}",
+                                spec.pos
+                            )
+                        })?
+                    }
+                    typ
+                }
+            };
+            let pattern = StructPatternNode::compile(ctx, &typ, pattern, scope)
+                .with_context(|| format!("at {}", spec.pos))?;
+            (node, pattern, typ)
         };
-        let pattern = StructPatternNode::compile(ctx, &typ, pattern, scope)
-            .with_context(|| format!("at {}", spec.pos))?;
         if pattern.is_refutable() {
             bail!("at {} refutable patterns are not allowed in let", spec.pos);
         }

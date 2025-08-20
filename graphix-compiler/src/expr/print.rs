@@ -245,7 +245,7 @@ impl ExprKind {
                 writeln!(buf, "{self}")
             }
             ExprKind::Bind(b) => {
-                let Bind { doc, pattern, typ, export, value } = &**b;
+                let Bind { rec, doc, pattern, typ, export, value } = &**b;
                 try_single_line!(true);
                 if let Some(doc) = doc {
                     if doc == "" {
@@ -256,7 +256,8 @@ impl ExprKind {
                         }
                     }
                 }
-                writeln!(buf, "{}let {pattern}{} = ", exp(*export), typ!(typ))?;
+                let rec = if *rec { " rec" } else { "" };
+                writeln!(buf, "{}let{} {pattern}{} = ", exp(*export), rec, typ!(typ))?;
                 value.kind.pretty_print(indent + 2, limit, false, buf)
             }
             ExprKind::StructWith { source, replace } => {
@@ -611,7 +612,7 @@ impl fmt::Display for ExprKind {
             }
             ExprKind::Constant(v) => v.fmt_ext(f, &VAL_ESC, true),
             ExprKind::Bind(b) => {
-                let Bind { doc, pattern, typ, export, value } = &**b;
+                let Bind { rec, doc, pattern, typ, export, value } = &**b;
                 if let Some(doc) = doc {
                     if doc == "" {
                         writeln!(f, "///")?
@@ -621,7 +622,8 @@ impl fmt::Display for ExprKind {
                         }
                     }
                 }
-                write!(f, "{}let {pattern}{} = {value}", exp(*export), typ!(typ))
+                let rec = if *rec { " rec" } else { "" };
+                write!(f, "{}let{} {pattern}{} = {value}", exp(*export), rec, typ!(typ))
             }
             ExprKind::StructWith { source, replace } => {
                 match &source.kind {

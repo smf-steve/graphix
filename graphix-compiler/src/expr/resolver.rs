@@ -356,13 +356,14 @@ impl Expr {
                 })
             }),
             ExprKind::Bind(b) => Box::pin(async move {
-                let Bind { doc, pattern, typ, export, value } = &*b;
+                let Bind { rec, doc, pattern, typ, export, value } = &*b;
                 let value = value.resolve_modules_int(scope, prepend, resolvers).await?;
                 Ok(Expr {
                     id: self.id,
                     ori: self.ori.clone(),
                     pos: self.pos,
                     kind: ExprKind::Bind(Arc::new(Bind {
+                        rec: *rec,
                         doc: doc.clone(),
                         pattern: pattern.clone(),
                         typ: typ.clone(),

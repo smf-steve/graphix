@@ -103,8 +103,8 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
         f: &TArc<Expr>,
     ) -> Result<Node<R, E>> {
         let fnode = compile(ctx, (**f).clone(), scope, top_id)?;
-        let ftype = match &fnode.typ() {
-            Type::Fn(ftype) => {
+        let ftype = match fnode.typ().with_deref(|t| t.cloned()) {
+            Some(Type::Fn(ftype)) => {
                 let ft = ftype.reset_tvars();
                 KNOWN.with_borrow_mut(|known| {
                     known.clear();
@@ -112,8 +112,8 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
                 });
                 ft
             }
-            typ => {
-                bail!("at {} {f} has {typ}, expected a function", spec.pos)
+            _ => {
+                bail!("at {} {f} has {}, expected a function", spec.pos, fnode.typ())
             }
         };
         ftype.unbind_tvars(); // make sure patterns compile properly
@@ -286,8 +286,8 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         // propagate auto constraints to this callsite. auto constraints are
         // discovered during the lambda typecheck
-        match self.fnode.typ() {
-            Type::Fn(ftype) => {
+        match self.fnode.typ().with_deref(|t| t.cloned()) {
+            Some(Type::Fn(ftype)) => {
                 *self.ftype.constraints.write() = ftype
                     .constraints
                     .read()
@@ -299,7 +299,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
                     self.ftype.alias_tvars(known);
                 });
             }
-            t => bail!("expected a function type saw {t}"),
+            _ => bail!("expected a function type saw {}", self.fnode.typ()),
         }
         for (n, FnArgType { typ, .. }) in self.args.iter_mut().zip(self.ftype.args.iter())
         {

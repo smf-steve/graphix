@@ -213,6 +213,7 @@ fn var_ref() {
 fn letbind() {
     assert_eq!(
         ExprKind::Bind(Arc::new(Bind {
+            rec: false,
             doc: None,
             export: false,
             typ: None,
@@ -221,6 +222,22 @@ fn letbind() {
         }))
         .to_expr_nopos(),
         parse_one("let foo = 42").unwrap()
+    );
+}
+
+#[test]
+fn letrecbind() {
+    assert_eq!(
+        ExprKind::Bind(Arc::new(Bind {
+            rec: true,
+            doc: None,
+            export: false,
+            typ: None,
+            pattern: StructurePattern::Bind(literal!("foo")),
+            value: ExprKind::Constant(Value::I64(42)).to_expr_nopos()
+        }))
+        .to_expr_nopos(),
+        parse_one("let rec foo = 42").unwrap()
     );
 }
 
@@ -247,6 +264,7 @@ fn letbinddoc() {
         literal!(" here is a let bind\n there are many like it\n but this one is mine");
     assert_eq!(
         ExprKind::Bind(Arc::new(Bind {
+            rec: false,
             doc: Some(doc),
             export: false,
             typ: None,
@@ -269,6 +287,7 @@ let foo = 42"#
 fn typed_letbind() {
     assert_eq!(
         ExprKind::Bind(Arc::new(Bind {
+            rec: false,
             doc: None,
             export: false,
             typ: Some(Type::Primitive(Typ::I64.into())),
@@ -729,6 +748,7 @@ fn inline_module() {
         export: true,
         value: ModuleKind::Inline(Arc::from_iter([
             ExprKind::Bind(Arc::new(Bind {
+                rec: false,
                 doc: None,
                 typ: None,
                 export: true,
@@ -737,6 +757,7 @@ fn inline_module() {
             }))
             .to_expr_nopos(),
             ExprKind::Bind(Arc::new(Bind {
+                rec: false,
                 doc: None,
                 typ: None,
                 export: false,
@@ -803,6 +824,7 @@ fn doexpr() {
     let exp = ExprKind::Do {
         exprs: Arc::from_iter([
             ExprKind::Bind(Arc::new(Bind {
+                rec: false,
                 doc: None,
                 typ: None,
                 export: false,
@@ -981,6 +1003,7 @@ fn mod_interpolate() {
 #[test]
 fn typed_array() {
     let e = ExprKind::Bind(Arc::new(Bind {
+        rec: false,
         doc: None,
         export: false,
         pattern: StructurePattern::Bind(literal!("f")),
@@ -1009,6 +1032,7 @@ fn typed_array() {
 #[test]
 fn labeled_argument_lambda() {
     let e = ExprKind::Bind(Arc::new(Bind {
+        rec: false,
         doc: None,
         export: false,
         pattern: StructurePattern::Bind(literal!("a")),
@@ -1183,6 +1207,7 @@ fn tuple0() {
 #[test]
 fn tuple1() {
     let e = ExprKind::Bind(Arc::new(Bind {
+        rec: false,
         doc: None,
         export: false,
         pattern: StructurePattern::Tuple {
@@ -1221,6 +1246,7 @@ fn tuple1() {
 #[test]
 fn struct0() {
     let e = ExprKind::Bind(Arc::new(Bind {
+        rec: false,
         doc: None,
         export: false,
         pattern: StructurePattern::Bind(literal!("a")),
@@ -1256,6 +1282,7 @@ fn struct0() {
 #[test]
 fn bindstruct() {
     let e = ExprKind::Bind(Arc::new(Bind {
+        rec: false,
         doc: None,
         export: false,
         pattern: StructurePattern::Struct {

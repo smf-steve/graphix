@@ -115,6 +115,7 @@ pub enum ModuleKind {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Bind {
+    pub rec: bool,
     pub doc: Option<ArcStr>,
     pub pattern: StructurePattern,
     pub typ: Option<Type>,

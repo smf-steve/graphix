@@ -60,7 +60,7 @@ pub const RESERVED: LazyLock<FxHashSet<&str>> = LazyLock::new(|| {
         "true", "false", "ok", "null", "mod", "let", "select", "pub", "type", "fn",
         "cast", "if", "u32", "v32", "i32", "z32", "u64", "v64", "i64", "z64", "f32",
         "f64", "decimal", "datetime", "duration", "bool", "string", "bytes", "result",
-        "null", "_", "?", "fn", "Array", "any", "Any", "use",
+        "null", "_", "?", "fn", "Array", "any", "Any", "use", "rec",
     ])
 });
 
@@ -970,12 +970,17 @@ parser! {
             optional(string("pub").skip(space())).map(|o| o.is_some()),
             spstring("let")
                 .with(space())
-                .with((structure_pattern(), optional(attempt(sptoken(':').with(typexp())))))
+                .with((
+                    optional(attempt(spstring("rec").with(space()))),
+                    structure_pattern(),
+                    optional(attempt(sptoken(':').with(typexp())))
+                ))
                 .skip(spstring("=")),
             expr(),
         )
-            .map(|(pos, doc, export, (pattern, typ), value)| {
-                ExprKind::Bind(Arc::new(Bind { doc, export, pattern, typ, value }))
+            .map(|(pos, doc, export, (rec, pattern, typ), value)| {
+                let rec = rec.is_some();
+                ExprKind::Bind(Arc::new(Bind { rec, doc, export, pattern, typ, value }))
                     .to_expr(pos)
             })
     }

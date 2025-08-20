@@ -1644,3 +1644,17 @@ run!(dynamic_module8, DYNAMIC_MODULE8, |v: Result<&Value>| match v {
     Ok(Value::String(s)) if s == "hello world" => true,
     _ => false,
 });
+
+#[cfg(test)]
+const RECURSIVE_LAMBDA0: &str = r#"
+{
+    let rec f = |x: i64| select x { x if x < 10 => f(x + 1), x => x };
+    f(0)
+}
+"#;
+
+#[cfg(test)]
+run!(recursive_lambda0, RECURSIVE_LAMBDA0, |v: Result<&Value>| match v {
+    Ok(Value::I64(10)) => true,
+    _ => false,
+});
