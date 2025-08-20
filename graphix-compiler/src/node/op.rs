@@ -4,8 +4,9 @@ use crate::{
     typ::Type,
     wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use netidx_value::{Typ, Value};
+use std::fmt;
 
 macro_rules! compare_op {
     ($name:ident, $op:tt) => {
@@ -230,8 +231,29 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Not<R, E> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Op {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+}
+
+impl fmt::Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Op::Add => write!(f, "+"),
+            Op::Sub => write!(f, "-"),
+            Op::Mul => write!(f, "*"),
+            Op::Div => write!(f, "/"),
+            Op::Mod => write!(f, "%"),
+        }
+    }
+}
+
 macro_rules! arith_op {
-    ($name:ident, $op:tt) => {
+    ($name:ident, $opn:expr, $op:tt) => {
         #[derive(Debug)]
         pub(crate) struct $name<R: Rt, E: UserEvent> {
             spec: Expr,
@@ -294,7 +316,6 @@ macro_rules! arith_op {
             fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
                 wrap!(self.lhs.node, self.lhs.node.typecheck(ctx))?;
                 wrap!(self.rhs.node, self.rhs.node.typecheck(ctx))?;
-                let typ = Type::Primitive(Typ::number());
                 let lhs = self.lhs.node.typ();
                 let rhs = self.rhs.node.typ();
                 match (lhs.with_deref(|t| t.cloned()), rhs.with_deref(|t| t.cloned())) {
@@ -302,17 +323,69 @@ macro_rules! arith_op {
                     (Some(t), None) => { let _ = rhs.contains(&ctx.env, &t); }
                     (None, Some(t)) => { let _ = lhs.contains(&ctx.env, &t); },
                 }
+                // init types that aren't known by now to Number
+                let typ = Type::Primitive(Typ::number());
+                wrap!(self.lhs.node, typ.contains(&ctx.env, lhs))?;
+                wrap!(self.rhs.node, typ.contains(&ctx.env, rhs))?;
+                // Duration and DateTime can be involved in some arith operations however
+                let typ = Type::Primitive(Typ::number() | Typ::Duration | Typ::DateTime);
                 wrap!(self.lhs.node, typ.check_contains(&ctx.env, lhs))?;
                 wrap!(self.rhs.node, typ.check_contains(&ctx.env, rhs))?;
-                let ut = wrap!(self, lhs.union(&ctx.env, rhs))?;
+                let ut = match (lhs.with_deref(|t| t.cloned()), rhs.with_deref(|t| t.cloned())) {
+                    (None, _) | (_, None) => bail!("type must be known"),
+                    (Some(lhs@ Type::Primitive(p0)), Some(rhs@ Type::Primitive(p1))) => {
+                        if (p0.contains(Typ::DateTime) || p1.contains(Typ::DateTime))
+                            && p0 != Typ::Duration && p1 != Typ::Duration {
+                            bail!("0 can't perform {lhs} {} {rhs}", $opn)
+                        }
+                        if (p0.contains(Typ::DateTime) || p1.contains(Typ::DateTime))
+                            && (p0 == Typ::Duration || p1 == Typ::Duration)
+                            && !($opn == Op::Add || $opn == Op::Sub)
+                        {
+                            bail!("can't perform non addition/subtraction on datetime")
+                        }
+                        if p0 == Typ::Duration && p1 == Typ::Duration
+                           && $opn != Op::Add && $opn != Op::Sub
+                        {
+                            bail!("can't perform {lhs} {} {rhs}", $opn)
+                        }
+                        if (p0.contains(Typ::Duration) || p1.contains(Typ::Duration))
+                            && (p0.intersects(Typ::number()) || p1.intersects(Typ::number()))
+                            && ($opn == Op::Add || $opn == Op::Sub || $opn == Op::Mod)
+                        {
+                            bail!("1 can't perform {lhs} {} {rhs}", $opn)
+                        }
+                        if (p0.contains(Typ::Duration) || p1.contains(Typ::Duration))
+                            && !(Typ::U32 | Typ::F32 | Typ::F64 | Typ::Duration).contains(p0)
+                            && !(Typ::U32 | Typ::F32 | Typ::F64 | Typ::Duration).contains(p1)
+                        {
+                            bail!("2 can't perform {lhs} {} {rhs}", $opn)
+                        }
+                        if p1.contains(Typ::Duration) && ($opn == Op::Div || $opn == Op::Mod) {
+                            bail!("3 can't perform {lhs} {} {rhs}", $opn)
+                        }
+                        if (p0.contains(Typ::DateTime) || p1.contains(Typ::DateTime))
+                            && (p0 == Typ::Duration || p1 == Typ::Duration)
+                        {
+                            Type::Primitive(Typ::DateTime.into())
+                        } else if (p0.contains(Typ::Duration) || p1.contains(Typ::Duration))
+                            && (Typ::number().contains(p0) || Typ::number().contains(p1))
+                        {
+                            Type::Primitive(Typ::Duration.into())
+                        } else {
+                            wrap!(self, lhs.union(&ctx.env, &rhs))?
+                        }
+                    }
+                    (Some(_), Some(_)) => wrap!(self, lhs.union(&ctx.env, rhs))?
+                };
                 wrap!(self, self.typ.check_contains(&ctx.env, &ut))
             }
         }
     }
 }
 
-arith_op!(Add, +);
-arith_op!(Sub, -);
-arith_op!(Mul, *);
-arith_op!(Div, /);
-arith_op!(Mod, %);
+arith_op!(Add, Op::Add, +);
+arith_op!(Sub, Op::Sub, -);
+arith_op!(Mul, Op::Mul, *);
+arith_op!(Div, Op::Div, /);
+arith_op!(Mod, Op::Mod, %);

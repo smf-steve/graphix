@@ -1,3 +1,6 @@
+#[cfg(test)]
+use std::time::Duration;
+
 use super::init;
 use crate::run;
 use anyhow::{bail, Result};
@@ -1656,5 +1659,249 @@ const RECURSIVE_LAMBDA0: &str = r#"
 #[cfg(test)]
 run!(recursive_lambda0, RECURSIVE_LAMBDA0, |v: Result<&Value>| match v {
     Ok(Value::I64(10)) => true,
+    _ => false,
+});
+
+use chrono::prelude::*;
+
+#[cfg(test)]
+const DATETIME_ARITH0: &str = r#"
+{
+    let x: datetime = datetime:"2024-11-05T00:00:00Z" + duration:3600.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith0, DATETIME_ARITH0, |v: Result<&Value>| match v {
+    Ok(Value::DateTime(dt))
+        if *dt == "2024-11-05T01:00:00Z".parse::<DateTime<Utc>>().unwrap() =>
+        true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH1: &str = r#"
+{
+    let x: datetime = datetime:"2024-11-05T00:00:00Z" - duration:3600.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith1, DATETIME_ARITH1, |v: Result<&Value>| match v {
+    Ok(Value::DateTime(dt))
+        if *dt == "2024-11-04T23:00:00Z".parse::<DateTime<Utc>>().unwrap() =>
+        true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH2: &str = r#"
+{
+    let x: duration = u32:2 * duration:3600.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith2, DATETIME_ARITH2, |v: Result<&Value>| match v {
+    Ok(Value::Duration(dt)) if *dt == Duration::from_secs(7200) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH3: &str = r#"
+{
+    let x: duration = duration:3600.s * u32:2;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith3, DATETIME_ARITH3, |v: Result<&Value>| match v {
+    Ok(Value::Duration(dt)) if *dt == Duration::from_secs(7200) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH4: &str = r#"
+{
+    let x: duration = duration:3600.s / u32:2;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith4, DATETIME_ARITH4, |v: Result<&Value>| match v {
+    Ok(Value::Duration(dt)) if *dt == Duration::from_secs(1800) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH5: &str = r#"
+{
+    let x: duration = duration:3600.s - duration:1800.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith5, DATETIME_ARITH5, |v: Result<&Value>| match v {
+    Ok(Value::Duration(dt)) if *dt == Duration::from_secs(1800) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH6: &str = r#"
+{
+    let x: duration = duration:0.s + duration:1800.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith6, DATETIME_ARITH6, |v: Result<&Value>| match v {
+    Ok(Value::Duration(dt)) if *dt == Duration::from_secs(1800) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH7: &str = r#"
+{
+    let x: duration = duration:2.s * duration:1800.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith7, DATETIME_ARITH7, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH8: &str = r#"
+{
+    let x: duration = duration:2.s / duration:1800.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith8, DATETIME_ARITH8, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH9: &str = r#"
+{
+    let x: duration = duration:2.s % duration:1800.s;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith9, DATETIME_ARITH9, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH10: &str = r#"
+{
+    let x: duration = duration:2.s + u32:1;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith10, DATETIME_ARITH10, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH11: &str = r#"
+{
+    let x: duration = duration:2.s - u32:1;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith11, DATETIME_ARITH11, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH12: &str = r#"
+{
+    let x: duration = datetime:"2024-11-05T00:00:00Z" - 1;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith12, DATETIME_ARITH12, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH13: &str = r#"
+{
+    let x: duration = datetime:"2024-11-05T00:00:00Z" + 1;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith13, DATETIME_ARITH13, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH14: &str = r#"
+{
+    let x: duration = datetime:"2024-11-05T00:00:00Z" * 2;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith14, DATETIME_ARITH14, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH15: &str = r#"
+{
+    let x: duration = datetime:"2024-11-05T00:00:00Z" / 2;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith15, DATETIME_ARITH15, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const DATETIME_ARITH16: &str = r#"
+{
+    let x: duration = datetime:"2024-11-05T00:00:00Z" % 2;
+    x
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith16, DATETIME_ARITH16, |v: Result<&Value>| match v {
+    Err(_) => true,
     _ => false,
 });

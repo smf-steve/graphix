@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Fundamental Types - The Graphix Programming Language</title>
+        <title>Fundamentals - The Graphix Programming Language</title>
 
 
         <!-- Custom HTML head -->
@@ -175,17 +175,67 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="fundamental-types"><a class="header" href="#fundamental-types">Fundamental Types</a></h1>
+                        <h1 id="fundamentals"><a class="header" href="#fundamentals">Fundamentals</a></h1>
+<p>Graphix has all the fundamental data types and expressions you'd expect. The
+Graphix shell is a good way to explore what small Graphix expressions do. You
+can run the Graphix shell by invoking <code>graphix</code> with no arguments.</p>
+<h1 id="numbers"><a class="header" href="#numbers">Numbers</a></h1>
+<p><code>i32</code>, <code>u32</code>, <code>i64</code>, <code>u64</code>, <code>f32</code>, <code>f64</code>, and <code>decimal</code> are the fundamental
+numeric types in Graphix. Numbers are written with their type prefixed, except
+for <code>i64</code> and <code>f64</code> which are written bare (and are thus the default numeric
+types). for example, <code>u32:3</code> is a <code>u32</code> literal value.</p>
+<p><code>decimal</code> is an exact decimal representation for performing financial
+calculations without rounding or floating point approximation errors.</p>
+<p>The basic arithmetic operations are implemented on all the number types with all
+the other number types. The type system allows you to control the outcomes. For example,</p>
+<pre><code>〉1. + 1
+-: [i64, f64]
+2
+</code></pre>
+<p>The compiler will let you add a <code>f64</code> to an <code>i64</code> directly without casting,
+however the return type of the operation will be the set of an <code>i64</code> and an
+<code>f64</code>, representing that either type could be returned. If you try to pass this
+result to a function that wants a specific numeric type, it will not typecheck.
+On the other hand you may not care about the specific type, and may just want
+the most concise code. Further,</p>
+<pre><code>〉1.2321 + 1
+-: [i64, f64]
+2.2321
+</code></pre>
+<p>In the first case we actually got an <code>i64:2</code> back from the addition, but in this
+case we get an <code>f64:2.2321</code> because we can't represent the fractional part of
+the <code>f64</code> in an <code>i64</code></p>
+<h1 id="bool"><a class="header" href="#bool">Bool</a></h1>
+<p>Graphix has a boolean type, it's literals are written as <code>true</code> and <code>false</code>, and the name of the type is <code>bool</code>.</p>
+<p>Boolean expressions using <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code> are supported. These operators only operate on <code>bool</code>. They can be grouped with parenthesis. For example,</p>
+<pre><code>〉true &amp;&amp; false
+-: bool
+false
+〉true || false
+-: bool
+true
+〉!true
+-: bool
+false
+〉!1
+error: in expr
+
+Caused by:
+    0: at: line: 1, column: 2, in: i64:1
+    1: type mismatch bool does not contain i64
+</code></pre>
+<h1 id="duration"><a class="header" href="#duration">Duration</a></h1>
+<p>A time duration. The type name is <code>duration</code>, and the literals are written as, <code>duration:1.0s</code>, <code>duration:1.0ms</code>, <code>duration:1.0us</code>, <code>duration:1.0ns</code>. Durations can be added,</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../types_and_expressions/let_binds.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../expressions/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../types_and_expressions/expression.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../expressions/let_binds.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -195,11 +245,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../types_and_expressions/let_binds.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../expressions/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../types_and_expressions/expression.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../expressions/let_binds.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

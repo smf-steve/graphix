@@ -188,15 +188,112 @@ libs for gssapi to build properly (on linux). On debian/ubuntu install
 <code>libclang-dev</code>, and <code>libkrb5-dev</code>. On other distributions the names will be
 similar.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="intro-to-graphix"><a class="header" href="#intro-to-graphix">Intro to Graphix</a></h1>
-<p>The first goal of Graphix is to make it easy and productive to build user interfaces to display, interact with, and control data and resources published in <a href="https://netidx.github.io/netidx-book">netidx</a>.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="types-and-expressions"><a class="header" href="#types-and-expressions">Types and Expressions</a></h1>
+<p>The first goal of Graphix is to make it easy to build user interfaces to
+display, interact with, and control resources published in
+<a href="https://netidx.github.io/netidx-book">netidx</a>. As such graphix is a "reactive"
+or dataflow language. Instead of compiling to machine code, or bytecode like
+other languages graphix programs compile to a directed graph. Operations like +
+are graph nodes, and edges represent paths between nodes that data can take.
+Running the program means starting the flow of data into the graph so that it
+will flow through, and be transformed by, the nodes of the graph. Consider,</p>
+<pre><code>let x = cast&lt;i64&gt;(net::subscribe("/foo")?)?;
+print(x * 10)
+</code></pre>
+<p>net::subscribe, subscribes to a netidx path and returns it's value, or an error
+(more on ? later). If you read this like a "normal" functional or imperative
+program, it appears to get the current value of "/foo", multiply it by 10 and
+print the result, no other explanation really makes sense. However in the dataflow paradigm, this compiles to a graph,</p>
+<pre><code>                                   const(10) ==
+                                                |
+                                                |
+                                                v
+const("/foo") =&gt; net::subscribe =&gt; cast&lt;i64&gt; =&gt; * =&gt; print
+</code></pre>
+<p>net::subscribe's value will change when the value in netidx changes, and that
+new value will flow through the graph and be transformed by all the nodes it
+passes through. So in graphix, this program will print the current value of
+"/foo" in netix multiplied by 10, and when that value changes it will print an
+updated value.</p>
+<p>This is a powerful way to think about programming, and it's especially well
+suited to building user interfaces and transforming data streams, as we will see
+in this book.</p>
+<p>In all other respects Graphix aims to be a normal language that would feel
+familair to anyone who knows OCaml, Rust, Haskell, or another similar modern
+language.</p>
+<ul>
+<li>It is strongly statically typed</li>
+<li>It has extensive type inference capability, such that type annotations are
+not needed very often</li>
+<li>It's typing discipline is structural rather than nomial, but named type aliases
+are supported</li>
+<li>It has parametric polymorphism for both lambdas and type aliases</li>
+<li>It has algebreic data types</li>
+<li>destructuring pattern matches are supported in select, let,
+and lambda arguments</li>
+<li>It is expression oriented, every language construct is an expression that
+results in a value</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="expressions"><a class="header" href="#expressions">Expressions</a></h1>
+<p>Everything in Graphix is an expression, in this chapter we'll go through the basic expressions that are the building blocks of a Graphix program.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="fundamentals"><a class="header" href="#fundamentals">Fundamentals</a></h1>
+<p>Graphix has all the fundamental data types and expressions you'd expect. The
+Graphix shell is a good way to explore what small Graphix expressions do. You
+can run the Graphix shell by invoking <code>graphix</code> with no arguments.</p>
+<h1 id="numbers"><a class="header" href="#numbers">Numbers</a></h1>
+<p><code>i32</code>, <code>u32</code>, <code>i64</code>, <code>u64</code>, <code>f32</code>, <code>f64</code>, and <code>decimal</code> are the fundamental
+numeric types in Graphix. Numbers are written with their type prefixed, except
+for <code>i64</code> and <code>f64</code> which are written bare (and are thus the default numeric
+types). for example, <code>u32:3</code> is a <code>u32</code> literal value.</p>
+<p><code>decimal</code> is an exact decimal representation for performing financial
+calculations without rounding or floating point approximation errors.</p>
+<p>The basic arithmetic operations are implemented on all the number types with all
+the other number types. The type system allows you to control the outcomes. For example,</p>
+<pre><code>〉1. + 1
+-: [i64, f64]
+2
+</code></pre>
+<p>The compiler will let you add a <code>f64</code> to an <code>i64</code> directly without casting,
+however the return type of the operation will be the set of an <code>i64</code> and an
+<code>f64</code>, representing that either type could be returned. If you try to pass this
+result to a function that wants a specific numeric type, it will not typecheck.
+On the other hand you may not care about the specific type, and may just want
+the most concise code. Further,</p>
+<pre><code>〉1.2321 + 1
+-: [i64, f64]
+2.2321
+</code></pre>
+<p>In the first case we actually got an <code>i64:2</code> back from the addition, but in this
+case we get an <code>f64:2.2321</code> because we can't represent the fractional part of
+the <code>f64</code> in an <code>i64</code></p>
+<h1 id="bool"><a class="header" href="#bool">Bool</a></h1>
+<p>Graphix has a boolean type, it's literals are written as <code>true</code> and <code>false</code>, and the name of the type is <code>bool</code>.</p>
+<p>Boolean expressions using <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code> are supported. These operators only operate on <code>bool</code>. They can be grouped with parenthesis. For example,</p>
+<pre><code>〉true &amp;&amp; false
+-: bool
+false
+〉true || false
+-: bool
+true
+〉!true
+-: bool
+false
+〉!1
+error: in expr
+
+Caused by:
+    0: at: line: 1, column: 2, in: i64:1
+    1: type mismatch bool does not contain i64
+</code></pre>
+<h1 id="duration"><a class="header" href="#duration">Duration</a></h1>
+<p>A time duration. The type name is <code>duration</code>, and the literals are written as, <code>duration:1.0s</code>, <code>duration:1.0ms</code>, <code>duration:1.0us</code>, <code>duration:1.0ns</code>. Durations can be added,</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="let-binds"><a class="header" href="#let-binds">Let Binds</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="fundamental-types"><a class="header" href="#fundamental-types">Fundamental Types</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="everything-is-an-expression"><a class="header" href="#everything-is-an-expression">Everything is an Expression</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="mutation-with-connect"><a class="header" href="#mutation-with-connect">Mutation with Connect</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="connect"><a class="header" href="#connect">Connect</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="blocks"><a class="header" href="#blocks">Blocks</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="use"><a class="header" href="#use">Use</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="select"><a class="header" href="#select">Select</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="advanced-select-the-sample-operator"><a class="header" href="#advanced-select-the-sample-operator">Advanced Select, the Sample Operator</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="loops"><a class="header" href="#loops">Loops</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="functions"><a class="header" href="#functions">Functions</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="closures-and-first-class-functions"><a class="header" href="#closures-and-first-class-functions">Closures and First Class Functions</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>

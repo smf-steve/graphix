@@ -26,7 +26,6 @@ use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
     future, mem,
-    panic::{catch_unwind, AssertUnwindSafe},
     path::{Component, PathBuf},
     result,
     sync::Weak,
@@ -237,18 +236,11 @@ impl<X: GXExt> GX<X> {
                         });
                     });
                 }
-                let res = catch_unwind(AssertUnwindSafe(|| {
-                    n.update(&mut self.ctx, &mut self.event)
-                }));
+                if let Some(v) = n.update(&mut self.ctx, &mut self.event) {
+                    batch.push(GXEvent::Updated(*id, v))
+                }
                 for id in clear {
                     self.event.variables.remove(&id);
-                }
-                match res {
-                    Ok(None) => (),
-                    Ok(Some(v)) => batch.push(GXEvent::Updated(*id, v)),
-                    Err(e) => {
-                        error!("could not update exprid: {id:?}, panic: {e:?}")
-                    }
                 }
             }
         }
