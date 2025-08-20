@@ -2,9 +2,10 @@ use super::{compiler::compile, Cached};
 use crate::{
     expr::{Expr, ExprId, ModPath},
     typ::Type,
-    wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
+    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{bail, Result};
+use compact_str::format_compact;
 use netidx_value::{Typ, Value};
 use std::fmt;
 
@@ -258,6 +259,7 @@ macro_rules! arith_op {
         pub(crate) struct $name<R: Rt, E: UserEvent> {
             spec: Expr,
             typ: Type,
+            id: BindId,
             lhs: Cached<R, E>,
             rhs: Cached<R, E>
         }
@@ -274,7 +276,10 @@ macro_rules! arith_op {
                 let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
                 let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
                 let typ = Type::empty_tvar();
-                Ok(Box::new(Self { spec, typ, lhs, rhs }))
+                match ctx.env.lookup_bind(scope, &ModPath::from(["errors"])) {
+                    None => bail!("at {} BUG: errors is undefined", spec.pos),
+                    Some((_, bind)) => Ok(Box::new(Self { spec, id: bind.id, typ, lhs, rhs }))
+                }
             }
         }
 
@@ -282,12 +287,20 @@ macro_rules! arith_op {
             fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
                 let lhs_up = self.lhs.update(ctx, event);
                 let rhs_up = self.rhs.update(ctx, event);
+                let lhs = self.lhs.cached.as_ref()?;
+                let rhs = self.rhs.cached.as_ref()?;
                 if lhs_up || rhs_up {
-                    return self.lhs.cached.as_ref().and_then(|lhs| {
-                        self.rhs.cached.as_ref().map(|rhs| (lhs.clone() $op rhs.clone()).into())
-                    })
+                    match lhs.clone() $op rhs.clone() {
+                        Value::Error(e) => {
+                            let e = format_compact!("{} at {} {e}", self.spec.ori, self.spec.pos);
+                            ctx.set_var(self.id, Value::Error(e.as_str().into()));
+                            None
+                        }
+                        v => Some(v)
+                    }
+                } else {
+                    None
                 }
-                None
             }
 
             fn spec(&self) -> &Expr {
@@ -334,44 +347,32 @@ macro_rules! arith_op {
                 let ut = match (lhs.with_deref(|t| t.cloned()), rhs.with_deref(|t| t.cloned())) {
                     (None, _) | (_, None) => bail!("type must be known"),
                     (Some(lhs@ Type::Primitive(p0)), Some(rhs@ Type::Primitive(p1))) => {
-                        if (p0.contains(Typ::DateTime) || p1.contains(Typ::DateTime))
-                            && p0 != Typ::Duration && p1 != Typ::Duration {
-                            bail!("0 can't perform {lhs} {} {rhs}", $opn)
-                        }
-                        if (p0.contains(Typ::DateTime) || p1.contains(Typ::DateTime))
-                            && (p0 == Typ::Duration || p1 == Typ::Duration)
-                            && !($opn == Op::Add || $opn == Op::Sub)
-                        {
-                            bail!("can't perform non addition/subtraction on datetime")
-                        }
-                        if p0 == Typ::Duration && p1 == Typ::Duration
-                           && $opn != Op::Add && $opn != Op::Sub
-                        {
-                            bail!("can't perform {lhs} {} {rhs}", $opn)
-                        }
-                        if (p0.contains(Typ::Duration) || p1.contains(Typ::Duration))
-                            && (p0.intersects(Typ::number()) || p1.intersects(Typ::number()))
-                            && ($opn == Op::Add || $opn == Op::Sub || $opn == Op::Mod)
-                        {
-                            bail!("1 can't perform {lhs} {} {rhs}", $opn)
-                        }
-                        if (p0.contains(Typ::Duration) || p1.contains(Typ::Duration))
-                            && !(Typ::U32 | Typ::F32 | Typ::F64 | Typ::Duration).contains(p0)
-                            && !(Typ::U32 | Typ::F32 | Typ::F64 | Typ::Duration).contains(p1)
-                        {
-                            bail!("2 can't perform {lhs} {} {rhs}", $opn)
-                        }
-                        if p1.contains(Typ::Duration) && ($opn == Op::Div || $opn == Op::Mod) {
-                            bail!("3 can't perform {lhs} {} {rhs}", $opn)
-                        }
-                        if (p0.contains(Typ::DateTime) || p1.contains(Typ::DateTime))
-                            && (p0 == Typ::Duration || p1 == Typ::Duration)
-                        {
-                            Type::Primitive(Typ::DateTime.into())
-                        } else if (p0.contains(Typ::Duration) || p1.contains(Typ::Duration))
-                            && (Typ::number().contains(p0) || Typ::number().contains(p1))
-                        {
-                            Type::Primitive(Typ::Duration.into())
+                        if p0.contains(Typ::DateTime) {
+                            if p1 == Typ::Duration && ($opn == Op::Add || $opn == Op::Sub) {
+                                Type::Primitive(Typ::DateTime.into())
+                            } else {
+                                bail!("0 can't perform {lhs} {} {rhs}", $opn)
+                            }
+                        } else if p1.contains(Typ::DateTime) {
+                            if p0 == Typ::Duration && $opn == Op::Add {
+                                Type::Primitive(Typ::DateTime.into())
+                            } else {
+                                bail!("1 can't perform {lhs} {} {rhs}", $opn)
+                            }
+                        } else if p0.contains(Typ::Duration) {
+                            if p1 == Typ::Duration && ($opn == Op::Add || $opn == Op::Sub) {
+                                Type::Primitive(Typ::Duration.into())
+                            } else if (Typ::integer() | Typ::F32 | Typ::F64).contains(p1) && ($opn == Op::Mul || $opn == Op::Div) {
+                                Type::Primitive(Typ::Duration.into())
+                            } else {
+                                bail!("2 can't perform {lhs} {} {rhs}", $opn)
+                            }
+                        } else if p1.contains(Typ::Duration) {
+                            if (Typ::integer() | Typ::F32 | Typ::F64).contains(p0) && $opn == Op::Mul {
+                                Type::Primitive(Typ::Duration.into())
+                            } else {
+                                bail!("3 can't perform {lhs} {} {rhs}", $opn)
+                            }
                         } else {
                             wrap!(self, lhs.union(&ctx.env, &rhs))?
                         }
