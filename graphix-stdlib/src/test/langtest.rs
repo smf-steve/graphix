@@ -1919,3 +1919,17 @@ run!(datetime_arith17, DATETIME_ARITH17, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
+
+#[cfg(test)]
+const DATETIME_ARITH18: &str = r#"
+{
+    let you_have_been_in_suspention_for = duration:9999999999999.0s * 99999999999999;
+    any(you_have_been_in_suspention_for, errors)
+}
+"#;
+
+#[cfg(test)]
+run!(datetime_arith18, DATETIME_ARITH18, |v: Result<&Value>| match v {
+    Ok(Value::Error(_)) => true,
+    _ => false,
+});

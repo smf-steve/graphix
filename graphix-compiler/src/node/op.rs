@@ -351,13 +351,13 @@ macro_rules! arith_op {
                             if p1 == Typ::Duration && ($opn == Op::Add || $opn == Op::Sub) {
                                 Type::Primitive(Typ::DateTime.into())
                             } else {
-                                bail!("0 can't perform {lhs} {} {rhs}", $opn)
+                                bail!("can't perform {lhs} {} {rhs}", $opn)
                             }
                         } else if p1.contains(Typ::DateTime) {
                             if p0 == Typ::Duration && $opn == Op::Add {
                                 Type::Primitive(Typ::DateTime.into())
                             } else {
-                                bail!("1 can't perform {lhs} {} {rhs}", $opn)
+                                bail!("can't perform {lhs} {} {rhs}", $opn)
                             }
                         } else if p0.contains(Typ::Duration) {
                             if p1 == Typ::Duration && ($opn == Op::Add || $opn == Op::Sub) {
@@ -365,13 +365,13 @@ macro_rules! arith_op {
                             } else if (Typ::integer() | Typ::F32 | Typ::F64).contains(p1) && ($opn == Op::Mul || $opn == Op::Div) {
                                 Type::Primitive(Typ::Duration.into())
                             } else {
-                                bail!("2 can't perform {lhs} {} {rhs}", $opn)
+                                bail!("can't perform {lhs} {} {rhs}", $opn)
                             }
                         } else if p1.contains(Typ::Duration) {
                             if (Typ::integer() | Typ::F32 | Typ::F64).contains(p0) && $opn == Op::Mul {
                                 Type::Primitive(Typ::Duration.into())
                             } else {
-                                bail!("3 can't perform {lhs} {} {rhs}", $opn)
+                                bail!("can't perform {lhs} {} {rhs}", $opn)
                             }
                         } else {
                             wrap!(self, lhs.union(&ctx.env, &rhs))?
