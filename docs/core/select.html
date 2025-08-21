@@ -178,19 +178,40 @@
                         <h1 id="select"><a class="header" href="#select">Select</a></h1>
 <p>Select lets us create a graph node with multiple possible output paths that
 will choose one path for each value based on a set of conditions. Kind of like,</p>
-<pre><code>                     | if foo &gt; 0 =&gt;  ...
-                     |
-                     |
-ref(foo) =&gt; select == if foo &lt; 0 =&gt; ...
-                     |
-                     |
-                     | otherwise =&gt; ...
+<pre><code>                   | if foo &gt; 0 =&gt;  ...
+                   |
+                   |
+ref(foo) =&gt; select | if foo &lt; 0 =&gt; ...
+                   |
+                   |
+                   | otherwise =&gt; ...
 </code></pre>
 <p>is written as</p>
 <pre><code>select foo {
   n if n &gt; 0 =&gt; ...,
   n if n &lt; 0 =&gt; ...,
   n =&gt; ...
+}
+</code></pre>
+<p>select takes an expression as an argument and then evaluates one or more "arms".
+Each arm consists of an optional type predicate, a destructuring pattern, and an
+optional guard clause. If the type predicate matches, the pattern matches, and
+the guard evaluates to true then the arm is "selected". Only one arm may be
+selected at a time, the arms are evaluated in lexical order, and first arm to be
+selected is chosen as the one and only selected arm.</p>
+<p>The code on the right side of the selected arm is the only code that is
+evaluated by select, all other code is "asleep", it will not be evaluated
+until it is selected (and if it has netidx subscriptions or published values
+they will be unsubscribed and unpublished until it is selected again).</p>
+<h2 id="matching-types"><a class="header" href="#matching-types">Matching Types</a></h2>
+<p>Consider we want to select from a value of type <code>[Array&lt;i64&gt;, i64, null]</code>,</p>
+<pre><code>let x: [Array&lt;i64&gt;, i64, null] = null;
+x &lt;- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
+x &lt;- time::timer(duration:2.s, false) ~ 7;
+select x {
+  Array&lt;i64&gt; as a =&gt; array::fold(a, 0, |s, x| s + x),
+  i64 as n =&gt; n,
+  null as _ =&gt; 42
 }
 </code></pre>
 
