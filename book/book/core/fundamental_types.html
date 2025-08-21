@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Use - The Graphix Programming Language</title>
+        <title>Fundamental Types - The Graphix Programming Language</title>
 
 
         <!-- Custom HTML head -->
@@ -175,17 +175,137 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="use"><a class="header" href="#use">Use</a></h1>
+                        <h1 id="fundamental-types"><a class="header" href="#fundamental-types">Fundamental Types</a></h1>
+<p>Graphix has a few fundamental data types, the Graphix shell is a good way to
+explore them by trying out small Graphix expressions. You can run the Graphix
+shell by invoking <code>graphix</code> with no arguments.</p>
+<h2 id="numbers"><a class="header" href="#numbers">Numbers</a></h2>
+<p><code>i32</code>, <code>u32</code>, <code>i64</code>, <code>u64</code>, <code>f32</code>, <code>f64</code>, and <code>decimal</code> are the fundamental
+numeric types in Graphix. Numbers are written with their type prefixed, except
+for <code>i64</code> and <code>f64</code> which are written bare (and are thus the default numeric
+types). for example, <code>u32:3</code> is a <code>u32</code> literal value.</p>
+<p><code>decimal</code> is an exact decimal representation for performing financial
+calculations without rounding or floating point approximation errors.</p>
+<p>The basic arithmetic operations are implemented on all the number types with all
+the other number types. The type system allows you to control the outcomes. For
+example,</p>
+<pre><code>〉1. + 1
+-: [i64, f64]
+2
+</code></pre>
+<p>The compiler will let you do arithmatic on different types of numbers directly
+without casting, however the return type of the operation will be the set of all
+the types in the operation, representing that either type could be returned. If
+you try to pass this result to a function that wants a specific numeric type, it
+will fail at compile time.</p>
+<pre><code>〉1.2321 + 1
+-: [i64, f64]
+2.2321
+</code></pre>
+<p>In the first case we actually got an <code>i64:2</code> back from the addition, but in this
+case we get an <code>f64:2.2321</code> because we can't represent the fractional part of
+the <code>f64</code> in an <code>i64</code>. In general when operating on numbers of different types
+you may get any type in the set back, you shouldn't rely on more precise
+behavior than that.</p>
+<p>Division by zero is raised as an error to the nearest error handler (more on
+that later) and will be printed to stderr by the shell if it is never handled.
+Overflow and underflow are handled by wrapping,</p>
+<pre><code>〉0 / 0
+
+thread 'tokio-runtime-worker' panicked at /home/eric/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/mod.rs:319:5:
+attempt to divide by zero
+-: i64
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
+〉u32:0 - u32:1
+-: u32
+4294967295
+</code></pre>
+<p>It is safe to continue using the shell and runtime if such an error occurrs,
+even if it is not caught. However the particular arith operation that caused the
+error will not update, which may cause problems depending on what your program
+is doing with it.</p>
+<h2 id="bool"><a class="header" href="#bool">Bool</a></h2>
+<p>Graphix has a boolean type, it's literals are written as <code>true</code> and <code>false</code>, and
+the name of the type is <code>bool</code>.</p>
+<p>Boolean expressions using <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code> are supported. These operators
+only operate on <code>bool</code>. They can be grouped with parenthesis. For example,</p>
+<pre><code>〉true &amp;&amp; false
+-: bool
+false
+〉true || false
+-: bool
+true
+〉!true
+-: bool
+false
+〉!1
+error: in expr
+
+Caused by:
+    0: at: line: 1, column: 2, in: i64:1
+    1: type mismatch bool does not contain i64
+</code></pre>
+<h2 id="duration"><a class="header" href="#duration">Duration</a></h2>
+<p>A time duration. The type name is <code>duration</code>, and the literals are written as,
+<code>duration:1.0s</code>, <code>duration:1.0ms</code>, <code>duration:1.0us</code>, <code>duration:1.0ns</code>. Durations
+can be added, and can be multiplied and divided by scalars.</p>
+<pre><code>〉duration:1.0s + duration:1.0s
+-: duration
+2.s
+〉duration:1.0s * 50
+-: duration
+50.s
+〉duration:1.0s / 50
+-: duration
+0.02s
+</code></pre>
+<h2 id="datetime"><a class="header" href="#datetime">DateTime</a></h2>
+<p>A date and time in the UTC time zone. The type name is <code>datetime</code> and literals
+are written in RFC3339 format inside quotes. For example,
+<code>datetime:"2020-01-01T00:00:00Z"</code>. You can add and subtract <code>duration</code> from
+<code>datetime</code>.</p>
+<pre><code>〉datetime:"2020-01-01T00:00:00Z" + duration:30.s
+-: datetime
+2020-01-01 00:00:30 UTC
+</code></pre>
+<p>You can enter <code>datetime</code> literals in local time and they will be converted to UTC. For example,</p>
+<pre><code>〉datetime:"2020-01-01T00:00:00-04:00"
+-: datetime
+2020-01-01 04:00:00 UTC
+</code></pre>
+<h2 id="string"><a class="header" href="#string">String</a></h2>
+<p>Strings in Graphix are UTF8 encoded text. The type name is <code>string</code> and the
+literal is written in quotes <code>"this is a string"</code>. C style escape sequences are
+supported, <code>"this is \" a string with a quote and a \n"</code>. Non printable
+characters such as newline will be escaped by default when strings are printed
+to the console, you can use <code>print</code> to print the raw string.</p>
+<h3 id="string-interpolation"><a class="header" href="#string-interpolation">String Interpolation</a></h3>
+<p>String literals can contain expressions that will be evaluated and joined to the string,
+such expressions are surrounded by unescaped <code>[]</code> in the string. For example,</p>
+<pre><code>〉let row = 1
+〉let column = 999
+〉"/foo/bar/[row]/[column]"
+-: string
+"/foo/bar/1/999"
+</code></pre>
+<p>Values in an interpolation need not be strings, they will be cast to a string
+when they are used. You can write a literal <code>[</code> or <code>]</code> in a string by escaping
+it.</p>
+<pre><code>〉"this is a string with a \[ and a \] but it isn't an interpolation"
+-: string
+"this is a string with a [ and a ] but it isn't an interpolation"
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../expressions/block.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../core/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../control_flow/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../core/let_binds.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -195,11 +315,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../expressions/block.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../core/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../control_flow/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../core/let_binds.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
