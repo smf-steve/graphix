@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Intro to Graphix - The Graphix Programming Language</title>
+        <title>Writing Built in Functions - The Graphix Programming Language</title>
 
 
         <!-- Custom HTML head -->
@@ -12,34 +12,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
 
 
         <!-- Provide site root and default themes to javascript -->
         <script>
-            const path_to_root = "";
+            const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex.js";
+            window.path_to_searchindex_js = "../searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc.js"></script>
+        <script src="../toc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -106,7 +106,7 @@
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
-                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
             </noscript>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -141,7 +141,7 @@
                     <h1 class="menu-title">The Graphix Programming Language</h1>
 
                     <div class="right-buttons">
-                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
 
@@ -175,66 +175,17 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="intro-to-graphix"><a class="header" href="#intro-to-graphix">Intro to Graphix</a></h1>
-<p>The first goal of Graphix is to make it easy to build user interfaces to
-display, interact with, and control resources published in
-<a href="https://netidx.github.io/netidx-book">netidx</a>. As such graphix is a "reactive"
-or dataflow language. Instead of compiling to machine code, or bytecode like
-other languages graphix programs compile to a directed graph. Operations like +
-are graph nodes, and edges represent paths between nodes that data can take.
-Running the program means starting the flow of data into the graph so that it
-will flow through, and be transformed by, the nodes of the graph. Consider,</p>
-<pre><code>let x = cast&lt;i64&gt;(net::subscribe("/foo")?)?;
-print(x * 10)
-</code></pre>
-<p>net::subscribe, subscribes to a netidx path and returns it's value, or an error
-(more on ? later). If you read this like a "normal" functional or imperative
-program, it appears to get the current value of "/foo", multiply it by 10 and
-print the result, no other explanation really makes sense. However in the dataflow paradigm, this compiles to a graph,</p>
-<pre><code>                                   const(10) ==
-                                                |
-                                                |
-                                                v
-const("/foo") =&gt; net::subscribe =&gt; cast&lt;i64&gt; =&gt; * =&gt; print
-</code></pre>
-<p>net::subscribe's value will change when the value in netidx changes, and that
-new value will flow through the graph and be transformed by all the nodes it
-passes through. So in graphix, this program will print the current value of
-"/foo" in netix multiplied by 10, and when that value changes it will print an
-updated value.</p>
-<p>This is a powerful way to think about programming, and it's especially well
-suited to building user interfaces and transforming data streams, as we will see
-in this book.</p>
-<p>In all other respects Graphix aims to be a normal language that would feel
-familair to anyone who knows OCaml, Rust, Haskell, or another similar modern
-language.</p>
-<ul>
-<li>It is lexically scoped</li>
-<li>It is expression oriented, every language construct is an expression that
-results in a value</li>
-<li>It is strongly statically typed, using type erasure on top of a flexible
-universal variant type. Making it both good at catching errors at compile
-time, and flexible at run time.</li>
-<li>It has extensive type inference capability, such that type annotations are
-not needed very often</li>
-<li>It's typing discipline is structural rather than nomial, but named type aliases
-are supported. This is different than most languages, but is useful for a
-"scripting language"</li>
-<li>It has parametric polymorphism for both lambdas and type aliases</li>
-<li>It has algebreic data types</li>
-<li>destructuring pattern matches are supported in select, let,
-and lambda arguments</li>
-</ul>
+                        <h1 id="writing-built-in-functions"><a class="header" href="#writing-built-in-functions">Writing Built in Functions</a></h1>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="install.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../embedding/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="core/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../embedding/shell.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -244,11 +195,11 @@ and lambda arguments</li>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="install.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../embedding/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="core/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../embedding/shell.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
@@ -263,13 +214,13 @@ and lambda arguments</li>
         </script>
 
 
-        <script src="elasticlunr.min.js"></script>
-        <script src="mark.min.js"></script>
-        <script src="searcher.js"></script>
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
 
-        <script src="clipboard.min.js"></script>
-        <script src="highlight.js"></script>
-        <script src="book.js"></script>
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
 

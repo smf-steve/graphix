@@ -221,17 +221,21 @@ in this book.</p>
 familair to anyone who knows OCaml, Rust, Haskell, or another similar modern
 language.</p>
 <ul>
-<li>It is strongly statically typed</li>
+<li>It is lexically scoped</li>
+<li>It is expression oriented, every language construct is an expression that
+results in a value</li>
+<li>It is strongly statically typed, using type erasure on top of a flexible
+universal variant type. Making it both good at catching errors at compile
+time, and flexible at run time.</li>
 <li>It has extensive type inference capability, such that type annotations are
 not needed very often</li>
 <li>It's typing discipline is structural rather than nomial, but named type aliases
-are supported</li>
+are supported. This is different than most languages, but is useful for a
+"scripting language"</li>
 <li>It has parametric polymorphism for both lambdas and type aliases</li>
 <li>It has algebreic data types</li>
 <li>destructuring pattern matches are supported in select, let,
 and lambda arguments</li>
-<li>It is expression oriented, every language construct is an expression that
-results in a value</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="core-language"><a class="header" href="#core-language">Core Language</a></h1>
 <p>This section documents the core language constructs in Graphix.</p>
@@ -285,6 +289,11 @@ unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
 even if it is not caught. However the particular arith operation that caused the
 error will not update, which may cause problems depending on what your program
 is doing with it.</p>
+<h3 id="number-sets"><a class="header" href="#number-sets">Number Sets</a></h3>
+<p>There are a few sets of number types that classify numbers into various kinds.
+<code>Number</code> being the most broad, it contains all the number types. <code>Int</code> contains
+only integers, <code>Real</code> contains only reals (decimal plus the two float types),
+<code>SInt</code> contains signed integers, <code>UInt</code> contains unsigned integers.</p>
 <h2 id="bool"><a class="header" href="#bool">Bool</a></h2>
 <p>Graphix has a boolean type, it's literals are written as <code>true</code> and <code>false</code>, and
 the name of the type is <code>bool</code>.</p>
@@ -339,7 +348,8 @@ are written in RFC3339 format inside quotes. For example,
 literal is written in quotes <code>"this is a string"</code>. C style escape sequences are
 supported, <code>"this is \" a string with a quote and a \n"</code>. Non printable
 characters such as newline will be escaped by default when strings are printed
-to the console, you can use <code>print</code> to print the raw string.</p>
+to the console, you can use <code>print</code> to print the raw string including control
+characters.</p>
 <h3 id="string-interpolation"><a class="header" href="#string-interpolation">String Interpolation</a></h3>
 <p>String literals can contain expressions that will be evaluated and joined to the string,
 such expressions are surrounded by unescaped <code>[]</code> in the string. For example,</p>
@@ -356,16 +366,285 @@ it.</p>
 -: string
 "this is a string with a [ and a ] but it isn't an interpolation"
 </code></pre>
+<h2 id="any"><a class="header" href="#any">Any</a></h2>
+<p>The <code>Any</code> type is a type that unifies with any other type, it corresponds to the
+underlying variant type that represents all values in Graphix (and netidx). It
+is not used very often, as it provides very few guarantees, however it has it's
+place. For example, <code>Any</code> is the type returned by <code>net::subscribe</code>, indicating
+that any valid netidx value can come from the network. Usually the first thing
+you do with an <code>Any</code> type is call <code>cast</code> to turn it into the type you expect (or
+an error), or use a <code>select</code> expression to match it's type (more on select later).</p>
+<h2 id="null"><a class="header" href="#null">Null</a></h2>
+<p>Null is nothing, just like in many other languages. Unlike most other languages
+<code>null</code> is a type not a catch all hack. If the type of a value does not include
+<code>null</code> then it can't be null. The set <code>['a, null]</code> is commonly used instead of
+an option type in Graphix, it serves the same purpose, and is more efficient,
+because <code>null</code> is part of the underlying variant that represents all Graphix
+values after type erasure.</p>
+<h2 id="array"><a class="header" href="#array">Array</a></h2>
+<p>Arrays in Graphix have a type parameter indicating their element type.
+<code>Array&lt;string&gt;</code> indicates an array of strings. Every element of an array must be
+the same type. Arrays are zero indexed <code>a[0]</code> is the first element. Arrays can
+hold any Graphix type as an element, including other arrays at arbitrary levels
+of nesting. There is a special type <code>Array&lt;Any&gt;</code> that can also be written as
+<code>array</code> (case sensitive), that represents the fundamental array type in the
+underlying value representation. <code>[x, y, z]</code> constructs a three element array.
+There are many functions in the <code>array</code> module of the standard library for
+working with arrays.</p>
+<h3 id="array-slicing-and-indexing"><a class="header" href="#array-slicing-and-indexing">Array Slicing and Indexing</a></h3>
+<p>Graphix supports array subslicing, the syntax will be familar to Rust programmers.</p>
+<ul>
+<li><code>a[2..]</code> a slice from index 2 to the end of the array</li>
+<li><code>a[..4]</code> a slice from the beginning of the array to index 3</li>
+<li><code>a[1..3]</code> a slice from index 1 to index 2</li>
+<li><code>a[-1]</code> the last element in the array</li>
+<li><code>a[-2]</code> the second to last element in the array</li>
+</ul>
+<p><code>..=</code> is not supported however, the second part of the slice will always be the
+exclusive bound. Literal numbers can always be replaced with a Graphix
+expression, e.g. <code>a[i..j]</code> is perfectly valid.</p>
+<h3 id="mutability-and-implementation"><a class="header" href="#mutability-and-implementation">Mutability and Implementation</a></h3>
+<p>Arrays are not mutable, like all other Graphix values. All operations that
+"change" an array, actually create a new array leaving the old one unchanged.
+This is even true of the connect operator, which we will talk more about later.</p>
+<p>There are a couple of important notes to understand about the implementation of
+Arrays.</p>
+<ul>
+<li>
+<p>Arrays are memory pooled, in almost all cases (besides really huge arrays)
+creating an array does not actually allocate any memory, it just reuses a
+previously used array that has since become unused. This makes using arrays a
+lot more efficient than you might expect.</p>
+</li>
+<li>
+<p>Arrays are contiguous in memory, there is no funny business going on (looking
+at you lua). This means they are generally very memory efficient, each element
+is 3 machine words, and fast to access. However there are a few cases where
+this causes a problem, such as building up an array by appending one element
+at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
+another data structure for this kind of operation.</p>
+</li>
+<li>
+<p>Array slices are zero copy. They do not allocate memory, and they do not clone
+any of the array's elements, they simply create a light weight view into the
+array. This means algorithms that progressively deconstruct an array by
+slicing are O(N) not O(N^2) and the constants are very fast.</p>
+</li>
+</ul>
+<h2 id="tuples"><a class="header" href="#tuples">Tuples</a></h2>
+<p>Tuples are written <code>(x, y)</code>, they can be of arbitrary length, and each element
+may have a different type. Tuples may be indexed using numeric field indexes.
+Consider</p>
+<pre><code>let x = (1, 2, 3, 4);
+x.0
+</code></pre>
+<p>Will print 1.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="let-binds"><a class="header" href="#let-binds">Let Binds</a></h1>
+<p>Let bindings introduce names that are visible in their scope after they are
+defined.</p>
+<pre><code>let x = 2 + 2 + x; // error x isn't defined yet
+let y = x + 1 // ok
+</code></pre>
+<p>The same name can be used again in the same scope, it will shadow the previous
+value.</p>
+<pre><code>let x = 1;
+let x = x + 1; // ok uses the previous definition
+x == 2 // true
+</code></pre>
+<p>You can annotate the binding with a type, which will then be enforced at compile
+time. Sometimes this is necessary in order to help type inference.</p>
+<pre><code>let x: Number = 1; // note x will be of type Number even though it's an i64
+let y: string = x + 1; // compile time type error
+</code></pre>
+<p>You can use destructuring patterns in let binds as long as they will always
+match.</p>
+<pre><code>let (x, y) = (3, "hello"); // binds x to 3 and y to "hello"
+x == 3; // true
+y == "hello" // true
+</code></pre>
+<p>You can mix type annotations with pattern matches</p>
+<pre><code>let (x, y): (i64, string) = (3, "hello")
+</code></pre>
+<p>You can assign documentation to a let bind using a <code>///</code> comment. Documentation
+will be displayed in the shell when the user tab completes and will be made
+available by the lsp server (when one exists).</p>
+<pre><code>// this is a normal comment
+let x = 1;
+/// this is documentation for y
+let y = 2;
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="connect"><a class="header" href="#connect">Connect</a></h1>
+<p>Connect, written <code>x &lt;- expr</code> is where things get interesting in Graphix. The
+sharp eyed may have noticed that up until now there was no way to introduce a
+cycle in the graph. Connect is the first (and really the only) graph operator in
+Graphix, it allows you to connect one part of the graph to another by name,
+causing the output of the right side to flow to the name on the left side.
+Consider,</p>
+<pre><code>let x = "off"
+x &lt;- time::timer(duration:1.0s, false) ~ "on"
+print(x)
+</code></pre>
+<p>This program will first print <code>off</code>, and after 1 second it will print <code>on</code>. Note
+the <code>~</code> operator means, when the expression on the left updates return the
+current value of the expression on the right (called the sample operator). The
+graph we created looks like,</p>
+<pre><code>const("off") ===============&gt; "x" =======&gt; print
+                              ^
+                              |
+time::timer ====&gt; sample =====
+                 ^
+                 |
+const("on") =====
+</code></pre>
+<p>We can also build an infinite loop with connect. This won't crash the program,
+and it won't stop other parts of the program from being evaluated, it's a
+completely legit thing to do.</p>
+<pre><code>let x = 0;
+x &lt;- x + 1;
+print(x)
+</code></pre>
+<p>This program will print all the i64s from 0 to MAX and then will wrap around. It
+will print numbers forever. You might notice, and you might wonder, why does it
+start from zero, shouldn't it start from 1? After all we increment x BEFORE the
+print right? Well, no, not actually, it will start at 0, for the same reason
+this infinite loop won't lock up the program or cause other expressions not to
+be evaluated. Graphix programs are evaluated in cycles, a batch of updates from
+the network, timers, and other IO is processed into a set of all events that
+happened "now", then the parts of the program that care about those particular
+events are evaluated, and then the main loop goes back to waiting for events.</p>
+<p>What connect does is it schedules an update to <code>x</code> for the next cycle, the
+current cycle proceeds as normal to it's conclusion as if the connect didn't
+happen yet, because it didn't. In the above case the event loop would never
+wait, because there is always work to do adding 1 to <code>x</code>, however it will still
+check for IO events, and any other events that might have happened.</p>
+<p>When combined with other operations, specifically select, connect becomes a
+powerful general looping construct, and is actually the only way to write a loop
+in Graphix. A quick example,</p>
+<pre><code>let count = {
+  let x = 0;
+  select x {
+    n if n &lt; 10 =&gt; x &lt;- x + 1,
+    _ =&gt; never()
+  };
+  x
+};
+count
+</code></pre>
+<p>This program creates a bind <code>count</code> that will update with the values 0 to 10. If
+you put it in a file <code>test.gx</code> and execute it using <code>graphix ./test.gx</code> it will
+print 0 to 10 and then wait.</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</code></pre>
+<h3 id="is-connect-mutation"><a class="header" href="#is-connect-mutation">Is Connect Mutation?</a></h3>
+<p>Connect causes let bound names to update, so it's kind of mutation. Kind of. A
+better way to think about it is that every let bound value is a pipe with
+multiple producers and multiple consumers. Connect adds a new producer to the
+pipe. The values being produced are immutable, an array <code>[1, 2, 3]</code> will always
+and forever be <code>[1, 2, 3]</code>, but a new array <code>[1, 2, 3, 4]</code> might be pushed into
+the same pipe <code>[1, 2, 3]</code> came from, and that might make it appear that the
+array changed. The difference is, if you captured the original <code>[1, 2, 3]</code> and
+put it somewhere, a new <code>[1, 2, 3, 4]</code> arriving on the pipe can't change the
+original array.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="blocks"><a class="header" href="#blocks">Blocks</a></h1>
+<p>A block is a group of code between <code>{</code> and <code>}</code> that has it's own scope, and
+evaluates to the last value in the block. Expressions in a block are <code>;</code>
+separated, meaning every expression except the last one must end in a <code>;</code> and
+it is illegal for a block to have just one expression (it will not parse).</p>
+<p>You can use blocks to hide intermediate variables from outer scopes, and to
+group code together in a logical way.</p>
+<pre><code>let important_thing = {
+  let x = 0;
+  let y = x + 1;
+  43 - y
+};
+
+x; // compile error, x isn't in scope
+y; // compile error, y isn't in scope
+important_thing
+</code></pre>
+<p>This program won't compile because you can't reference y and x from outside the
+block scope, but if you removed those refernces it would print a very important
+number. Blocks are valid anywhere an expression is valid, and they are just
+expressions. They will become very important when we introduce lambda
+expressions.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="use"><a class="header" href="#use">Use</a></h1>
+<p>Use allows you to bring names in modules into your current scope so they can be used without prefixing.</p>
+<pre><code>net::subscribe(...); // call subscribe in the net module
+use net;
+subscribe(...) // same function
+</code></pre>
+<p>Use is valid anywhere expressions are valid</p>
+<pre><code>let list = {
+  use array;
+  map([1, 2, 3, 4, 5], |x| x * 2)
+};
+list
+</code></pre>
+<p>will print <code>[2, 4, 6, 8, 10]</code></p>
+<pre><code>let list = {
+  use array;
+  map([1, 2, 3, 4, 5], |x| x * 2)
+};
+map(list, |x| x * 2)
+</code></pre>
+<p>will not compile, e.g.</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+Error: in file "/home/eric/test.gx"
+
+Caused by:
+    at line: 5, column: 1 map not defined
+</code></pre>
+<p>Use shadows earlier declarations in it's scope. Consider,</p>
+<pre><code>let map = |a, f| "hello you called map!";
+let list = {
+  use array;
+  map([1, 2, 3, 4, 5], |x| x * 2)
+};
+(list, map(list, |x| x * 2))
+</code></pre>
+<p>prints</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+([2, 4, 6, 8, 10], "hello you called map!")
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="select"><a class="header" href="#select">Select</a></h1>
+<p>Select lets us create a graph node with multiple possible output paths that
+will choose one path for each value based on a set of conditions. Kind of like,</p>
+<pre><code>                     | if foo &gt; 0 =&gt;  ...
+                     |
+                     |
+ref(foo) =&gt; select == if foo &lt; 0 =&gt; ...
+                     |
+                     |
+                     | otherwise =&gt; ...
+</code></pre>
+<p>is written as</p>
+<pre><code>select foo {
+  n if n &gt; 0 =&gt; ...,
+  n if n &lt; 0 =&gt; ...,
+  n =&gt; ...
+}
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="loops"><a class="header" href="#loops">Loops</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="functions"><a class="header" href="#functions">Functions</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="closures-and-first-class-functions"><a class="header" href="#closures-and-first-class-functions">Closures and First Class Functions</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="recursion"><a class="header" href="#recursion">Recursion</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="user-defined-types"><a class="header" href="#user-defined-types">User Defined Types</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="structs"><a class="header" href="#structs">Structs</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="variants"><a class="header" href="#variants">Variants</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tuples-1"><a class="header" href="#tuples-1">Tuples</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="named-types"><a class="header" href="#named-types">Named Types</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="parametric-polymorphism"><a class="header" href="#parametric-polymorphism">Parametric Polymorphism</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursive-types"><a class="header" href="#recursive-types">Recursive Types</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="modules"><a class="header" href="#modules">Modules</a></h1>
@@ -375,7 +654,7 @@ it.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-standard-library"><a class="header" href="#the-standard-library">The Standard Library</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="core"><a class="header" href="#core">core</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="net"><a class="header" href="#net">net</a></h1>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="array"><a class="header" href="#array">array</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="array-1"><a class="header" href="#array-1">array</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="str"><a class="header" href="#str">str</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="re"><a class="header" href="#re">re</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="time"><a class="header" href="#time">time</a></h1>
@@ -398,6 +677,10 @@ it.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="sparkline"><a class="header" href="#sparkline">sparkline</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="table"><a class="header" href="#table">table</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="tabs"><a class="header" href="#tabs">tabs</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="embedding-graphix"><a class="header" href="#embedding-graphix">Embedding Graphix</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="writing-built-in-functions"><a class="header" href="#writing-built-in-functions">Writing Built in Functions</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="using-graphix-shell"><a class="header" href="#using-graphix-shell">Using graphix-shell</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="using-graphix-rt"><a class="header" href="#using-graphix-rt">Using graphix-rt</a></h1>
 
                     </main>
 

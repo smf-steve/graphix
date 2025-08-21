@@ -64,6 +64,13 @@ even if it is not caught. However the particular arith operation that caused the
 error will not update, which may cause problems depending on what your program
 is doing with it.
 
+### Number Sets
+
+There are a few sets of number types that classify numbers into various kinds.
+`Number` being the most broad, it contains all the number types. `Int` contains
+only integers, `Real` contains only reals (decimal plus the two float types),
+`SInt` contains signed integers, `UInt` contains unsigned integers.
+
 ## Bool
 
 Graphix has a boolean type, it's literals are written as `true` and `false`, and
@@ -135,7 +142,8 @@ Strings in Graphix are UTF8 encoded text. The type name is `string` and the
 literal is written in quotes `"this is a string"`. C style escape sequences are
 supported, `"this is \" a string with a quote and a \n"`. Non printable
 characters such as newline will be escaped by default when strings are printed
-to the console, you can use `print` to print the raw string.
+to the console, you can use `print` to print the raw string including control
+characters.
 
 ### String Interpolation
 
@@ -159,3 +167,87 @@ it.
 -: string
 "this is a string with a [ and a ] but it isn't an interpolation"
 ```
+
+## Any
+
+The `Any` type is a type that unifies with any other type, it corresponds to the
+underlying variant type that represents all values in Graphix (and netidx). It
+is not used very often, as it provides very few guarantees, however it has it's
+place. For example, `Any` is the type returned by `net::subscribe`, indicating
+that any valid netidx value can come from the network. Usually the first thing
+you do with an `Any` type is call `cast` to turn it into the type you expect (or
+an error), or use a `select` expression to match it's type (more on select later).
+
+## Null
+
+Null is nothing, just like in many other languages. Unlike most other languages
+`null` is a type not a catch all hack. If the type of a value does not include
+`null` then it can't be null. The set `['a, null]` is commonly used instead of
+an option type in Graphix, it serves the same purpose, and is more efficient,
+because `null` is part of the underlying variant that represents all Graphix
+values after type erasure.
+
+## Array
+
+Arrays in Graphix have a type parameter indicating their element type.
+`Array<string>` indicates an array of strings. Every element of an array must be
+the same type. Arrays are zero indexed `a[0]` is the first element. Arrays can
+hold any Graphix type as an element, including other arrays at arbitrary levels
+of nesting. There is a special type `Array<Any>` that can also be written as
+`array` (case sensitive), that represents the fundamental array type in the
+underlying value representation. `[x, y, z]` constructs a three element array.
+There are many functions in the `array` module of the standard library for
+working with arrays.
+
+### Array Slicing and Indexing
+
+Graphix supports array subslicing, the syntax will be familar to Rust programmers.
+
+- `a[2..]` a slice from index 2 to the end of the array
+- `a[..4]` a slice from the beginning of the array to index 3
+- `a[1..3]` a slice from index 1 to index 2
+- `a[-1]` the last element in the array
+- `a[-2]` the second to last element in the array
+
+`..=` is not supported however, the second part of the slice will always be the
+exclusive bound. Literal numbers can always be replaced with a Graphix
+expression, e.g. `a[i..j]` is perfectly valid.
+
+### Mutability and Implementation
+
+Arrays are not mutable, like all other Graphix values. All operations that
+"change" an array, actually create a new array leaving the old one unchanged.
+This is even true of the connect operator, which we will talk more about later.
+
+There are a couple of important notes to understand about the implementation of
+Arrays.
+
+- Arrays are memory pooled, in almost all cases (besides really huge arrays)
+  creating an array does not actually allocate any memory, it just reuses a
+  previously used array that has since become unused. This makes using arrays a
+  lot more efficient than you might expect.
+
+- Arrays are contiguous in memory, there is no funny business going on (looking
+  at you lua). This means they are generally very memory efficient, each element
+  is 3 machine words, and fast to access. However there are a few cases where
+  this causes a problem, such as building up an array by appending one element
+  at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
+  another data structure for this kind of operation.
+
+- Array slices are zero copy. They do not allocate memory, and they do not clone
+  any of the array's elements, they simply create a light weight view into the
+  array. This means algorithms that progressively deconstruct an array by
+  slicing are O(N) not O(N^2) and the constants are very fast.
+
+## Tuples
+
+Tuples are written `(x, y)`, they can be of arbitrary length, and each element
+may have a different type. Tuples may be indexed using numeric field indexes.
+Consider
+
+```
+let x = (1, 2, 3, 4);
+x.0
+```
+
+Will print 1.

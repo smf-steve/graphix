@@ -176,6 +176,44 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="use"><a class="header" href="#use">Use</a></h1>
+<p>Use allows you to bring names in modules into your current scope so they can be used without prefixing.</p>
+<pre><code>net::subscribe(...); // call subscribe in the net module
+use net;
+subscribe(...) // same function
+</code></pre>
+<p>Use is valid anywhere expressions are valid</p>
+<pre><code>let list = {
+  use array;
+  map([1, 2, 3, 4, 5], |x| x * 2)
+};
+list
+</code></pre>
+<p>will print <code>[2, 4, 6, 8, 10]</code></p>
+<pre><code>let list = {
+  use array;
+  map([1, 2, 3, 4, 5], |x| x * 2)
+};
+map(list, |x| x * 2)
+</code></pre>
+<p>will not compile, e.g.</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+Error: in file "/home/eric/test.gx"
+
+Caused by:
+    at line: 5, column: 1 map not defined
+</code></pre>
+<p>Use shadows earlier declarations in it's scope. Consider,</p>
+<pre><code>let map = |a, f| "hello you called map!";
+let list = {
+  use array;
+  map([1, 2, 3, 4, 5], |x| x * 2)
+};
+(list, map(list, |x| x * 2))
+</code></pre>
+<p>prints</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+([2, 4, 6, 8, 10], "hello you called map!")
+</code></pre>
 
                     </main>
 

@@ -225,6 +225,11 @@ unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
 even if it is not caught. However the particular arith operation that caused the
 error will not update, which may cause problems depending on what your program
 is doing with it.</p>
+<h3 id="number-sets"><a class="header" href="#number-sets">Number Sets</a></h3>
+<p>There are a few sets of number types that classify numbers into various kinds.
+<code>Number</code> being the most broad, it contains all the number types. <code>Int</code> contains
+only integers, <code>Real</code> contains only reals (decimal plus the two float types),
+<code>SInt</code> contains signed integers, <code>UInt</code> contains unsigned integers.</p>
 <h2 id="bool"><a class="header" href="#bool">Bool</a></h2>
 <p>Graphix has a boolean type, it's literals are written as <code>true</code> and <code>false</code>, and
 the name of the type is <code>bool</code>.</p>
@@ -279,7 +284,8 @@ are written in RFC3339 format inside quotes. For example,
 literal is written in quotes <code>"this is a string"</code>. C style escape sequences are
 supported, <code>"this is \" a string with a quote and a \n"</code>. Non printable
 characters such as newline will be escaped by default when strings are printed
-to the console, you can use <code>print</code> to print the raw string.</p>
+to the console, you can use <code>print</code> to print the raw string including control
+characters.</p>
 <h3 id="string-interpolation"><a class="header" href="#string-interpolation">String Interpolation</a></h3>
 <p>String literals can contain expressions that will be evaluated and joined to the string,
 such expressions are surrounded by unescaped <code>[]</code> in the string. For example,</p>
@@ -296,6 +302,79 @@ it.</p>
 -: string
 "this is a string with a [ and a ] but it isn't an interpolation"
 </code></pre>
+<h2 id="any"><a class="header" href="#any">Any</a></h2>
+<p>The <code>Any</code> type is a type that unifies with any other type, it corresponds to the
+underlying variant type that represents all values in Graphix (and netidx). It
+is not used very often, as it provides very few guarantees, however it has it's
+place. For example, <code>Any</code> is the type returned by <code>net::subscribe</code>, indicating
+that any valid netidx value can come from the network. Usually the first thing
+you do with an <code>Any</code> type is call <code>cast</code> to turn it into the type you expect (or
+an error), or use a <code>select</code> expression to match it's type (more on select later).</p>
+<h2 id="null"><a class="header" href="#null">Null</a></h2>
+<p>Null is nothing, just like in many other languages. Unlike most other languages
+<code>null</code> is a type not a catch all hack. If the type of a value does not include
+<code>null</code> then it can't be null. The set <code>['a, null]</code> is commonly used instead of
+an option type in Graphix, it serves the same purpose, and is more efficient,
+because <code>null</code> is part of the underlying variant that represents all Graphix
+values after type erasure.</p>
+<h2 id="array"><a class="header" href="#array">Array</a></h2>
+<p>Arrays in Graphix have a type parameter indicating their element type.
+<code>Array&lt;string&gt;</code> indicates an array of strings. Every element of an array must be
+the same type. Arrays are zero indexed <code>a[0]</code> is the first element. Arrays can
+hold any Graphix type as an element, including other arrays at arbitrary levels
+of nesting. There is a special type <code>Array&lt;Any&gt;</code> that can also be written as
+<code>array</code> (case sensitive), that represents the fundamental array type in the
+underlying value representation. <code>[x, y, z]</code> constructs a three element array.
+There are many functions in the <code>array</code> module of the standard library for
+working with arrays.</p>
+<h3 id="array-slicing-and-indexing"><a class="header" href="#array-slicing-and-indexing">Array Slicing and Indexing</a></h3>
+<p>Graphix supports array subslicing, the syntax will be familar to Rust programmers.</p>
+<ul>
+<li><code>a[2..]</code> a slice from index 2 to the end of the array</li>
+<li><code>a[..4]</code> a slice from the beginning of the array to index 3</li>
+<li><code>a[1..3]</code> a slice from index 1 to index 2</li>
+<li><code>a[-1]</code> the last element in the array</li>
+<li><code>a[-2]</code> the second to last element in the array</li>
+</ul>
+<p><code>..=</code> is not supported however, the second part of the slice will always be the
+exclusive bound. Literal numbers can always be replaced with a Graphix
+expression, e.g. <code>a[i..j]</code> is perfectly valid.</p>
+<h3 id="mutability-and-implementation"><a class="header" href="#mutability-and-implementation">Mutability and Implementation</a></h3>
+<p>Arrays are not mutable, like all other Graphix values. All operations that
+"change" an array, actually create a new array leaving the old one unchanged.
+This is even true of the connect operator, which we will talk more about later.</p>
+<p>There are a couple of important notes to understand about the implementation of
+Arrays.</p>
+<ul>
+<li>
+<p>Arrays are memory pooled, in almost all cases (besides really huge arrays)
+creating an array does not actually allocate any memory, it just reuses a
+previously used array that has since become unused. This makes using arrays a
+lot more efficient than you might expect.</p>
+</li>
+<li>
+<p>Arrays are contiguous in memory, there is no funny business going on (looking
+at you lua). This means they are generally very memory efficient, each element
+is 3 machine words, and fast to access. However there are a few cases where
+this causes a problem, such as building up an array by appending one element
+at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
+another data structure for this kind of operation.</p>
+</li>
+<li>
+<p>Array slices are zero copy. They do not allocate memory, and they do not clone
+any of the array's elements, they simply create a light weight view into the
+array. This means algorithms that progressively deconstruct an array by
+slicing are O(N) not O(N^2) and the constants are very fast.</p>
+</li>
+</ul>
+<h2 id="tuples"><a class="header" href="#tuples">Tuples</a></h2>
+<p>Tuples are written <code>(x, y)</code>, they can be of arbitrary length, and each element
+may have a different type. Tuples may be indexed using numeric field indexes.
+Consider</p>
+<pre><code>let x = (1, 2, 3, 4);
+x.0
+</code></pre>
+<p>Will print 1.</p>
 
                     </main>
 

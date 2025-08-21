@@ -41,14 +41,18 @@ In all other respects Graphix aims to be a normal language that would feel
 familair to anyone who knows OCaml, Rust, Haskell, or another similar modern
 language.
 
-- It is strongly statically typed
+- It is lexically scoped
+- It is expression oriented, every language construct is an expression that
+  results in a value
+- It is strongly statically typed, using type erasure on top of a flexible
+  universal variant type. Making it both good at catching errors at compile
+  time, and flexible at run time.
 - It has extensive type inference capability, such that type annotations are
   not needed very often
 - It's typing discipline is structural rather than nomial, but named type aliases
-  are supported
+  are supported. This is different than most languages, but is useful for a
+  "scripting language"
 - It has parametric polymorphism for both lambdas and type aliases
 - It has algebreic data types
 - destructuring pattern matches are supported in select, let,
   and lambda arguments
-- It is expression oriented, every language construct is an expression that
-  results in a value

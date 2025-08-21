@@ -176,6 +176,27 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="blocks"><a class="header" href="#blocks">Blocks</a></h1>
+<p>A block is a group of code between <code>{</code> and <code>}</code> that has it's own scope, and
+evaluates to the last value in the block. Expressions in a block are <code>;</code>
+separated, meaning every expression except the last one must end in a <code>;</code> and
+it is illegal for a block to have just one expression (it will not parse).</p>
+<p>You can use blocks to hide intermediate variables from outer scopes, and to
+group code together in a logical way.</p>
+<pre><code>let important_thing = {
+  let x = 0;
+  let y = x + 1;
+  43 - y
+};
+
+x; // compile error, x isn't in scope
+y; // compile error, y isn't in scope
+important_thing
+</code></pre>
+<p>This program won't compile because you can't reference y and x from outside the
+block scope, but if you removed those refernces it would print a very important
+number. Blocks are valid anywhere an expression is valid, and they are just
+expressions. They will become very important when we introduce lambda
+expressions.</p>
 
                     </main>
 
