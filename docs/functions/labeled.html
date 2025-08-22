@@ -182,13 +182,13 @@ all. When declaring a function you must specify the labeled and optional
 arguments before any non labeled arguments.</p>
 <pre><code>let f = |#lbl1, #lbl2, arg| ...
 </code></pre>
-<p>In this case lbl1 and 2 are not optional, but is labeled. You can call f with
+<p>In this case lbl1 and 2 are not optional, but are labeled. You can call f with
 either labeled argument in either order. e.g. <code>f(#lbl2, #lbl1, a)</code>.</p>
 <pre><code>let f = |#opt = null, a| ...
 </code></pre>
 <p><code>opt</code> need not be specifed when <code>f</code> is called, if it isn't specified then it
-will be <code>null</code>. e.g. <code>f(2)</code>. You can also apply type constraints to labeled and
-optional arguments.</p>
+will be <code>null</code>. e.g. <code>f(2)</code> is a valid way to call <code>f</code>. You can also apply type
+constraints to labeled and optional arguments.</p>
 <pre><code>let f = |#opt: [i64, null] = null, a| ..
 </code></pre>
 <p>Specifies that <code>opt</code> can be either an <code>i64</code> or <code>null</code> and by default it is null.

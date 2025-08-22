@@ -9,7 +9,7 @@ arguments before any non labeled arguments.
 let f = |#lbl1, #lbl2, arg| ...
 ```
 
-In this case lbl1 and 2 are not optional, but is labeled. You can call f with
+In this case lbl1 and 2 are not optional, but are labeled. You can call f with
 either labeled argument in either order. e.g. `f(#lbl2, #lbl1, a)`.
 
 ```
@@ -17,8 +17,8 @@ let f = |#opt = null, a| ...
 ```
 
 `opt` need not be specifed when `f` is called, if it isn't specified then it
-will be `null`. e.g. `f(2)`. You can also apply type constraints to labeled and
-optional arguments.
+will be `null`. e.g. `f(2)` is a valid way to call `f`. You can also apply type
+constraints to labeled and optional arguments.
 
 ```
 let f = |#opt: [i64, null] = null, a| ..

@@ -1,33 +1,31 @@
 # Detailed Semantics
 
-Now buckle up, it's about to get weird. Consider,
+Considering the underlying execution model functions might be better described
+as "polymorphic graph templates", in that they allow you to specify a part of
+the graph once, and then use it multiple times with different types each time.
+Most of the time this difference in semantics doesn't matter. Most of the time.
+Consider,
 
 ```
 let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
 f(n, 1)
 ```
 
-What happens now? Does `f` get "called" every time `n` updates? Does it only
-work for the first `n`? Does it explode? To understand this, go back to the graph
-template analogy. `f` only gets instantiated once (in this case), that happens
-when we first know (at run time) which template we're actually using.
-From then on this code runs as if I had written
+What happens here? Does `f` get "called" every time `n` updates? Does it only
+work for the first `n`? Does it explode? Lets transform it like the compiler
+would in order to understand it better,
 
 ```
 let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 ```
 
-You can think of this as the "arguments" to the function call were plugged into
-the holes in the graph template and copied to the call site, and from then on
-the graph runs as normal. Most of the time the outcome is the same as if `f`
-were a normal function in a normal language and it just got called every time
-`n` updated. Most of the time. However when there are local variables keeping
-state, or side effecting io operations, or other complex things going on inside
-the function this simpler model breaks down and you really need to start
-thinking of functions as graph templates. The highlight this lets revisit an
-earlier example where we used select and connect to find the length of an array.
-Suppose we want to generalize that into a function we might write,
+The "arguments" to the function call were plugged into the holes in the graph
+template and then the whole template is copied to the call site, and from then
+on the graph runs as normal.
+
+Lets revisit an earlier example where we used select and connect to find the
+length of an array. Suppose we want to generalize that into a function,
 
 ```
 let len = |a: Array<'a>| {

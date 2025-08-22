@@ -176,28 +176,25 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>
-<p>Now buckle up, it's about to get weird. Consider,</p>
+<p>Considering the underlying execution model functions might be better described
+as "polymorphic graph templates", in that they allow you to specify a part of
+the graph once, and then use it multiple times with different types each time.
+Most of the time this difference in semantics doesn't matter. Most of the time.
+Consider,</p>
 <pre><code>let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 f(n, 1)
 </code></pre>
-<p>What happens now? Does <code>f</code> get "called" every time <code>n</code> updates? Does it only
-work for the first <code>n</code>? Does it explode? To understand this, go back to the graph
-template analogy. <code>f</code> only gets instantiated once (in this case), that happens
-when we first know (at run time) which template we're actually using.
-From then on this code runs as if I had written</p>
+<p>What happens here? Does <code>f</code> get "called" every time <code>n</code> updates? Does it only
+work for the first <code>n</code>? Does it explode? Lets transform it like the compiler
+would in order to understand it better,</p>
 <pre><code>let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 </code></pre>
-<p>You can think of this as the "arguments" to the function call were plugged into
-the holes in the graph template and copied to the call site, and from then on
-the graph runs as normal. Most of the time the outcome is the same as if <code>f</code>
-were a normal function in a normal language and it just got called every time
-<code>n</code> updated. Most of the time. However when there are local variables keeping
-state, or side effecting io operations, or other complex things going on inside
-the function this simpler model breaks down and you really need to start
-thinking of functions as graph templates. The highlight this lets revisit an
-earlier example where we used select and connect to find the length of an array.
-Suppose we want to generalize that into a function we might write,</p>
+<p>The "arguments" to the function call were plugged into the holes in the graph
+template and then the whole template is copied to the call site, and from then
+on the graph runs as normal.</p>
+<p>Lets revisit an earlier example where we used select and connect to find the
+length of an array. Suppose we want to generalize that into a function,</p>
 <pre><code>let len = |a: Array&lt;'a&gt;| {
   let sum = 0;
   select a {

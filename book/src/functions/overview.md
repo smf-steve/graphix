@@ -1,13 +1,7 @@
 # Functions
 
-Considering the underlying execution model functions might be better described
-as "polymorphic graph templates", in that they allow you to specify a part of
-the graph once, and then use it multiple times with different types each time.
-I'll keep calling them functions, and on the surface they are very similar to
-"actual functions".
-
-In Graphix functions are first class values. They can be stored in variables, in
-data structures, and they can be passed around to other functions. Etc. They are
+Functions are first class values. They can be stored in variables, in data
+structures, and they can be passed around to other functions. Etc. They are
 defined with the syntax,
 
 ```
