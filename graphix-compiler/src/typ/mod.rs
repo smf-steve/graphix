@@ -663,7 +663,11 @@ impl Type {
                 }
             }
             (Type::Array(t0), Type::Array(t1)) => {
-                Ok(Type::Array(Arc::new(t0.diff_int(env, hist, t1)?)))
+                if t0 == t1 {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(Type::Array(Arc::new(t0.diff_int(env, hist, t1)?)))
+                }
             }
             (Type::ByRef(t0), Type::ByRef(t1)) => {
                 Ok(Type::ByRef(Arc::new(t0.diff_int(env, hist, t1)?)))
