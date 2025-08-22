@@ -9,7 +9,6 @@
   - [Blocks](./core/block.md)
   - [Use](./core/use.md)
   - [Select](./core/select.md)
-  - [Loops](./core/loops.md)
 - [Functions](./functions/overview.md)
   - [Closures and First Class Functions](./functions/closures.md)
   - [Polymorphism](./functions/polymorphism.md)

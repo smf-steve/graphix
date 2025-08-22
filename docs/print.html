@@ -245,24 +245,30 @@ explore them by trying out small Graphix expressions. You can run the Graphix
 shell by invoking <code>graphix</code> with no arguments.</p>
 <h2 id="numbers"><a class="header" href="#numbers">Numbers</a></h2>
 <p><code>i32</code>, <code>u32</code>, <code>i64</code>, <code>u64</code>, <code>f32</code>, <code>f64</code>, and <code>decimal</code> are the fundamental
-numeric types in Graphix. Numbers are written with their type prefixed, except
-for <code>i64</code> and <code>f64</code> which are written bare (and are thus the default numeric
-types). for example, <code>u32:3</code> is a <code>u32</code> literal value.</p>
+numeric types in Graphix. Literals are written with their type prefixed, except
+for <code>i64</code> and <code>f64</code> which are written bare. for example, <code>u32:3</code> is a <code>u32</code>
+literal value.</p>
 <p><code>decimal</code> is an exact decimal representation for performing financial
 calculations without rounding or floating point approximation errors.</p>
 <p>The basic arithmetic operations are implemented on all the number types with all
-the other number types. The type system allows you to control the outcomes. For
-example,</p>
-<pre><code>〉1. + 1
--: [i64, f64]
-2
-</code></pre>
+the other number types.</p>
+<div class="table-wrapper"><table><thead><tr><th>Operation</th><th>Operator</th></tr></thead><tbody>
+<tr><td>Add</td><td>+</td></tr>
+<tr><td>Subtract</td><td>-</td></tr>
+<tr><td>Multiply</td><td>*</td></tr>
+<tr><td>Divide</td><td>/</td></tr>
+<tr><td>Mod</td><td>%</td></tr>
+</tbody></table>
+</div>
 <p>The compiler will let you do arithmatic on different types of numbers directly
 without casting, however the return type of the operation will be the set of all
 the types in the operation, representing that either type could be returned. If
 you try to pass this result to a function that wants a specific numeric type, it
 will fail at compile time.</p>
-<pre><code>〉let f = |x: i64| x * 10
+<pre><code>〉1. + 1
+-: [i64, f64]
+2
+〉let f = |x: i64| x * 10
 〉f(1. + 1)
 error: in expr
 
@@ -656,7 +662,244 @@ select x {
   null as _ =&gt; 42
 }
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="loops"><a class="header" href="#loops">Loops</a></h1>
+<p>This program will print 42, 15, 7 and then wait. The compiler will check that
+you have handled all the possible cases. If we remove the null case from this
+select we will get a compile error.</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+Error: in file "/home/eric/test.gx"
+
+Caused by:
+    missing match cases type mismatch [i64, Array&lt;i64&gt;] does not contain [[i64, null], Array&lt;i64&gt;]
+</code></pre>
+<p>If you read this carefully you can see that the compiler is building up a set of
+types that we did match, and checking that it contains the argument type. This
+goes both ways, a match case that could never match is also an error.</p>
+<pre><code>let x: [Array&lt;i64&gt;, i64, null] = null;
+x &lt;- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
+x &lt;- time::timer(duration:2.s, false) ~ 7;
+select x {
+  Array&lt;i64&gt; as a =&gt; array::fold(a, 0, |s, x| s + x),
+  i64 as n =&gt; n,
+  f64 as n =&gt; cast&lt;i64&gt;(n)?,
+  null as _ =&gt; 42
+}
+</code></pre>
+<p>Here we've added an <code>f64</code> match case, but the argument type can never contain an
+<code>f64</code> so we will get a compile error.</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+Error: in file "/home/eric/test.gx"
+
+Caused by:
+    pattern f64 will never match null, unused match cases
+</code></pre>
+<p>The diagnostic message gives you an insight into the compiler's thinking. What
+it is saying is that, by the time it's gotten to looking at the <code>f64</code> pattern,
+the only type left in the argument that hasn't already been matched is <code>null</code>,
+and since <code>f64</code> doesn't unify with <code>null</code> it is sure this pattern can never
+match.</p>
+<p>Guarded patterns can always not match because of the guard, so they do not
+subtract from the argument type set. You are required to match without a guard
+at some point. No analysis is done to determine if your guard covers the entire
+range of a type.</p>
+<pre><code>let x: [Array&lt;i64&gt;, i64, null] = null;
+x &lt;- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
+x &lt;- time::timer(duration:2.s, false) ~ 7;
+select x {
+  Array&lt;i64&gt; as a =&gt; array::fold(a, 0, |s, x| s + x),
+  i64 as n if n &gt; 10 =&gt; n,
+  null as _ =&gt; 42
+}
+</code></pre>
+<p>This will fail with a missing match case because the <code>i64</code> pattern is guarded
+and no unguarded pattern exists that matches <code>i64</code>.</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+Error: in file "/home/eric/test.gx"
+
+Caused by:
+    missing match cases type mismatch [null, Array&lt;i64&gt;] does not contain [[i64, null], Array&lt;i64&gt;]
+</code></pre>
+<p>This is the same error you would get if you omitted the <code>i64</code> match case
+entirely.</p>
+<h2 id="matching-structure"><a class="header" href="#matching-structure">Matching Structure</a></h2>
+<p>The type predicate is optional in a pattern, and the more commonly used pattern
+is structural. Graphix supports several kinds of structural matching,</p>
+<ul>
+<li>array slices</li>
+<li>tuples</li>
+<li>structs</li>
+<li>variants</li>
+<li>literals, ignore</li>
+</ul>
+<h3 id="slice-patterns"><a class="header" href="#slice-patterns">Slice Patterns</a></h3>
+<p>Suppose we want to classify arrays that have at least two elements vs arrays
+that don't, and we want to return a variant with a triple of the first two
+elements and the rest of the array or `Short with the whole array.</p>
+<pre><code>let a = [1, 2, 3, 4];
+a &lt;- [1];
+a &lt;- [5, 6];
+select a {
+  [x, y, tl..] =&gt; `Ok((x, y, tl)),
+  a =&gt; `Short(a)
+}
+</code></pre>
+<p>This program will print,</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+`Ok((1, 2, [3, 4]))
+`Short([1])
+`Ok((5, 6, []))
+</code></pre>
+<p>The following kinds of slice patterns are supported,</p>
+<ul>
+<li>
+<p>whole slice, with binds, or literals, e.g. <code>[1, x, 2, y]</code> matches a 4 element
+array and binds it's 2nd and 4th element to <code>x</code> and <code>y</code> respectivly.</p>
+</li>
+<li>
+<p>head pattern, like the above program, e.g. <code>[(x, y), ..]</code> matches the first
+pair in an array of pairs and ignores the rest of the array, binding the pair
+elements to <code>x</code> and <code>y</code>. You can also name the remainder, as we saw, e.g.
+<code>[(x, y), tl..]</code> does the same thing, but binds the rest of the array to <code>tl</code></p>
+</li>
+<li>
+<p>tail pattern, just like the head pattern, but for the end of the array. e.g.
+<code>[hd.., {foo, bar}]</code> matches the last element of an array of structs with
+fields <code>foo</code> and <code>bar</code>, binding <code>hd</code> to the array minus the last element, and
+<code>foo</code> to field foo and <code>bar</code> to field bar.</p>
+</li>
+</ul>
+<p>Structure patterns (all of the differnt types) can be nested to any depth.</p>
+<h3 id="tuple-patterns"><a class="header" href="#tuple-patterns">Tuple Patterns</a></h3>
+<p>Tuple patterns allow you to match tuples. Compared to slice patterns they are
+fairly simple. You must specify every field of the tuple, you can choose to bind
+it, or ignore it with <code>_</code>. e.g.</p>
+<p><code>("I", "am", "a", "happy", "tuple", w, _, "patterns")</code></p>
+<h3 id="struct-patterns"><a class="header" href="#struct-patterns">Struct Patterns</a></h3>
+<p>Struct patterns, like tuple patterns, are pretty simple.</p>
+<ul>
+<li><code>{ x, y }</code> if you like the field names then there is no need to change them</li>
+<li><code>{ x: x_coord, y: y_coord }</code> but if you need to use a different name you can</li>
+<li><code>{ x, .. }</code> you don't have to write every field</li>
+</ul>
+<p>Consider</p>
+<pre><code>let a = {x: 54, y: 23};
+a &lt;- {x: 21, y: 88};
+a &lt;- {x: 5, y: 42};
+a &lt;- {x: 23, y: 32};
+select a {
+  {x, y: _} if (x &lt; 10) || (x &gt; 50) =&gt; `VWall,
+  {y, x: _} if (y &lt; 10) || (y &gt; 40)  =&gt; `HWall,
+  {x, y} =&gt; `Ok(x, y)
+}
+</code></pre>
+<p>does some 2d bounds checking, and will output</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+`VWall
+`HWall
+`VWall
+`Ok(23, 32)
+</code></pre>
+<p>You might be tempted to replace <code>y: _</code> with <code>..</code> as it would be shorter.
+Unfortunatly this will confuse the type checker, because the Graphix type system
+is structural saying <code>{x, ..}</code> without any other information could match ANY
+struct with a field called <code>x</code>. This is currently too much for the type checker
+to handle,</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+Error: in file "/home/eric/test.gx"
+
+Caused by:
+    pattern {x: '_1040} will never match {x: i64, y: i64}, unused match cases
+</code></pre>
+<p>The error is slightly confusing at first, until you understand that since we
+don't know the type of <code>{x, ..}</code> we don't think it will match the argument type,
+and therefore the match case is unused. This actually saves us a lot of trouble
+here, because the last match is exhaustive, if we didn't check for unused match
+cases this program would compile, but it wouldn't work. You can easily fix this
+by naming the type, and for larger structs it's often worth it if you only need
+a few fields.</p>
+<pre><code>type T = {x: i64, y: i64};
+let a = {x: 54, y: 23};
+a &lt;- {x: 21, y: 88};
+a &lt;- {x: 5, y: 42};
+a &lt;- {x: 23, y: 32};
+select a {
+  T as {x, ..} if (x &lt; 10) || (x &gt; 50) =&gt; `VWall,
+  T as {y, ..} if (y &lt; 10) || (y &gt; 40)  =&gt; `HWall,
+  {x, y} =&gt; `Ok(x, y)
+}
+</code></pre>
+<p>Here since we've included the type pattern <code>T</code> in our partial patterns the
+program compiles and runs.</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+`VWall
+`HWall
+`VWall
+`Ok(23, 32)
+</code></pre>
+<p>Note that we never told the compiler that <code>a</code> is of
+type <code>T</code>. In fact <code>T</code> is just an alias for <code>{x: i64, y: i64}</code> which is the type
+of <code>a</code>. We could in fact write our patterns without the alias,</p>
+<p><code>{x: i64, y: i64} as {x, ..} if (x &lt; 10) || (x &gt; 50) =&gt; `VWall</code></p>
+<p>The type alias just makes the code less verbose without changing the semantics.</p>
+<h3 id="variant-patterns"><a class="header" href="#variant-patterns">Variant Patterns</a></h3>
+<p>Variant patterns match variants. Consider,</p>
+<pre><code>let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
+v &lt;- `Arg(42);
+v &lt;- `MoreArg("hello world", 42);
+select v {
+  `Bare =&gt; "it's bare, no argument",
+  `Arg(i) =&gt; "it has an arg [i]",
+  x@ `MoreArg(s, n) =&gt; "it's big [x] with args \"[s]\" and [n]"
+}
+</code></pre>
+<p>produces</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+"it's bare, no argument"
+"it has an arg 42"
+"it's big `MoreArg(\"hello world\", 42) with args \"hello world\" and 42"
+</code></pre>
+<p>Variant patterns enforce the same kinds of match case checking as all the other pattern types</p>
+<pre><code>let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
+v &lt;- `Arg(42);
+v &lt;- `MoreArg("hello world", 42);
+select v {
+  `Bare =&gt; "it's bare, no argument",
+  `Arg(i) =&gt; "it has an arg [i]",
+  x@ `MoreArg(s, n) =&gt; "it's big [x] with args \"[s]\" and [n]",
+  `Wrong =&gt; "this won't compile"
+}
+</code></pre>
+<p>yields</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+Error: in file "/home/eric/test.gx"
+
+Caused by:
+    pattern `Wrong will never match [`Arg(i64), `MoreArg(string, i64)], unused match cases
+</code></pre>
+<h3 id="literals-ignore"><a class="header" href="#literals-ignore">Literals, Ignore</a></h3>
+<p>You can match literals as well as bind variables, as you may have noticed, and
+the special pattern <code>_</code> means match anything and don't bind it to a variable.</p>
+<h3 id="missing-features"><a class="header" href="#missing-features">Missing Features</a></h3>
+<p>A significant missing feature from patterns vs other languages is support for
+multiple alternative patterns in one arm. I plan to add this at some point.</p>
+<h2 id="select-and-connect"><a class="header" href="#select-and-connect">Select and Connect</a></h2>
+<p>Using select and connect together is one way to iterate in Graphix. Consider,</p>
+<pre><code>let a = [1, 2, 3, 4, 5];
+let len = 0;
+select a {
+  [x, tl..] =&gt; {
+    len &lt;- len + 1;
+    a &lt;- tl
+  },
+  _ =&gt; len
+}
+</code></pre>
+<p>produces</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+5
+</code></pre>
+<p>This is not normally how we would get the length of an array in Graphix, or even
+how we would do something with every element of an array (see <code>array::map</code> and
+<code>array::fold</code>), however it illustrates the power of select and connect together.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="functions"><a class="header" href="#functions">Functions</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="closures-and-first-class-functions"><a class="header" href="#closures-and-first-class-functions">Closures and First Class Functions</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>

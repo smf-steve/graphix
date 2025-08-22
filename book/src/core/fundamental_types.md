@@ -7,22 +7,23 @@ shell by invoking `graphix` with no arguments.
 ## Numbers
 
 `i32`, `u32`, `i64`, `u64`, `f32`, `f64`, and `decimal` are the fundamental
-numeric types in Graphix. Numbers are written with their type prefixed, except
-for `i64` and `f64` which are written bare (and are thus the default numeric
-types). for example, `u32:3` is a `u32` literal value.
+numeric types in Graphix. Literals are written with their type prefixed, except
+for `i64` and `f64` which are written bare. for example, `u32:3` is a `u32`
+literal value.
 
 `decimal` is an exact decimal representation for performing financial
 calculations without rounding or floating point approximation errors.
 
 The basic arithmetic operations are implemented on all the number types with all
-the other number types. The type system allows you to control the outcomes. For
-example,
+the other number types.
 
-```
-〉1. + 1
--: [i64, f64]
-2
-```
+| Operation | Operator |
+|-----------|----------|
+| Add       |     +    |
+| Subtract  |     -    |
+| Multiply  |     *    |
+| Divide    |     /    |
+| Mod       |     %    |
 
 The compiler will let you do arithmatic on different types of numbers directly
 without casting, however the return type of the operation will be the set of all
@@ -31,6 +32,9 @@ you try to pass this result to a function that wants a specific numeric type, it
 will fail at compile time.
 
 ```
+〉1. + 1
+-: [i64, f64]
+2
 〉let f = |x: i64| x * 10
 〉f(1. + 1)
 error: in expr
