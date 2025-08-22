@@ -31,16 +31,15 @@ you try to pass this result to a function that wants a specific numeric type, it
 will fail at compile time.
 
 ```
-〉1.2321 + 1
--: [i64, f64]
-2.2321
-```
+〉let f = |x: i64| x * 10
+〉f(1. + 1)
+error: in expr
 
-In the first case we actually got an `i64:2` back from the addition, but in this
-case we get an `f64:2.2321` because we can't represent the fractional part of
-the `f64` in an `i64`. In general when operating on numbers of different types
-you may get any type in the set back, you shouldn't rely on more precise
-behavior than that.
+Caused by:
+    0: at: line: 1, column: 3, in: (f64:1. + i64:1)
+    1: at: line: 1, column: 3, in: (f64:1. + i64:1)
+    2: type mismatch '_1046: i64 does not contain [i64, f64]
+```
 
 Division by zero is raised as an error to the nearest error handler (more on
 that later) and will be printed to stderr by the shell if it is never handled.

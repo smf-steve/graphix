@@ -198,15 +198,15 @@ without casting, however the return type of the operation will be the set of all
 the types in the operation, representing that either type could be returned. If
 you try to pass this result to a function that wants a specific numeric type, it
 will fail at compile time.</p>
-<pre><code>〉1.2321 + 1
--: [i64, f64]
-2.2321
+<pre><code>〉let f = |x: i64| x * 10
+〉f(1. + 1)
+error: in expr
+
+Caused by:
+    0: at: line: 1, column: 3, in: (f64:1. + i64:1)
+    1: at: line: 1, column: 3, in: (f64:1. + i64:1)
+    2: type mismatch '_1046: i64 does not contain [i64, f64]
 </code></pre>
-<p>In the first case we actually got an <code>i64:2</code> back from the addition, but in this
-case we get an <code>f64:2.2321</code> because we can't represent the fractional part of
-the <code>f64</code> in an <code>i64</code>. In general when operating on numbers of different types
-you may get any type in the set back, you shouldn't rely on more precise
-behavior than that.</p>
 <p>Division by zero is raised as an error to the nearest error handler (more on
 that later) and will be printed to stderr by the shell if it is never handled.
 Overflow and underflow are handled by wrapping,</p>
