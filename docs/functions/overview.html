@@ -176,16 +176,46 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="functions"><a class="header" href="#functions">Functions</a></h1>
+<p>Considering the underlying execution model functions might be better described
+as "polymorphic graph templates", in that they allow you to specify a part of
+the graph once, and then use it multiple times with different types each time.
+I'll keep calling them functions, and on the surface they are very similar to
+"actual functions".</p>
+<p>In Graphix functions are first class values. They can be stored in variables, in
+data structures, and they can be passed around to other functions. Etc. They are
+defined with the syntax,</p>
+<pre><code>|arg0, arg1, ...| body
+</code></pre>
+<p>This is often combined with a let bind to make a named function.</p>
+<pre><code>let f = |x, y| x + y + 1
+</code></pre>
+<p><code>f</code> is now bound to the lambda that adds it's two arguments and 1. You can also
+use structure patterns in function arguments as long as the pattern will always
+match.</p>
+<pre><code>let g =|(x, y), z| x + y + z
+</code></pre>
+<p>Type annotations can be used to constrain the argument types and the return
+type,</p>
+<pre><code>let g = |(x, y): (f64, f64), z: f64| -&gt; f64 x + y + z
+</code></pre>
+<p>Functions are called with the following syntax.</p>
+<pre><code>f(1, 1)
+</code></pre>
+<p>Would return 3. If the function is stored in a data structure, then sometimes
+you need parenthesis to call it.</p>
+<pre><code>(s.f)(1, 1)
+</code></pre>
+<p>Would call the function <code>f</code> in the struct <code>s</code>.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../core/select.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../core/error.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../functions/closures.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../functions/semantics.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -195,11 +225,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../core/select.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../core/error.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../functions/closures.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../functions/semantics.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

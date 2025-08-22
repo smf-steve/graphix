@@ -179,12 +179,13 @@
                         <h1 id="intro-to-graphix"><a class="header" href="#intro-to-graphix">Intro to Graphix</a></h1>
 <p>The first goal of Graphix is to make it easy to build user interfaces to
 display, interact with, and control resources published in
-<a href="https://netidx.github.io/netidx-book">netidx</a>. As such graphix is a "reactive"
-or dataflow language. Instead of compiling to machine code, or bytecode like
-other languages graphix programs compile to a directed graph. Operations like +
-are graph nodes, and edges represent paths between nodes that data can take.
-Running the program means starting the flow of data into the graph so that it
-will flow through, and be transformed by, the nodes of the graph. Consider,</p>
+<a href="https://netidx.github.io/netidx-book">netidx</a>(The second goal is to be the
+weirdest practical language on earth). As such graphix is a "reactive" or
+dataflow language. Instead of compiling to machine code, or bytecode like other
+languages graphix programs compile to a directed graph. Operations like + are
+graph nodes, and edges represent paths between nodes that data can take. Running
+the program means starting the flow of data into the graph so that it will flow
+through, and be transformed by, the nodes of the graph. Consider,</p>
 <pre><code>let x = cast&lt;i64&gt;(net::subscribe("/foo")?)?;
 print(x * 10)
 </code></pre>
@@ -900,7 +901,152 @@ select a {
 <p>This is not normally how we would get the length of an array in Graphix, or even
 how we would do something with every element of an array (see <code>array::map</code> and
 <code>array::fold</code>), however it illustrates the power of select and connect together.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="functions"><a class="header" href="#functions">Functions</a></h1>
+<p>Considering the underlying execution model functions might be better described
+as "polymorphic graph templates", in that they allow you to specify a part of
+the graph once, and then use it multiple times with different types each time.
+I'll keep calling them functions, and on the surface they are very similar to
+"actual functions".</p>
+<p>In Graphix functions are first class values. They can be stored in variables, in
+data structures, and they can be passed around to other functions. Etc. They are
+defined with the syntax,</p>
+<pre><code>|arg0, arg1, ...| body
+</code></pre>
+<p>This is often combined with a let bind to make a named function.</p>
+<pre><code>let f = |x, y| x + y + 1
+</code></pre>
+<p><code>f</code> is now bound to the lambda that adds it's two arguments and 1. You can also
+use structure patterns in function arguments as long as the pattern will always
+match.</p>
+<pre><code>let g =|(x, y), z| x + y + z
+</code></pre>
+<p>Type annotations can be used to constrain the argument types and the return
+type,</p>
+<pre><code>let g = |(x, y): (f64, f64), z: f64| -&gt; f64 x + y + z
+</code></pre>
+<p>Functions are called with the following syntax.</p>
+<pre><code>f(1, 1)
+</code></pre>
+<p>Would return 3. If the function is stored in a data structure, then sometimes
+you need parenthesis to call it.</p>
+<pre><code>(s.f)(1, 1)
+</code></pre>
+<p>Would call the function <code>f</code> in the struct <code>s</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>
+<p>Now buckle up, it's about to get weird. Consider,</p>
+<pre><code>let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+f(n, 1)
+</code></pre>
+<p>What happens now? Does <code>f</code> get "called" every time <code>n</code> updates? Does it only
+work for the first <code>n</code>? Does it explode? To understand this, go back to the graph
+template analogy. <code>f</code> only gets instantiated once (in this case), that happens
+when we first know (at run time) which template we're actually using.
+From then on this code runs as if I had written</p>
+<pre><code>let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+n + 1 + 1
+</code></pre>
+<p>You can think of this as the "arguments" to the function call were plugged into
+the holes in the graph template and copied to the call site, and from then on
+the graph runs as normal. Most of the time the outcome is the same as if <code>f</code>
+were a normal function in a normal language and it just got called every time
+<code>n</code> updated. Most of the time. However when there are local variables keeping
+state, or side effecting io operations, or other complex things going on inside
+the function this simpler model breaks down and you really need to start
+thinking of functions as graph templates. The highlight this lets revisit an
+earlier example where we used select and connect to find the length of an array.
+Suppose we want to generalize that into a function we might write,</p>
+<pre><code>let len = |a: Array&lt;'a&gt;| {
+  let sum = 0;
+  select a {
+    [x, tl..] =&gt; {
+      sum &lt;- sum + 1;
+      a &lt;- tl
+    },
+    _ =&gt; sum
+  }
+}
+</code></pre>
+<p>Lets just ignore the <code>'a</code> for now. Here we have a function that takes an array
+with any element type and returns it's length. Brilliant, lets call it,</p>
+<pre><code>let a = [1, 2, 3, 4, 5];
+len(a)
+</code></pre>
+<p>and when we run this we get,</p>
+<pre><code>eric@katana ~ [1]&gt; proj/graphix/target/debug/graphix ./test.gx
+5
+</code></pre>
+<p>That's the right answer. Are we done? Noooooooo. No we are not done. Lets see
+what happens if we do,</p>
+<pre><code>let a = [1, 2, 3, 4, 5];
+a &lt;- [1, 2, 3];
+a &lt;- [1, 2];
+len(a)
+</code></pre>
+<p>this results in,</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+4
+</code></pre>
+<p>What!? That's not even wrong. That's just nonsense, what happened? The key to
+understanding this problem is that there is just one call site, which means we
+instantiated this little reusable bit of graph one time, just one time. That
+means there is just one <code>sum</code>, one <code>a</code>, basically just one graph. When we use
+connect to iterate we are using graph traversal cycles to do a new element of
+the array every cycle until we are done. It will take 5 cycles for the first
+array to be done, and that's the problem, because we update <code>a</code> with a whole new
+array in cycle 1 and again in cycle 2. That's why we get 4, it's determanistic,
+we will get 4 every time.</p>
+<ul>
+<li>the first cycle we add 1 to <code>sum</code> and set the inner <code>a</code> to <code>tl</code> (it's not the
+same variable as the outer <code>a</code>, which is why the chaos isn't even greater). But
+the outer <code>a</code> also gets set to <code>[1, 2, 3]</code> and that overwrites the inner set
+because it happens after it (because that's just the way the runtime works).</li>
+<li>the second cycle we add 1 to <code>sum</code> and set the inner <code>a</code> to <code>[2, 3]</code> and the
+outer <code>a</code> to <code>[1, 2]</code></li>
+<li>the third cycle we add 1 to <code>sum</code> and set the inner <code>a</code> to <code>[2]</code></li>
+<li>the 4th cycle we add 1 to <code>sum</code> and set <code>a</code> to <code>[]</code></li>
+<li>the 5th cycle we update our return value with <code>sum</code>, which is now 4</li>
+</ul>
+<p>We can only fix this be understanding that we're programming a graph. I tried to
+make Graphix as much like a normal language as possible, but this is where we
+depart from that possibility. The general idea is, we need to queue updates to
+the outer <code>a</code> until we're done processing the current one. For that we have a
+builtin called <code>queue</code>, here is the correct implementation</p>
+<pre><code>let len = |a: Array&lt;'a&gt;| {
+  let clock = once(null);
+  let q = queue(#clock, a);
+  let sum = 0;
+  select q {
+    [x, tl..] =&gt; {
+      sum &lt;- sum + 1;
+      q &lt;- tl
+    },
+    _ =&gt; {
+      clock &lt;- null;
+      sum &lt;- 0;
+      once(sum)
+    }
+  }
+}
+</code></pre>
+<p>Every time <code>clock</code> updates <code>queue</code> will output something it has queued, or if it
+has nothing queued it will store that the next thing that arrives can go out
+immediatly. So the first <code>a</code> will immediatly pass through the queue, but
+anything after that will be held. Then the normal select loop will run, except
+it will look at <code>q</code> instead of <code>a</code> now, so that <code>a</code> can update without
+disturbing it. When we get to the terminating case, we update for next cycle
+<code>clock</code> with <code>null</code> and <code>sum</code> with 0 and we return <code>once(sum)</code>. We return
+<code>once(sum)</code> instead of just <code>sum</code> because removing something from the queue
+takes one cycle, so it will be two cycles before we start on the next array, and
+in the mean time the existing array will still be empty, meaning the second
+select arm will still be selected, and <code>sum</code> is updating to 0 which we do not
+want to return. If we run this with the same set of examples we will get the
+correct answer,</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./cycle_iter.gx
+5
+3
+2
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="closures-and-first-class-functions"><a class="header" href="#closures-and-first-class-functions">Closures and First Class Functions</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursion"><a class="header" href="#recursion">Recursion</a></h1>

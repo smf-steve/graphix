@@ -2,12 +2,13 @@
 
 The first goal of Graphix is to make it easy to build user interfaces to
 display, interact with, and control resources published in
-[netidx](https://netidx.github.io/netidx-book). As such graphix is a "reactive"
-or dataflow language. Instead of compiling to machine code, or bytecode like
-other languages graphix programs compile to a directed graph. Operations like +
-are graph nodes, and edges represent paths between nodes that data can take.
-Running the program means starting the flow of data into the graph so that it
-will flow through, and be transformed by, the nodes of the graph. Consider,
+[netidx](https://netidx.github.io/netidx-book)(The second goal is to be the
+weirdest practical language on earth). As such graphix is a "reactive" or
+dataflow language. Instead of compiling to machine code, or bytecode like other
+languages graphix programs compile to a directed graph. Operations like + are
+graph nodes, and edges represent paths between nodes that data can take. Running
+the program means starting the flow of data into the graph so that it will flow
+through, and be transformed by, the nodes of the graph. Consider,
 
 ```
 let x = cast<i64>(net::subscribe("/foo")?)?;
