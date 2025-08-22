@@ -1,2 +1,4 @@
 * text eol=lf
-*.exe binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
