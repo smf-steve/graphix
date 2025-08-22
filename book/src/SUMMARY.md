@@ -1,7 +1,7 @@
 # Summary
 
-- [Installing Graphix](./install.md)
 - [Intro to Graphix](./intro.md)
+- [Installing Graphix](./install.md)
 - [Core Language](./core/overview.md)
   - [Fundamental Types](./core/fundamental_types.md)
   - [Let Binds](./core/let_binds.md)

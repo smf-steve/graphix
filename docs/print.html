@@ -176,18 +176,7 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="installing-graphix"><a class="header" href="#installing-graphix">Installing Graphix</a></h1>
-<p>To install the Graphix shell from source you need to install a rust build
-environment. See <a href="https://www.rust-lang.org/tools/install">here</a> for
-instructions on how to do that for your platform. Once you have that set up, you
-can just run</p>
-<p><code>cargo install graphix-shell</code></p>
-<p>That should build the <code>graphix</code> command and install it in your ~/.cargo/bin
-directory. On linux you may need to install kerberos headers, as well as clang
-libs for gssapi to build properly (on linux). On debian/ubuntu install
-<code>libclang-dev</code>, and <code>libkrb5-dev</code>. On other distributions the names will be
-similar.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="intro-to-graphix"><a class="header" href="#intro-to-graphix">Intro to Graphix</a></h1>
+                        <h1 id="intro-to-graphix"><a class="header" href="#intro-to-graphix">Intro to Graphix</a></h1>
 <p>The first goal of Graphix is to make it easy to build user interfaces to
 display, interact with, and control resources published in
 <a href="https://netidx.github.io/netidx-book">netidx</a>. As such graphix is a "reactive"
@@ -237,6 +226,17 @@ are supported. This is different than most languages, but is useful for a
 <li>destructuring pattern matches are supported in select, let,
 and lambda arguments</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="installing-graphix"><a class="header" href="#installing-graphix">Installing Graphix</a></h1>
+<p>To install the Graphix shell from source you need to install a rust build
+environment. See <a href="https://www.rust-lang.org/tools/install">here</a> for
+instructions on how to do that for your platform. Once you have that set up, you
+can just run</p>
+<p><code>cargo install graphix-shell</code></p>
+<p>That should build the <code>graphix</code> command and install it in your ~/.cargo/bin
+directory. On linux you may need to install kerberos headers, as well as clang
+libs for gssapi to build properly (on linux). On debian/ubuntu install
+<code>libclang-dev</code>, and <code>libkrb5-dev</code>. On other distributions the names will be
+similar.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="core-language"><a class="header" href="#core-language">Core Language</a></h1>
 <p>This section documents the core language constructs in Graphix.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fundamental-types"><a class="header" href="#fundamental-types">Fundamental Types</a></h1>
