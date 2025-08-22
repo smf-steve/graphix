@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>User Defined Types - The Graphix Programming Language</title>
+        <title>Labeled and Optional Arguments - The Graphix Programming Language</title>
 
 
         <!-- Custom HTML head -->
@@ -175,17 +175,46 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="user-defined-types"><a class="header" href="#user-defined-types">User Defined Types</a></h1>
+                        <h1 id="labeled-and-optional-arguments"><a class="header" href="#labeled-and-optional-arguments">Labeled and Optional Arguments</a></h1>
+<p>Functions can have labeled and also optional arguments. Labeled arguments need
+not be specified in order, and optional arguments don't need to be specified at
+all. When declaring a function you must specify the labeled and optional
+arguments before any non labeled arguments.</p>
+<pre><code>let f = |#lbl1, #lbl2, arg| ...
+</code></pre>
+<p>In this case lbl1 and 2 are not optional, but is labeled. You can call f with
+either labeled argument in either order. e.g. <code>f(#lbl2, #lbl1, a)</code>.</p>
+<pre><code>let f = |#opt = null, a| ...
+</code></pre>
+<p><code>opt</code> need not be specifed when <code>f</code> is called, if it isn't specified then it
+will be <code>null</code>. e.g. <code>f(2)</code>. You can also apply type constraints to labeled and
+optional arguments.</p>
+<pre><code>let f = |#opt: [i64, null] = null, a| ..
+</code></pre>
+<p>Specifies that <code>opt</code> can be either an <code>i64</code> or <code>null</code> and by default it is null.
+The compiler implements subtyping for functions with optional arguments. For
+example if you write a function that takes a function with a labeled argument
+<code>foo</code>, you can pass any function that has a labeled argument <code>foo</code>, even if it
+also has other optional arguments. The non optional and non labeled arguments
+must match, of course. For example,</p>
+<pre><code>let f = |g: fn(#foo:i64, i64) -&gt; i64, x: i64| g(#foo:x, x);
+let g = |#foo:i64, #bar: i64 = 0, x: i64| foo + bar + x;
+f(g, 42) // valid call
+</code></pre>
+<p>outputs</p>
+<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+84
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../functions/semantics.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../functions/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../udf/structs.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../functions/closures.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -195,11 +224,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../functions/semantics.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../functions/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../udf/structs.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../functions/closures.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
