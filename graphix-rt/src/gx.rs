@@ -15,13 +15,10 @@ use graphix_compiler::{
 use indexmap::IndexMap;
 use log::{debug, error, info};
 use netidx::{
-    path::Path,
-    pool::{Pool, Pooled},
-    protocol::valarray::ValArray,
-    publisher::Value,
-    subscriber::Dval,
+    path::Path, protocol::valarray::ValArray, publisher::Value, subscriber::Dval,
 };
 use netidx_protocols::rpc::server::RpcCall;
+use poolshark::{Pool, Pooled};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},

@@ -17,13 +17,13 @@ use graphix_compiler::{
 };
 use log::error;
 use netidx::{
-    pool::Pooled,
     protocol::valarray::ValArray,
     publisher::{Value, WriteRequest},
     subscriber::{self, SubId},
 };
 use netidx_core::atomic_id;
 use netidx_value::FromValue;
+use poolshark::Pooled;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{future, path::PathBuf, time::Duration};

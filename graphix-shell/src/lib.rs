@@ -13,10 +13,10 @@ use graphix_stdlib::Module;
 use input::InputReader;
 use netidx::{
     path::Path,
-    pool::Pooled,
     publisher::{Publisher, Value},
     subscriber::Subscriber,
 };
+use poolshark::Pooled;
 use reedline::Signal;
 use std::{collections::HashMap, path::PathBuf, sync::LazyLock, time::Duration};
 use tokio::{select, sync::mpsc};

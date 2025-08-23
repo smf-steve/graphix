@@ -50,6 +50,7 @@ graphix-stdlib = { version = "0.1.9", path = "../graphix-stdlib" }
 log = { workspace = true }
 netidx = { workspace = true }
 parking_lot = { workspace = true }
+poolshark = { workspace = true }
 ratatui = { workspace = true }
 reedline = { workspace = true }
 serde = { workspace = true }
