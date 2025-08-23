@@ -254,3 +254,9 @@ x.0
 ```
 
 Will print 1.
+
+## Error
+
+Error is the built in error type. It carries a string describing the error. It
+can be constructed with the `error` function, and it's type name `error` can be
+used in pattern matching.
