@@ -23,7 +23,7 @@ use netidx::{
 };
 use netidx_core::atomic_id;
 use netidx_value::FromValue;
-use poolshark::Pooled;
+use poolshark::global::GPooled;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{future, path::PathBuf, time::Duration};
@@ -112,8 +112,8 @@ impl GXExt for NoExt {
     }
 }
 
-type UpdateBatch = Pooled<Vec<(SubId, subscriber::Event)>>;
-type WriteBatch = Pooled<Vec<WriteRequest>>;
+type UpdateBatch = GPooled<Vec<(SubId, subscriber::Event)>>;
+type WriteBatch = GPooled<Vec<WriteRequest>>;
 
 #[derive(Debug)]
 pub struct CouldNotResolve;
@@ -388,14 +388,14 @@ pub struct GXConfig<X: GXExt> {
     #[builder(default)]
     resolvers: Vec<ModuleResolver>,
     /// The channel that will receive events from the runtime
-    sub: tmpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
+    sub: tmpsc::Sender<GPooled<Vec<GXEvent<X>>>>,
 }
 
 impl<X: GXExt> GXConfig<X> {
     /// Create a new config
     pub fn builder(
         ctx: ExecCtx<GXRt<X>, X::UserEvent>,
-        sub: tmpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
+        sub: tmpsc::Sender<GPooled<Vec<GXEvent<X>>>>,
     ) -> GXConfigBuilder<X> {
         GXConfigBuilder::default().ctx(ctx).sub(sub)
     }

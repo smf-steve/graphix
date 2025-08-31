@@ -18,7 +18,7 @@ use netidx::{
     path::Path, protocol::valarray::ValArray, publisher::Value, subscriber::Dval,
 };
 use netidx_protocols::rpc::server::RpcCall;
-use poolshark::{Pool, Pooled};
+use poolshark::global::{GPooled, Pool};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
@@ -102,7 +102,7 @@ pub(super) struct GX<X: GXExt> {
     event: Event<X::UserEvent>,
     nodes: IndexMap<ExprId, Node<GXRt<X>, X::UserEvent>, FxBuildHasher>,
     callables: FxHashMap<CallableId, CallableInt>,
-    sub: tmpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
+    sub: tmpsc::Sender<GPooled<Vec<GXEvent<X>>>>,
     resolvers: Arc<[ModuleResolver]>,
     publish_timeout: Option<Duration>,
     last_rpc_gc: Instant,
@@ -160,7 +160,7 @@ impl<X: GXExt> GX<X> {
         rpcs: &mut Vec<(BindId, RpcCall)>,
         to_rt: &mut UnboundedReceiver<ToGX<X>>,
         input: &mut Vec<ToGX<X>>,
-        mut batch: Pooled<Vec<GXEvent<X>>>,
+        mut batch: GPooled<Vec<GXEvent<X>>>,
     ) {
         macro_rules! push_event {
             ($id:expr, $v:expr, $event:ident, $refed:ident, $overflow:ident) => {
@@ -272,7 +272,7 @@ impl<X: GXExt> GX<X> {
         &mut self,
         tasks: &mut Vec<(BindId, Value)>,
         input: &mut Vec<ToGX<X>>,
-        batch: &mut Pooled<Vec<GXEvent<X>>>,
+        batch: &mut GPooled<Vec<GXEvent<X>>>,
     ) {
         for m in input.drain(..) {
             match m {

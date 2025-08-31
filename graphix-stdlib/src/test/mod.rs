@@ -2,7 +2,7 @@ use anyhow::Result;
 use enumflags2::BitFlags;
 use graphix_compiler::ExecCtx;
 use graphix_rt::{GXConfig, GXEvent, GXHandle, GXRt, NoExt};
-use netidx::pool::Pooled;
+use poolshark::global::GPooled;
 use tokio::sync::mpsc;
 
 mod langtest;
@@ -13,7 +13,7 @@ pub struct TestCtx {
     pub rt: GXHandle<NoExt>,
 }
 
-pub async fn init(sub: mpsc::Sender<Pooled<Vec<GXEvent<NoExt>>>>) -> Result<TestCtx> {
+pub async fn init(sub: mpsc::Sender<GPooled<Vec<GXEvent<NoExt>>>>) -> Result<TestCtx> {
     let _ = env_logger::try_init();
     let env = netidx::InternalOnly::new().await?;
     let mut ctx = ExecCtx::new(GXRt::<NoExt>::new(

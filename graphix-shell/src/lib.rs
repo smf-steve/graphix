@@ -16,7 +16,7 @@ use netidx::{
     publisher::{Publisher, Value},
     subscriber::Subscriber,
 };
-use poolshark::Pooled;
+use poolshark::global::GPooled;
 use reedline::Signal;
 use std::{collections::HashMap, path::PathBuf, sync::LazyLock, time::Duration};
 use tokio::{select, sync::mpsc};
@@ -180,7 +180,7 @@ pub struct Shell<X: GXExt> {
 impl<X: GXExt> Shell<X> {
     async fn init(
         &mut self,
-        sub: mpsc::Sender<Pooled<Vec<GXEvent<X>>>>,
+        sub: mpsc::Sender<GPooled<Vec<GXEvent<X>>>>,
     ) -> Result<GXHandle<X>> {
         let publisher = self.publisher.clone();
         let subscriber = self.subscriber.clone();

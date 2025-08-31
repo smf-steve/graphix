@@ -28,6 +28,7 @@ escaping = { workspace = true }
 futures = { workspace = true }
 fxhash = { workspace = true }
 graphix-compiler = { version = "0.1.9", path = "../graphix-compiler" }
+poolshark = { workspace = true }
 immutable-chunkmap = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
