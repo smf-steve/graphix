@@ -601,6 +601,7 @@ impl<R: Rt, E: UserEvent> PatternNode<R, E> {
             | Type::Primitive(_)
             | Type::Set(_)
             | Type::TVar(_)
+            | Type::Error(_)
             | Type::Array(_)
             | Type::ByRef(_)
             | Type::Tuple(_)

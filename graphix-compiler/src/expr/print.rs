@@ -382,6 +382,11 @@ impl ExprKind {
                 kill_newline!(buf);
                 writeln!(buf, "?")
             }
+            ExprKind::Catch { bind, handler } => {
+                try_single_line!(true);
+                writeln!(buf, "catch({bind}) => ")?;
+                handler.kind.pretty_print(indent + 2, limit, true, buf)
+            }
             ExprKind::Apply { function, args } => {
                 try_single_line!(true);
                 match &function.kind {
@@ -754,6 +759,7 @@ impl fmt::Display for ExprKind {
                 write!(f, " }}")
             }
             ExprKind::Qop(e) => write!(f, "{}?", e),
+            ExprKind::Catch { bind, handler } => write!(f, "catch({bind}) => {handler}"),
             ExprKind::StringInterpolate { args } => {
                 write!(f, "\"")?;
                 for s in args.iter() {

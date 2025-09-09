@@ -90,8 +90,8 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for ToError {
         event: &mut Event<E>,
     ) -> Option<Value> {
         from[0].update(ctx, event).map(|v| match v.cast_to::<ArcStr>() {
-            Ok(s) => Value::Error(s),
-            Err(e) => Value::Error(format_compact!("{e}").as_str().into()),
+            Ok(s) => Value::Error(triomphe::Arc::new(Value::String(s))),
+            Err(e) => Value::error(format_compact!("{e}").as_str()),
         })
     }
 

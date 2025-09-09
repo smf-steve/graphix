@@ -216,10 +216,10 @@ impl<R: Rt, E: UserEvent> Update<R, E> for DynamicModule<R, E> {
                 Value::String(s) => {
                     if let Err(e) = self.compile_inner(ctx, s) {
                         let m = format!("invalid dynamic module, compile error {e:?}");
-                        return Some(Value::Error(m.into()));
+                        return Some(Value::error(m));
                     }
                 }
-                v => return Some(Value::Error(format!("unexpected {v}").into())),
+                v => return Some(Value::error(format!("unexpected {v}"))),
             }
             compiled = true;
         }

@@ -158,6 +158,7 @@ pub enum ExprKind {
     Struct { args: Arc<[(ArcStr, Expr)]> },
     Select { arg: Arc<Expr>, arms: Arc<[(Pattern, Expr)]> },
     Qop(Arc<Expr>),
+    Catch { bind: ArcStr, handler: Arc<Expr> },
     ByRef(Arc<Expr>),
     Deref(Arc<Expr>),
     Eq { lhs: Arc<Expr>, rhs: Arc<Expr> },
@@ -436,6 +437,7 @@ impl Expr {
                 })
             }
             ExprKind::Qop(e)
+            | ExprKind::Catch { bind: _, handler: e }
             | ExprKind::ByRef(e)
             | ExprKind::Deref(e)
             | ExprKind::Not { expr: e } => e.fold(init, f),

@@ -201,7 +201,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Subscribe {
         }
         self.cur.as_ref().and_then(|(_, dv)| {
             event.netidx.get(&dv.id()).map(|e| match e {
-                subscriber::Event::Unsubscribed => Value::Error(literal!("unsubscribed")),
+                subscriber::Event::Unsubscribed => Value::error(literal!("unsubscribed")),
                 subscriber::Event::Update(v) => v.clone(),
             })
         })
@@ -431,7 +431,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Publish<R, E> {
             ($path:expr, $v:expr) => {{
                 let path = Path::from($path.clone());
                 match ctx.rt.publish(path.clone(), $v.clone(), self.top_id) {
-                    Err(e) => return Some(Value::Error(format!("{e:?}").into())),
+                    Err(e) => return Some(Value::error(format!("{e:?}"))),
                     Ok(id) => {
                         self.current = Some((path, id));
                     }
@@ -611,7 +611,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for PublishRpc<R, E> {
                 if let Err(e) =
                     ctx.rt.publish_rpc(path.clone(), doc.clone(), spec, self.id)
                 {
-                    let e = Value::Error(format_compact!("{e:?}").as_str().into());
+                    let e = Value::error(format_compact!("{e:?}").as_str());
                     return Some(e);
                 }
                 self.current = Some(path);

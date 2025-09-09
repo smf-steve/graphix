@@ -104,7 +104,7 @@ macro_rules! or_err {
             Ok(v) => v,
             Err(e) => {
                 let e = ArcStr::from(format_compact!("{e:?}").as_str());
-                let e = Value::Error(e);
+                let e = Value::Error(Arc::new(Value::String(e)));
                 return ($bindid, e);
             }
         }
@@ -200,7 +200,7 @@ impl<X: GXExt> Rt for GXRt<X> {
             macro_rules! err {
                 ($e:expr) => {{
                     let e = format_compact!("{:?}", $e);
-                    (id, Value::Error(e.as_str().into()))
+                    (id, Value::error(e.as_str()))
                 }};
             }
             match proc {

@@ -60,7 +60,7 @@ pub const RESERVED: LazyLock<FxHashSet<&str>> = LazyLock::new(|| {
         "true", "false", "ok", "null", "mod", "let", "select", "pub", "type", "fn",
         "cast", "if", "u32", "v32", "i32", "z32", "u64", "v64", "i64", "z64", "f32",
         "f64", "decimal", "datetime", "duration", "bool", "string", "bytes", "result",
-        "null", "_", "?", "fn", "Array", "any", "Any", "use", "rec",
+        "null", "_", "?", "fn", "Array", "any", "Any", "use", "rec", "catch",
     ])
 });
 
@@ -329,6 +329,7 @@ parser! {
                                 | (Some(Expr { kind: ExprKind::Variant { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Struct { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Qop(_), .. }), _)
+                                | (Some(Expr { kind: ExprKind::Catch { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Do { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Module { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Use { .. }, .. }), _)
@@ -848,6 +849,8 @@ parser! {
             attempt(fntype().map(|f| Type::Fn(Arc::new(f)))),
             attempt(spstring("Array").with(between(sptoken('<'), sptoken('>'), typexp())))
                 .map(|t| Type::Array(Arc::new(t))),
+            attempt(spstring("Error").with(between(sptoken('<'), sptoken('>'), typexp())))
+                .map(|t| Type::Error(Arc::new(t))),
             attempt((
                 sptypath(),
                 optional(attempt(between(
@@ -1564,6 +1567,21 @@ parser! {
 }
 
 parser! {
+    fn catch[I]()(I) -> Expr
+    where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
+    {
+        (
+            position().skip(string("catch")),
+            between(sptoken('('), sptoken(')'), spfname()),
+            spstring("=>").with(expr())
+        )
+            .map(|(pos, bind, handler)| {
+                ExprKind::Catch { bind, handler: Arc::new(handler) }.to_expr(pos)
+            })
+    }
+}
+
+parser! {
     fn byref[I]()(I) -> Expr
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
     {
@@ -1596,6 +1614,7 @@ parser! {
     {
         choice((
             attempt(choice((
+                attempt(spaces().with(catch())),
                 attempt(spaces().with(module())),
                 attempt(spaces().with(use_module())),
                 attempt(spaces().with(typedef())),

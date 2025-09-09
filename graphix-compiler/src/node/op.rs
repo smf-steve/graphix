@@ -293,7 +293,7 @@ macro_rules! arith_op {
                     match lhs.clone() $op rhs.clone() {
                         Value::Error(e) => {
                             let e = format_compact!("{} at {} {e}", self.spec.ori, self.spec.pos);
-                            ctx.set_var(self.id, Value::Error(e.as_str().into()));
+                            ctx.set_var(self.id, Value::error(e.as_str()));
                             None
                         }
                         v => Some(v)

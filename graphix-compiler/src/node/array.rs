@@ -181,15 +181,15 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArraySlice<R, E> {
                 (None, None) => Some(Value::Array(elts.clone())),
                 (Some(i), Some(j)) => match elts.subslice(i..j) {
                     Ok(a) => Some(Value::Array(a)),
-                    Err(e) => Some(Value::Error(e.to_string().into())),
+                    Err(e) => Some(Value::error(e.to_string())),
                 },
                 (Some(i), None) => match elts.subslice(i..) {
                     Ok(a) => Some(Value::Array(a)),
-                    Err(e) => Some(Value::Error(e.to_string().into())),
+                    Err(e) => Some(Value::error(e.to_string())),
                 },
                 (None, Some(i)) => match elts.subslice(..i) {
                     Ok(a) => Some(Value::Array(a)),
-                    Err(e) => Some(Value::Error(e.to_string().into())),
+                    Err(e) => Some(Value::error(e.to_string())),
                 },
             },
             Some(_) => err!("expected array"),

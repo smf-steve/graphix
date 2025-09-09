@@ -13,6 +13,7 @@ use parking_lot::RwLock;
 use parser::RESERVED;
 use prop::option;
 use proptest::{collection, prelude::*};
+use rust_decimal::Decimal;
 use smallvec::SmallVec;
 use std::time::Duration;
 
@@ -39,7 +40,7 @@ fn arcstr() -> impl Strategy<Value = ArcStr> {
 }
 
 fn value() -> impl Strategy<Value = Value> {
-    prop_oneof![
+    let leaf = prop_oneof![
         any::<u32>().prop_map(Value::U32),
         any::<u32>().prop_map(Value::V32),
         any::<i32>().prop_map(Value::I32),
@@ -50,6 +51,7 @@ fn value() -> impl Strategy<Value = Value> {
         any::<i64>().prop_map(Value::Z64),
         any::<f32>().prop_map(Value::F32),
         any::<f64>().prop_map(Value::F64),
+        any::<[u8; 16]>().prop_map(|a| Value::Decimal(Decimal::deserialize(a))),
         datetime().prop_map(Value::DateTime),
         duration().prop_map(Value::Duration),
         arcstr().prop_map(Value::String),
@@ -57,8 +59,10 @@ fn value() -> impl Strategy<Value = Value> {
         Just(Value::Bool(true)),
         Just(Value::Bool(false)),
         Just(Value::Null),
-        arcstr().prop_map(Value::Error),
-    ]
+    ];
+    leaf.prop_recursive(1, 1, 1, |inner| {
+        prop_oneof![inner.clone().prop_map(|v| Value::Error(Arc::new(v))),]
+    })
 }
 
 fn random_modpart() -> impl Strategy<Value = String> {
@@ -228,6 +232,7 @@ fn typexp() -> impl Strategy<Value = Type> {
                     Type::Struct(Arc::from(t))
                 }
             ),
+            inner.clone().prop_map(|t| Type::Array(Arc::new(t))),
             inner.clone().prop_map(|t| Type::Array(Arc::new(t))),
             inner.clone().prop_map(|t| Type::ByRef(Arc::new(t))),
             (typath(), collection::vec(inner.clone(), (0, 8))).prop_map(
@@ -410,6 +415,14 @@ macro_rules! qop {
             | ExprKind::TupleRef { .. }
             | ExprKind::StructRef { .. } => ExprKind::Qop(Arc::new(e)).to_expr_nopos(),
             _ => e,
+        })
+    };
+}
+
+macro_rules! catch {
+    ($inner:expr) => {
+        (random_fname(), $inner).prop_map(|(bind, e)| {
+            ExprKind::Catch { bind, handler: Arc::new(e) }.to_expr_nopos()
         })
     };
 }
@@ -724,6 +737,7 @@ fn expr() -> impl Strategy<Value = Expr> {
             tupleref!(inner.clone()),
             any!(inner.clone()),
             apply!(inner.clone(), false),
+            catch!(inner.clone()),
             typecast!(inner.clone()),
             do_block!(inner.clone()),
             lambda!(inner.clone()),
@@ -943,19 +957,7 @@ fn check_module_sig(s0: &[SigItem], s1: &[SigItem]) -> bool {
 
 fn check(s0: &Expr, s1: &Expr) -> bool {
     match (&s0.kind, &s1.kind) {
-        (ExprKind::Constant(v0), ExprKind::Constant(v1)) => match (v0, v1) {
-            (Value::Duration(d0), Value::Duration(d1)) => {
-                let f0 = d0.as_secs_f64();
-                let f1 = d1.as_secs_f64();
-                dbg!(
-                    dbg!(f0 == f1)
-                        || dbg!(f0 != 0. && f1 != 0. && ((f0 - f1).abs() / f0) < 1e-8)
-                )
-            }
-            (Value::F32(v0), Value::F32(v1)) => dbg!(v0 == v1 || (v0 - v1).abs() < 1e-7),
-            (Value::F64(v0), Value::F64(v1)) => dbg!(v0 == v1 || (v0 - v1).abs() < 1e-8),
-            (v0, v1) => dbg!(v0 == v1),
-        },
+        (ExprKind::Constant(v0), ExprKind::Constant(v1)) => v0.approx_eq(v1),
         (ExprKind::Array { args: a0 }, ExprKind::Array { args: a1 })
         | (ExprKind::Tuple { args: a0 }, ExprKind::Tuple { args: a1 }) => {
             a0.len() == a1.len() && a0.iter().zip(a1.iter()).all(|(e0, e1)| check(e0, e1))
@@ -1175,6 +1177,10 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
             ExprKind::Connect { name: name1, value: value1, deref: d1 },
         ) => dbg!(dbg!(d0 == d1) && dbg!(name0 == name1) && dbg!(check(value0, value1))),
         (ExprKind::Qop(e0), ExprKind::Qop(e1)) => check(e0, e1),
+        (
+            ExprKind::Catch { bind: b0, handler: h0 },
+            ExprKind::Catch { bind: b1, handler: h1 },
+        ) => b0 == b1 && check(h0, h1),
         (ExprKind::Ref { name: name0 }, ExprKind::Ref { name: name1 }) => {
             dbg!(name0 == name1)
         }

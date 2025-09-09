@@ -25,6 +25,7 @@ pub(super) fn would_cycle_inner(addr: usize, t: &Type) -> bool {
                     Some(t) => would_cycle_inner(addr, t),
                 }
         }
+        Type::Error(t) => would_cycle_inner(addr, t),
         Type::Array(a) => would_cycle_inner(addr, &**a),
         Type::ByRef(t) => would_cycle_inner(addr, t),
         Type::Tuple(ts) => ts.iter().any(|t| would_cycle_inner(addr, t)),

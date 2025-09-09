@@ -94,6 +94,7 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         }
         ExprKind::Bind(b) => Bind::compile(ctx, spec.clone(), scope, top_id, b),
         ExprKind::Qop(e) => Qop::compile(ctx, spec.clone(), scope, top_id, e),
+        ExprKind::Catch { bind: _, handler: _ } => unimplemented!(),
         ExprKind::ByRef(e) => ByRef::compile(ctx, spec.clone(), scope, top_id, e),
         ExprKind::Deref(e) => Deref::compile(ctx, spec.clone(), scope, top_id, e),
         ExprKind::Ref { name } => Ref::compile(ctx, spec.clone(), scope, top_id, name),

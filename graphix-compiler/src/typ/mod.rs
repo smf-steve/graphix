@@ -47,6 +47,7 @@ pub enum Type {
     Fn(Arc<FnType>),
     Set(Arc<[Type]>),
     TVar(TVar),
+    Error(Arc<Type>),
     Array(Arc<Type>),
     ByRef(Arc<Type>),
     Tuple(Arc<[Type]>),
@@ -81,6 +82,7 @@ impl Type {
             | Self::Primitive(_)
             | Self::Fn(_)
             | Self::Set(_)
+            | Self::Error(_)
             | Self::Array(_)
             | Self::ByRef(_)
             | Self::Tuple(_)
@@ -191,8 +193,13 @@ impl Type {
             ) => Ok(p.contains(Typ::Array)),
             (Self::Array(t0), Self::Array(t1)) => t0.contains_int(env, hist, t1),
             (Self::Array(t0), Self::Primitive(p)) if *p == BitFlags::from(Typ::Array) => {
-                t0.contains_int(env, hist, &Type::Primitive(BitFlags::all()))
+                t0.contains_int(env, hist, &Type::Any)
             }
+            (Self::Primitive(p0), Self::Error(_)) => Ok(p0.contains(Typ::Error)),
+            (Self::Error(e), Self::Primitive(p)) if *p == BitFlags::from(Typ::Error) => {
+                e.contains_int(env, hist, &Type::Any)
+            }
+            (Self::Error(e0), Self::Error(e1)) => e0.contains_int(env, hist, e1),
             (Self::Tuple(t0), Self::Tuple(t1))
                 if t0.as_ptr().addr() == t1.as_ptr().addr() =>
             {
@@ -237,22 +244,6 @@ impl Type {
                     .collect::<Result<AndAc>>()?
                     .0),
             (Self::ByRef(t0), Self::ByRef(t1)) => t0.contains_int(env, hist, t1),
-            (Self::Tuple(_), Self::Array(_))
-            | (Self::Tuple(_), Self::Primitive(_))
-            | (Self::Tuple(_), Self::Struct(_))
-            | (Self::Tuple(_), Self::Variant(_, _))
-            | (Self::Array(_), Self::Primitive(_))
-            | (Self::Array(_), Self::Tuple(_))
-            | (Self::Array(_), Self::Struct(_))
-            | (Self::Array(_), Self::Variant(_, _))
-            | (Self::Struct(_), Self::Primitive(_))
-            | (Self::Struct(_), Self::Array(_))
-            | (Self::Struct(_), Self::Tuple(_))
-            | (Self::Struct(_), Self::Variant(_, _))
-            | (Self::Variant(_, _), Self::Array(_))
-            | (Self::Variant(_, _), Self::Struct(_))
-            | (Self::Variant(_, _), Self::Primitive(_))
-            | (Self::Variant(_, _), Self::Tuple(_)) => Ok(false),
             (Self::TVar(t0), Self::TVar(t1)) if t0.addr() == t1.addr() => Ok(true),
             (Self::TVar(t0), tt1 @ Self::TVar(t1)) => {
                 #[derive(Debug)]
@@ -352,7 +343,32 @@ impl Type {
             | (Self::Fn(_), _)
             | (Self::ByRef(_), _)
             | (_, Self::ByRef(_))
-            | (_, Self::Fn(_)) => Ok(false),
+            | (_, Self::Fn(_))
+            | (Self::Tuple(_), Self::Array(_))
+            | (Self::Tuple(_), Self::Primitive(_))
+            | (Self::Tuple(_), Self::Struct(_))
+            | (Self::Tuple(_), Self::Variant(_, _))
+            | (Self::Tuple(_), Self::Error(_))
+            | (Self::Array(_), Self::Primitive(_))
+            | (Self::Array(_), Self::Tuple(_))
+            | (Self::Array(_), Self::Struct(_))
+            | (Self::Array(_), Self::Variant(_, _))
+            | (Self::Array(_), Self::Error(_))
+            | (Self::Struct(_), Self::Array(_))
+            | (Self::Struct(_), Self::Primitive(_))
+            | (Self::Struct(_), Self::Tuple(_))
+            | (Self::Struct(_), Self::Variant(_, _))
+            | (Self::Struct(_), Self::Error(_))
+            | (Self::Variant(_, _), Self::Array(_))
+            | (Self::Variant(_, _), Self::Struct(_))
+            | (Self::Variant(_, _), Self::Primitive(_))
+            | (Self::Variant(_, _), Self::Tuple(_))
+            | (Self::Variant(_, _), Self::Error(_))
+            | (Self::Error(_), Self::Array(_))
+            | (Self::Error(_), Self::Primitive(_))
+            | (Self::Error(_), Self::Struct(_))
+            | (Self::Error(_), Self::Variant(_, _))
+            | (Self::Error(_), Self::Tuple(_)) => Ok(false),
         }
     }
 
@@ -514,6 +530,18 @@ impl Type {
                     Ok(Type::Set(Arc::from_iter([u.clone(), t.clone()])))
                 }
             }
+            (Type::Primitive(p), Type::Error(_))
+            | (Type::Error(_), Type::Primitive(p))
+                if p.contains(Typ::Error) =>
+            {
+                Ok(Type::Primitive(*p))
+            }
+            (Type::Error(e0), Type::Error(e1)) => {
+                Ok(Type::Error(Arc::new(e0.union_int(env, hist, e1)?)))
+            }
+            (e @ Type::Error(_), t) | (t, e @ Type::Error(_)) => {
+                Ok(Type::Set(Arc::from_iter([e.clone(), t.clone()])))
+            }
             (t @ Type::ByRef(t0), u @ Type::ByRef(t1)) => {
                 if t0 == t1 {
                     Ok(Type::ByRef(t0.clone()))
@@ -608,8 +636,8 @@ impl Type {
         t: &Self,
     ) -> Result<Self> {
         match (self, t) {
-            (Type::Any, _) => Ok(Type::Any),
             (_, Type::Any) => Ok(Type::Primitive(BitFlags::empty())),
+            (Type::Any, _) => Ok(Type::Any),
             (
                 Type::Ref { scope: s0, name: n0, .. },
                 Type::Ref { scope: s1, name: n1, .. },
@@ -643,14 +671,14 @@ impl Type {
                 s.remove(*s1);
                 Ok(Type::Primitive(s))
             }
-            (
-                Type::Primitive(p),
-                Type::Array(_) | Type::Struct(_) | Type::Tuple(_) | Type::Variant(_, _),
-            ) => {
-                // CR estokes: is this correct? It's a bit odd.
-                let mut s = *p;
-                s.remove(Typ::Array);
-                Ok(Type::Primitive(s))
+            (Type::Primitive(p), Type::Array(t)) => {
+                if &**t == &Type::Any {
+                    let mut s = *p;
+                    s.remove(Typ::Array);
+                    Ok(Type::Primitive(s))
+                } else {
+                    Ok(Type::Primitive(*p))
+                }
             }
             (
                 Type::Array(_) | Type::Struct(_) | Type::Tuple(_) | Type::Variant(_, _),
@@ -669,6 +697,32 @@ impl Type {
                     Ok(Type::Array(Arc::new(t0.diff_int(env, hist, t1)?)))
                 }
             }
+            (Type::Array(_), _) | (_, Type::Array(_)) => Ok(self.clone()),
+            (Type::Primitive(p), Type::Error(e)) => {
+                if &**e == &Type::Any {
+                    let mut s = *p;
+                    s.remove(Typ::Error);
+                    Ok(Type::Primitive(s))
+                } else {
+                    Ok(Type::Primitive(*p))
+                }
+            }
+            (Type::Error(_), Type::Primitive(p)) => {
+                if p.contains(Typ::Error) {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(self.clone())
+                }
+            }
+            (Type::Error(e0), Type::Error(e1)) => {
+                if e0 == e1 {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(Type::Error(Arc::new(e0.diff_int(env, hist, e1)?)))
+                }
+            }
+            (Type::Error(_), _) | (_, Type::Error(_)) => Ok(self.clone()),
+            (Type::Primitive(_), _) | (_, Type::Primitive(_)) => Ok(self.clone()),
             (Type::ByRef(t0), Type::ByRef(t1)) => {
                 Ok(Type::ByRef(Arc::new(t0.diff_int(env, hist, t1)?)))
             }
@@ -737,14 +791,6 @@ impl Type {
                     (Some(t0), Some(t1)) => t0.diff_int(env, hist, t1)?,
                 })
             }
-            (Type::TVar(tv), t1) => match &*tv.read().typ.read() {
-                None => Ok(Type::TVar(tv.clone())),
-                Some(t0) => t0.diff_int(env, hist, t1),
-            },
-            (t0, Type::TVar(tv)) => match &*tv.read().typ.read() {
-                None => Ok(t0.clone()),
-                Some(t1) => t0.diff_int(env, hist, t1),
-            },
         }
     }
 
@@ -787,6 +833,7 @@ impl Type {
                     t.alias_tvars(known);
                 }
             }
+            Type::Error(t) => t.alias_tvars(known),
             Type::Array(t) => t.alias_tvars(known),
             Type::ByRef(t) => t.alias_tvars(known),
             Type::Tuple(ts) => {
@@ -832,6 +879,7 @@ impl Type {
                     t.collect_tvars(known);
                 }
             }
+            Type::Error(t) => t.collect_tvars(known),
             Type::Array(t) => t.collect_tvars(known),
             Type::ByRef(t) => t.collect_tvars(known),
             Type::Tuple(ts) => {
@@ -871,6 +919,7 @@ impl Type {
             Type::Ref { params, .. } => {
                 params.iter().try_for_each(|t| t.check_tvars_declared(declared))
             }
+            Type::Error(t) => t.check_tvars_declared(declared),
             Type::Array(t) => t.check_tvars_declared(declared),
             Type::ByRef(t) => t.check_tvars_declared(declared),
             Type::Tuple(ts) => {
@@ -898,6 +947,7 @@ impl Type {
         match self {
             Type::Bottom | Type::Any | Type::Primitive(_) => false,
             Type::Ref { .. } => false,
+            Type::Error(e) => e.has_unbound(),
             Type::Array(t0) => t0.has_unbound(),
             Type::ByRef(t0) => t0.has_unbound(),
             Type::Tuple(ts) => ts.iter().any(|t| t.has_unbound()),
@@ -914,6 +964,7 @@ impl Type {
         match self {
             Type::Bottom | Type::Any | Type::Primitive(_) => (),
             Type::Ref { .. } => (),
+            Type::Error(t0) => t0.bind_as(t),
             Type::Array(t0) => t0.bind_as(t),
             Type::ByRef(t0) => t0.bind_as(t),
             Type::Tuple(ts) => {
@@ -959,6 +1010,7 @@ impl Type {
                 name: name.clone(),
                 params: Arc::from_iter(params.iter().map(|t| t.reset_tvars())),
             },
+            Type::Error(t0) => Type::Error(Arc::new(t0.reset_tvars())),
             Type::Array(t0) => Type::Array(Arc::new(t0.reset_tvars())),
             Type::ByRef(t0) => Type::ByRef(Arc::new(t0.reset_tvars())),
             Type::Tuple(ts) => {
@@ -993,6 +1045,7 @@ impl Type {
                 name: name.clone(),
                 params: Arc::from_iter(params.iter().map(|t| t.replace_tvars(known))),
             },
+            Type::Error(t0) => Type::Error(Arc::new(t0.replace_tvars(known))),
             Type::Array(t0) => Type::Array(Arc::new(t0.replace_tvars(known))),
             Type::ByRef(t0) => Type::ByRef(Arc::new(t0.replace_tvars(known))),
             Type::Tuple(ts) => {
@@ -1016,6 +1069,7 @@ impl Type {
     pub(crate) fn unbind_tvars(&self) {
         match self {
             Type::Bottom | Type::Any | Type::Primitive(_) | Type::Ref { .. } => (),
+            Type::Error(t0) => t0.unbind_tvars(),
             Type::Array(t0) => t0.unbind_tvars(),
             Type::ByRef(t0) => t0.unbind_tvars(),
             Type::Tuple(ts) | Type::Variant(_, ts) | Type::Set(ts) => {
@@ -1048,6 +1102,7 @@ impl Type {
             Type::Bottom
             | Type::Any
             | Type::Fn(_)
+            | Type::Error(_)
             | Type::Array(_)
             | Type::Tuple(_)
             | Type::Struct(_)
@@ -1092,6 +1147,7 @@ impl Type {
                 Some(t) => t.check_cast_int(env, hist),
                 None => bail!("can't cast a value to a free type variable"),
             },
+            Type::Error(e) => e.check_cast_int(env, hist),
             Type::Array(et) => et.check_cast_int(env, hist),
             Type::ByRef(_) => bail!("can't cast a reference"),
             Type::Tuple(ts) => Ok(for t in ts.iter() {
@@ -1136,6 +1192,13 @@ impl Type {
             return Ok(v);
         }
         match self {
+            Type::Error(e) => {
+                let v = match v {
+                    Value::Error(v) => (*v).clone(),
+                    v => v,
+                };
+                Ok(Value::Error(Arc::new(e.cast_value_int(env, hist, v)?)))
+            }
             Type::Array(et) => match v {
                 Value::Array(elts) => {
                     let va = elts
@@ -1282,7 +1345,7 @@ impl Type {
             hist.clear();
             match self.cast_value_int(env, hist, v) {
                 Ok(v) => v,
-                Err(e) => Value::Error(e.to_string().into()),
+                Err(e) => Value::error(e.to_string()),
             }
         })
     }
@@ -1308,6 +1371,10 @@ impl Type {
             Type::Any => true,
             Type::Array(et) => match v {
                 Value::Array(a) => a.iter().all(|v| et.is_a_int(env, hist, v)),
+                _ => false,
+            },
+            Type::Error(e) => match v {
+                Value::Error(v) => e.is_a_int(env, hist, v),
                 _ => false,
             },
             Type::ByRef(_) => matches!(v, Value::U64(_) | Value::V64(_)),
@@ -1386,6 +1453,7 @@ impl Type {
             | Type::Primitive(_)
             | Type::Ref { .. }
             | Type::Fn(_)
+            | Type::Error(_)
             | Type::Array(_)
             | Type::ByRef(_)
             | Type::Tuple(_)
@@ -1402,6 +1470,7 @@ impl Type {
             | Self::Primitive(_)
             | Self::Fn(_)
             | Self::Set(_)
+            | Self::Error(_)
             | Self::Array(_)
             | Self::ByRef(_)
             | Self::Tuple(_)
@@ -1466,6 +1535,7 @@ impl Type {
             }
             Type::TVar(tv) => Type::TVar(tv.normalize()),
             Type::Set(s) => Self::flatten_set(s.iter().map(|t| t.normalize())),
+            Type::Error(t) => Type::Error(Arc::new(t.normalize())),
             Type::Array(t) => Type::Array(Arc::new(t.normalize())),
             Type::ByRef(t) => Type::ByRef(Arc::new(t.normalize())),
             Type::Tuple(t) => {
@@ -1483,6 +1553,14 @@ impl Type {
     }
 
     fn merge(&self, t: &Self) -> Option<Self> {
+        macro_rules! flatten {
+            ($t:expr) => {
+                match $t {
+                    Type::Set(et) => Self::flatten_set(et.iter().cloned()),
+                    t => t.clone(),
+                }
+            };
+        }
         match (self, t) {
             (
                 Type::Ref { scope: s0, name: r0, params: a0 },
@@ -1517,15 +1595,14 @@ impl Type {
                 }
             }
             (Type::Array(t0), Type::Array(t1)) => {
-                let t0f = match &**t0 {
-                    Type::Set(et) => Self::flatten_set(et.iter().cloned()),
-                    t => t.clone(),
-                };
-                let t1f = match &**t1 {
-                    Type::Set(et) => Self::flatten_set(et.iter().cloned()),
-                    t => t.clone(),
-                };
-                if t0f == t1f {
+                if flatten!(&**t0) == flatten!(&**t1) {
+                    Some(Type::Array(t0.clone()))
+                } else {
+                    None
+                }
+            }
+            (Type::Error(t0), Type::Error(t1)) => {
+                if flatten!(&**t0) == flatten!(&**t1) {
                     Some(Type::Array(t0.clone()))
                 } else {
                     None
@@ -1605,7 +1682,9 @@ impl Type {
             | (Type::Variant(_, _), _)
             | (_, Type::Variant(_, _))
             | (_, Type::Fn(_))
-            | (Type::Fn(_), _) => None,
+            | (Type::Fn(_), _)
+            | (Type::Error(_), _)
+            | (_, Type::Error(_)) => None,
         }
     }
 
@@ -1614,6 +1693,7 @@ impl Type {
             Type::Bottom => Type::Bottom,
             Type::Any => Type::Any,
             Type::Primitive(s) => Type::Primitive(*s),
+            Type::Error(t0) => Type::Error(Arc::new(t0.scope_refs(scope))),
             Type::Array(t0) => Type::Array(Arc::new(t0.scope_refs(scope))),
             Type::ByRef(t) => Type::ByRef(Arc::new(t.scope_refs(scope))),
             Type::Tuple(ts) => {
@@ -1687,6 +1767,7 @@ impl fmt::Display for Type {
             }
             Self::TVar(tv) => write!(f, "{tv}"),
             Self::Fn(t) => write!(f, "{t}"),
+            Self::Error(t) => write!(f, "Error<{t}>"),
             Self::Array(t) => write!(f, "Array<{t}>"),
             Self::ByRef(t) => write!(f, "&{t}"),
             Self::Tuple(ts) => {

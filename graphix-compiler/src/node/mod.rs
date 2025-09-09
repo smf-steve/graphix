@@ -969,7 +969,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
             None => None,
             Some(Value::Error(e)) => {
                 let e = format_compact!("{} at {} {e}", self.spec.ori, self.spec.pos);
-                ctx.set_var(self.id, Value::Error(e.as_str().into()));
+                ctx.set_var(self.id, Value::error(e.as_str()));
                 None
             }
             Some(v) => Some(v),

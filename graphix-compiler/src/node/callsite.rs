@@ -203,7 +203,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
         macro_rules! error {
             ($m:literal) => {{
                 let m = format_compact!($m);
-                return Some(Value::Error(m.as_str().into()));
+                return Some(Value::error(m.as_str()));
             }};
         }
         let mut set = vec![];

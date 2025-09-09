@@ -720,7 +720,7 @@ impl EvalCached for SprintfEv {
                 }
                 match netidx_value::printf(&mut self.buf, fmt, &self.args) {
                     Ok(_) => Some(Value::String(ArcStr::from(&self.buf))),
-                    Err(e) => Some(Value::Error(ArcStr::from(e.to_string()))),
+                    Err(e) => Some(Value::error(ArcStr::from(e.to_string()))),
                 }
             }
             _ => err!("sprintf invalid args"),
@@ -787,7 +787,7 @@ impl EvalCached for ParseEv {
         match &from.0[0] {
             Some(Value::String(s)) => match s.parse::<Value>() {
                 Ok(v) => Some(v),
-                Err(e) => Some(Value::Error(e.to_string().into())),
+                Err(e) => Some(Value::error(e.to_string())),
             },
             _ => None,
         }
