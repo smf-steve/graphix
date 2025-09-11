@@ -7,6 +7,31 @@ type Number = [ Int, Real ];
 type NotNull = [Number, string, error, array, datetime, duration];
 type Log = [`Trace, `Debug, `Info, `Warn, `Error, `Stdout, `Stderr];
 
+type Pos = {
+    line: i32,
+    column: i32
+};
+
+type Source = [
+    `File(string),
+    `Netidx(string),
+    `Internal(string),
+    `Unspecified
+];
+
+type Ori = {
+    parent: [Ori, null],
+    source: Source,
+    text: string
+};
+
+type ErrChain<'a> = {
+    cause: [ErrChain<'a>, null],
+    error: 'a,
+    ori: Ori
+    pos: Pos,
+};
+
 /// return the first argument when all arguments are equal, otherwise return nothing
 pub let all = |@args| 'all;
 

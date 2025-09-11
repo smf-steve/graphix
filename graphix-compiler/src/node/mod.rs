@@ -10,6 +10,7 @@ use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
 use compiler::compile;
 use enumflags2::BitFlags;
+use netidx::path::Path;
 use netidx_value::{Typ, Value};
 use pattern::StructPatternNode;
 use std::{cell::RefCell, sync::LazyLock};
@@ -940,6 +941,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Deref<R, E> {
 pub(crate) struct Qop<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
+    errchain: Type,
     id: BindId,
     n: Node<R, E>,
 }
@@ -953,13 +955,20 @@ impl<R: Rt, E: UserEvent> Qop<R, E> {
         e: &Expr,
     ) -> Result<Node<R, E>> {
         let n = compile(ctx, e.clone(), scope, top_id)?;
-        match ctx.env.lookup_bind(scope, &ModPath::from(["errors"])) {
-            None => bail!("at {} BUG: errors is undefined", spec.pos),
-            Some((_, bind)) => {
-                let typ = Type::empty_tvar();
-                Ok(Box::new(Self { spec, typ, id: bind.id, n }))
-            }
-        }
+        let id = match Path::dirnames(&scope.0)
+            .rev()
+            .find_map(|scope| ctx.env.catch.get(scope))
+        {
+            Some(id) => *id,
+            None => bail!("there is no catch visible in {scope}"),
+        };
+        let typ = Type::empty_tvar();
+        let errchain = Type::Ref {
+            scope: ModPath::root(),
+            name: ModPath::from(["ErrChain"]),
+            params: Arc::from_iter([Type::empty_tvar()]),
+        };
+        Ok(Box::new(Self { spec, typ, errchain, id, n }))
     }
 }
 
@@ -968,8 +977,31 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         match self.n.update(ctx, event) {
             None => None,
             Some(Value::Error(e)) => {
-                let e = format_compact!("{} at {} {e}", self.spec.ori, self.spec.pos);
-                ctx.set_var(self.id, Value::error(e.as_str()));
+                let pos: Value = [
+                    (literal!("column"), self.spec.pos.column),
+                    (literal!("line"), self.spec.pos.line),
+                ]
+                .into();
+                let e: Value = if self.errchain.is_a(&ctx.env, &*e) {
+                    let error = (*e).clone().cast_to::<[(ArcStr, Value); 4]>().unwrap();
+                    let error = error[1].1.clone();
+                    [
+                        (literal!("cause"), (*e).clone()),
+                        (literal!("error"), error),
+                        (literal!("ori"), self.spec.ori.to_value()),
+                        (literal!("pos"), pos),
+                    ]
+                    .into()
+                } else {
+                    [
+                        (literal!("cause"), Value::Null),
+                        (literal!("error"), (*e).clone()),
+                        (literal!("ori"), self.spec.ori.to_value()),
+                        (literal!("pos"), pos),
+                    ]
+                    .into()
+                };
+                ctx.set_var(self.id, Value::Error(Arc::new(e)));
                 None
             }
             Some(v) => Some(v),
@@ -998,16 +1030,20 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.n, self.n.typecheck(ctx))?;
-        let bind =
-            ctx.env.by_id.get(&self.id).ok_or_else(|| anyhow!("BUG: missing bind"))?;
         let err = Type::Primitive(Typ::Error.into());
-        wrap!(self, bind.typ.check_contains(&ctx.env, &err))?;
-        wrap!(self, err.check_contains(&ctx.env, &bind.typ))?;
         if !self.n.typ().contains(&ctx.env, &err)? {
             bail!("cannot use the ? operator on a non error type")
         }
         let rtyp = self.n.typ().diff(&ctx.env, &err)?;
         wrap!(self, self.typ.check_contains(&ctx.env, &rtyp))?;
+        let bind =
+            ctx.env.by_id.get(&self.id).ok_or_else(|| anyhow!("missing catch id"))?;
+        let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
+        let etyp = etyp
+            .strip_error(&ctx.env)
+            .ok_or_else(|| anyhow!("expected an error got {etyp}"));
+        let etyp = wrap!(self.n, etyp)?;
+        wrap!(self, bind.typ.check_contains(&ctx.env, &etyp))?;
         Ok(())
     }
 }
@@ -1214,5 +1250,65 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Sample<R, E> {
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.trigger, self.trigger.typecheck(ctx))?;
         wrap!(self.arg.node, self.arg.node.typecheck(ctx))
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct Catch<R: Rt, E: UserEvent> {
+    spec: Expr,
+    handler: Node<R, E>,
+}
+
+impl<R: Rt, E: UserEvent> Catch<R, E> {
+    pub(crate) fn new(
+        ctx: &mut ExecCtx<R, E>,
+        spec: Expr,
+        scope: &ModPath,
+        top_id: ExprId,
+        bind: &ArcStr,
+        constraint: &Option<Type>,
+        handler: &Arc<Expr>,
+    ) -> Result<Node<R, E>> {
+        let name = format_compact!("ca{}", BindId::new().inner());
+        let inner_scope = ModPath(scope.append(name.as_str()));
+        let typ = match constraint {
+            Some(t) => t.clone(),
+            None => Type::empty_tvar(),
+        };
+        let id = ctx.env.bind_variable(&inner_scope, bind, typ).id;
+        let handler = compile(ctx, (**handler).clone(), &inner_scope, top_id)?;
+        ctx.env.catch.insert_cow(scope.clone(), id);
+        Ok(Box::new(Self { spec, handler }))
+    }
+}
+
+impl<R: Rt, E: UserEvent> Update<R, E> for Catch<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
+        let _ = self.handler.update(ctx, event);
+        None
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        self.handler.delete(ctx);
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        self.handler.sleep(ctx);
+    }
+
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
+        wrap!(self.handler, self.handler.typecheck(ctx))
+    }
+
+    fn spec(&self) -> &Expr {
+        &self.spec
+    }
+
+    fn typ(&self) -> &Type {
+        &Type::Bottom
+    }
+
+    fn refs(&self, refs: &mut Refs) {
+        self.handler.refs(refs);
     }
 }

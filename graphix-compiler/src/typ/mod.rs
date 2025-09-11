@@ -1065,6 +1065,59 @@ impl Type {
         }
     }
 
+    fn strip_error_int<R: Rt, E: UserEvent>(
+        &self,
+        env: &Env<R, E>,
+        hist: &mut FxHashSet<usize>,
+    ) -> Option<Type> {
+        match self {
+            Type::Error(t) => match t.strip_error_int(env, hist) {
+                Some(t) => Some(t),
+                None => Some((**t).clone()),
+            },
+            Type::TVar(tv) => {
+                tv.read().typ.read().as_ref().and_then(|t| t.strip_error_int(env, hist))
+            }
+            Type::Primitive(p) => {
+                if *p == BitFlags::from(Typ::Error) {
+                    Some(Type::Any)
+                } else {
+                    None
+                }
+            }
+            Type::Ref { .. } => {
+                let t = self.lookup_ref(env).ok()?;
+                let addr = t as *const Type as usize;
+                if hist.insert(addr) {
+                    t.strip_error_int(env, hist)
+                } else {
+                    None
+                }
+            }
+            Type::Array(_)
+            | Type::ByRef(_)
+            | Type::Tuple(_)
+            | Type::Struct(_)
+            | Type::Variant(_, _)
+            | Type::Set(_)
+            | Type::Fn(_)
+            | Type::Any
+            | Type::Bottom => None,
+        }
+    }
+
+    /// remove the outer error type and return the inner payload, fail if self
+    /// isn't an error or contains non error types
+    pub fn strip_error<R: Rt, E: UserEvent>(&self, env: &Env<R, E>) -> Option<Self> {
+        thread_local! {
+            static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
+        }
+        HIST.with_borrow_mut(|hist| {
+            hist.clear();
+            self.strip_error_int(env, hist)
+        })
+    }
+
     /// Unbind any bound tvars, but do not unalias them.
     pub(crate) fn unbind_tvars(&self) {
         match self {
@@ -1085,50 +1138,6 @@ impl Type {
             Type::TVar(tv) => tv.unbind(),
             Type::Fn(fntyp) => fntyp.unbind_tvars(),
         }
-    }
-
-    fn first_prim_int<R: Rt, E: UserEvent>(
-        &self,
-        env: &Env<R, E>,
-        hist: &mut FxHashSet<usize>,
-    ) -> Option<Typ> {
-        match self {
-            Type::Primitive(p) => p.iter().next(),
-            Type::Set(s) => s.iter().find_map(|t| t.first_prim_int(env, hist)),
-            Type::TVar(tv) => {
-                tv.read().typ.read().as_ref().and_then(|t| t.first_prim_int(env, hist))
-            }
-            // array, tuple, and struct casting are handled directly
-            Type::Bottom
-            | Type::Any
-            | Type::Fn(_)
-            | Type::Error(_)
-            | Type::Array(_)
-            | Type::Tuple(_)
-            | Type::Struct(_)
-            | Type::Variant(_, _)
-            | Type::ByRef(_) => None,
-            Type::Ref { .. } => {
-                let t = self.lookup_ref(env).ok()?;
-                let t_addr = (t as *const Type).addr();
-                if hist.contains(&t_addr) {
-                    None
-                } else {
-                    hist.insert(t_addr);
-                    t.first_prim_int(env, hist)
-                }
-            }
-        }
-    }
-
-    fn first_prim<R: Rt, E: UserEvent>(&self, env: &Env<R, E>) -> Option<Typ> {
-        thread_local! {
-            static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            self.first_prim_int(env, hist)
-        })
     }
 
     fn check_cast_int<R: Rt, E: UserEvent>(
@@ -1192,6 +1201,14 @@ impl Type {
             return Ok(v);
         }
         match self {
+            Type::Bottom => bail!("can't cast {v} to Bottom"),
+            Type::Fn(_) => bail!("can't cast {v} to a function"),
+            Type::ByRef(_) => bail!("can't cast {v} to a reference"),
+            Type::Primitive(s) => s
+                .iter()
+                .find_map(|t| v.clone().cast(t))
+                .ok_or_else(|| anyhow!("can't cast {v} to {self}")),
+            Type::Any => Ok(v),
             Type::Error(e) => {
                 let v = match v {
                     Value::Error(v) => (*v).clone(),
@@ -1327,12 +1344,13 @@ impl Type {
                 v => bail!("can't cast {v} to {self}"),
             },
             Type::Ref { .. } => self.lookup_ref(env)?.cast_value_int(env, hist, v),
-            t => match t.first_prim(env) {
-                None => bail!("empty or non primitive cast"),
-                Some(t) => Ok(v
-                    .clone()
-                    .cast(t)
-                    .ok_or_else(|| anyhow!("can't cast {v} to {t}"))?),
+            Type::Set(ts) => ts
+                .iter()
+                .find_map(|t| t.cast_value_int(env, hist, v.clone()).ok())
+                .ok_or_else(|| anyhow!("can't cast {v} to {self}")),
+            Type::TVar(tv) => match &*tv.read().typ.read() {
+                Some(t) => t.cast_value_int(env, hist, v.clone()),
+                None => Ok(v),
             },
         }
     }

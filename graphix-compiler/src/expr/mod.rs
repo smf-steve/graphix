@@ -3,7 +3,7 @@ use crate::{
     PrintFlag, PRINT_FLAGS,
 };
 use anyhow::Result;
-use arcstr::ArcStr;
+use arcstr::{literal, ArcStr};
 use combine::stream::position::SourcePosition;
 pub use modpath::ModPath;
 use netidx::{path::Path, subscriber::Value, utils::Either};
@@ -158,7 +158,7 @@ pub enum ExprKind {
     Struct { args: Arc<[(ArcStr, Expr)]> },
     Select { arg: Arc<Expr>, arms: Arc<[(Pattern, Expr)]> },
     Qop(Arc<Expr>),
-    Catch { bind: ArcStr, handler: Arc<Expr> },
+    Catch { bind: ArcStr, constraint: Option<Type>, handler: Arc<Expr> },
     ByRef(Arc<Expr>),
     Deref(Arc<Expr>),
     Eq { lhs: Arc<Expr>, rhs: Arc<Expr> },
@@ -208,6 +208,18 @@ impl Source {
         match self {
             Self::File(_) => true,
             Self::Netidx(_) | Self::Internal(_) | Self::Unspecified => false,
+        }
+    }
+
+    pub fn to_value(&self) -> Value {
+        match self {
+            Self::File(pb) => {
+                let s = pb.as_os_str().to_string_lossy();
+                (literal!("File"), ArcStr::from(s)).into()
+            }
+            Self::Netidx(p) => (literal!("Netidx"), p.clone()).into(),
+            Self::Internal(s) => (literal!("Internal"), s.clone()).into(),
+            Self::Unspecified => literal!("Unspecified").into(),
         }
     }
 }
@@ -262,6 +274,18 @@ impl fmt::Display for Origin {
                 }
             }
         }
+    }
+}
+
+impl Origin {
+    pub fn to_value(&self) -> Value {
+        let p = Value::from(self.parent.as_ref().map(|p| p.to_value()));
+        [
+            (literal!("parent"), p),
+            (literal!("source"), self.source.to_value()),
+            (literal!("text"), Value::from(self.text.clone())),
+        ]
+        .into()
     }
 }
 
@@ -437,7 +461,7 @@ impl Expr {
                 })
             }
             ExprKind::Qop(e)
-            | ExprKind::Catch { bind: _, handler: e }
+            | ExprKind::Catch { bind: _, constraint: _, handler: e }
             | ExprKind::ByRef(e)
             | ExprKind::Deref(e)
             | ExprKind::Not { expr: e } => e.fold(init, f),

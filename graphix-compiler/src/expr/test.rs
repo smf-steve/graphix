@@ -421,9 +421,11 @@ macro_rules! qop {
 
 macro_rules! catch {
     ($inner:expr) => {
-        (random_fname(), $inner).prop_map(|(bind, e)| {
-            ExprKind::Catch { bind, handler: Arc::new(e) }.to_expr_nopos()
-        })
+        (random_fname(), option::of(typexp()), $inner).prop_map(
+            |(bind, constraint, e)| {
+                ExprKind::Catch { bind, constraint, handler: Arc::new(e) }.to_expr_nopos()
+            },
+        )
     };
 }
 
@@ -1178,9 +1180,9 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
         ) => dbg!(dbg!(d0 == d1) && dbg!(name0 == name1) && dbg!(check(value0, value1))),
         (ExprKind::Qop(e0), ExprKind::Qop(e1)) => check(e0, e1),
         (
-            ExprKind::Catch { bind: b0, handler: h0 },
-            ExprKind::Catch { bind: b1, handler: h1 },
-        ) => b0 == b1 && check(h0, h1),
+            ExprKind::Catch { bind: b0, constraint: c0, handler: h0 },
+            ExprKind::Catch { bind: b1, constraint: c1, handler: h1 },
+        ) => b0 == b1 && check_type_opt(c0, c1) && check(h0, h1),
         (ExprKind::Ref { name: name0 }, ExprKind::Ref { name: name1 }) => {
             dbg!(name0 == name1)
         }

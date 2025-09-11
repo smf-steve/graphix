@@ -70,6 +70,7 @@ pub struct Env<R: Rt, E: UserEvent> {
     pub used: Map<ModPath, Arc<Vec<ModPath>>>,
     pub modules: Set<ModPath>,
     pub typedefs: Map<ModPath, Map<CompactString, TypeDef>>,
+    pub catch: Map<ModPath, BindId>,
 }
 
 impl<R: Rt, E: UserEvent> Clone for Env<R, E> {
@@ -82,6 +83,7 @@ impl<R: Rt, E: UserEvent> Clone for Env<R, E> {
             modules: self.modules.clone(),
             typedefs: self.typedefs.clone(),
             lambdas: self.lambdas.clone(),
+            catch: self.catch.clone(),
         }
     }
 }
@@ -96,11 +98,13 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
             modules: Set::new(),
             typedefs: Map::new(),
             lambdas: Map::new(),
+            catch: Map::new(),
         }
     }
 
     pub(super) fn clear(&mut self) {
-        let Self { by_id, binds, byref_chain, used, modules, typedefs, lambdas } = self;
+        let Self { by_id, binds, byref_chain, used, modules, typedefs, lambdas, catch } =
+            self;
         *by_id = Map::new();
         *binds = Map::new();
         *byref_chain = Map::new();
@@ -108,6 +112,7 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
         *modules = Set::new();
         *typedefs = Map::new();
         *lambdas = Map::new();
+        *catch = Map::new();
     }
 
     // restore the lexical environment to the state it was in at the
@@ -121,6 +126,7 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
             typedefs: other.typedefs,
             by_id: self.by_id.clone(),
             lambdas: self.lambdas.clone(),
+            catch: self.catch.clone(),
             byref_chain: self.byref_chain.clone(),
         }
     }
@@ -388,8 +394,8 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
         }
     }
 
-    // create a new binding. If an existing bind exists in the same
-    // scope shadow it.
+    /// create a new binding. If an existing bind exists in the same
+    /// scope shadow it.
     pub fn bind_variable(&mut self, scope: &ModPath, name: &str, typ: Type) -> &mut Bind {
         let binds = self.binds.get_or_default_cow(scope.clone());
         let mut existing = true;
@@ -408,6 +414,12 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
             name: CompactString::from(name),
             typ,
         })
+    }
+
+    /// make the specified name an alias for `id`
+    pub fn alias_variable(&mut self, scope: &ModPath, name: &str, id: BindId) {
+        let binds = self.binds.get_or_default_cow(scope.clone());
+        binds.insert_cow(CompactString::from(name), id);
     }
 
     pub fn unbind_variable(&mut self, id: BindId) {

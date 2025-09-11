@@ -522,13 +522,17 @@ impl Expr {
                     kind: ExprKind::Qop(Arc::new(e)),
                 })
             }),
-            ExprKind::Catch { bind, handler } => Box::pin(async move {
+            ExprKind::Catch { bind, constraint, handler } => Box::pin(async move {
                 let e = handler.resolve_modules_int(scope, prepend, resolvers).await?;
                 Ok(Expr {
                     id: self.id,
                     ori: self.ori.clone(),
                     pos: self.pos,
-                    kind: ExprKind::Catch { bind: bind.clone(), handler: Arc::new(e) },
+                    kind: ExprKind::Catch {
+                        bind: bind.clone(),
+                        constraint: constraint.clone(),
+                        handler: Arc::new(e),
+                    },
                 })
             }),
             ExprKind::ByRef(e) => Box::pin(async move {

@@ -11,6 +11,7 @@ use super::{
 };
 use crate::{
     expr::{self, Expr, ExprId, ExprKind, ModPath, ModuleKind},
+    node::Catch,
     ExecCtx, Node, Rt, UserEvent,
 };
 use anyhow::{bail, Context, Result};
@@ -94,7 +95,9 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         }
         ExprKind::Bind(b) => Bind::compile(ctx, spec.clone(), scope, top_id, b),
         ExprKind::Qop(e) => Qop::compile(ctx, spec.clone(), scope, top_id, e),
-        ExprKind::Catch { bind: _, handler: _ } => unimplemented!(),
+        ExprKind::Catch { bind, constraint, handler } => {
+            Catch::new(ctx, spec.clone(), scope, top_id, bind, constraint, handler)
+        }
         ExprKind::ByRef(e) => ByRef::compile(ctx, spec.clone(), scope, top_id, e),
         ExprKind::Deref(e) => Deref::compile(ctx, spec.clone(), scope, top_id, e),
         ExprKind::Ref { name } => Ref::compile(ctx, spec.clone(), scope, top_id, name),

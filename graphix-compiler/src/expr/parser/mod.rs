@@ -1572,11 +1572,15 @@ parser! {
     {
         (
             position().skip(string("catch")),
-            between(sptoken('('), sptoken(')'), spfname()),
+            between(
+                sptoken('('),
+                sptoken(')'),
+                (spfname(), optional(attempt(sptoken(':').with(typexp()))))
+            ),
             spstring("=>").with(expr())
         )
-            .map(|(pos, bind, handler)| {
-                ExprKind::Catch { bind, handler: Arc::new(handler) }.to_expr(pos)
+            .map(|(pos, (bind, constraint), handler)| {
+                ExprKind::Catch { bind, constraint, handler: Arc::new(handler) }.to_expr(pos)
             })
     }
 }
