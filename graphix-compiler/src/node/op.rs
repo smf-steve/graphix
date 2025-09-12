@@ -1,13 +1,14 @@
-use super::{compiler::compile, Cached};
+use super::{compiler::compile, wrap_error, Cached};
 use crate::{
     expr::{Expr, ExprId, ModPath},
     typ::Type,
     wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
-use anyhow::{bail, Result};
-use compact_str::format_compact;
+use anyhow::{anyhow, bail, Result};
+use arcstr::literal;
 use netidx_value::{Typ, Value};
-use std::fmt;
+use std::{fmt, sync::LazyLock};
+use triomphe::Arc;
 
 macro_rules! compare_op {
     ($name:ident, $op:tt) => {
@@ -253,6 +254,13 @@ impl fmt::Display for Op {
     }
 }
 
+static ARITH_ERR: LazyLock<Type> = LazyLock::new(|| {
+    Type::Variant(
+        literal!("ArithError"),
+        Arc::from_iter([Type::Primitive(Typ::String.into())]),
+    )
+});
+
 macro_rules! arith_op {
     ($name:ident, $opn:expr, $op:tt) => {
         #[derive(Debug)]
@@ -276,10 +284,8 @@ macro_rules! arith_op {
                 let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
                 let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
                 let typ = Type::empty_tvar();
-                match ctx.env.lookup_bind(scope, &ModPath::from(["errors"])) {
-                    None => bail!("at {} BUG: errors is undefined", spec.pos),
-                    Some((_, bind)) => Ok(Box::new(Self { spec, id: bind.id, typ, lhs, rhs }))
-                }
+                let id = ctx.env.lookup_catch(scope)?;
+                Ok(Box::new(Self { spec, id, typ, lhs, rhs }))
             }
         }
 
@@ -292,8 +298,9 @@ macro_rules! arith_op {
                 if lhs_up || rhs_up {
                     match lhs.clone() $op rhs.clone() {
                         Value::Error(e) => {
-                            let e = format_compact!("{} at {} {e}", self.spec.ori, self.spec.pos);
-                            ctx.set_var(self.id, Value::error(e.as_str()));
+                            let e: Value = (literal!("ArithError"), (*e).clone()).into();
+                            let e = wrap_error(&ctx.env, &self.spec, e);
+                            ctx.set_var(self.id, Value::Error(Arc::new(e)));
                             None
                         }
                         v => Some(v)
@@ -379,7 +386,9 @@ macro_rules! arith_op {
                     }
                     (Some(_), Some(_)) => wrap!(self, lhs.union(&ctx.env, rhs))?
                 };
-                wrap!(self, self.typ.check_contains(&ctx.env, &ut))
+                wrap!(self, self.typ.check_contains(&ctx.env, &ut))?;
+                let bind = ctx.env.by_id.get(&self.id).ok_or_else(|| anyhow!("BUG: missing catch id"))?;
+                wrap!(self, bind.typ.check_contains(&ctx.env, &ARITH_ERR))
             }
         }
     }

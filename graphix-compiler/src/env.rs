@@ -271,6 +271,14 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
         })
     }
 
+    /// lookup the bind id of the nearest catch handler in this scope
+    pub fn lookup_catch(&self, scope: &ModPath) -> Result<BindId> {
+        match Path::dirnames(&scope.0).rev().find_map(|scope| self.catch.get(scope)) {
+            Some(id) => Ok(*id),
+            None => bail!("there is no catch visible in {scope}"),
+        }
+    }
+
     /// lookup binds in scope that match the specified partial
     /// name. This is intended to be used for IDEs and interactive
     /// shells, and is not used by the compiler.

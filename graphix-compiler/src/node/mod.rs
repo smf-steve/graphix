@@ -1,5 +1,6 @@
 use crate::{
-    env, err,
+    env::{self, Env},
+    err,
     expr::{self, Expr, ExprId, ExprKind, ModPath},
     format_with_flags,
     typ::{TVal, TVar, Type},
@@ -10,7 +11,6 @@ use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
 use compiler::compile;
 use enumflags2::BitFlags;
-use netidx::path::Path;
 use netidx_value::{Typ, Value};
 use pattern::StructPatternNode;
 use std::{cell::RefCell, sync::LazyLock};
@@ -937,11 +937,39 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Deref<R, E> {
     }
 }
 
+fn wrap_error<R: Rt, E: UserEvent>(env: &Env<R, E>, spec: &Expr, e: Value) -> Value {
+    static ERRCHAIN: LazyLock<Type> = LazyLock::new(|| Type::Ref {
+        scope: ModPath::root(),
+        name: ModPath::from(["ErrChain"]),
+        params: Arc::from_iter([Type::empty_tvar()]),
+    });
+    let pos: Value =
+        [(literal!("column"), spec.pos.column), (literal!("line"), spec.pos.line)].into();
+    if ERRCHAIN.is_a(env, &e) {
+        let error = e.clone().cast_to::<[(ArcStr, Value); 4]>().unwrap();
+        let error = error[1].1.clone();
+        [
+            (literal!("cause"), e.clone()),
+            (literal!("error"), error),
+            (literal!("ori"), spec.ori.to_value()),
+            (literal!("pos"), pos),
+        ]
+        .into()
+    } else {
+        [
+            (literal!("cause"), Value::Null),
+            (literal!("error"), e.clone()),
+            (literal!("ori"), spec.ori.to_value()),
+            (literal!("pos"), pos),
+        ]
+        .into()
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct Qop<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    errchain: Type,
     id: BindId,
     n: Node<R, E>,
 }
@@ -955,20 +983,9 @@ impl<R: Rt, E: UserEvent> Qop<R, E> {
         e: &Expr,
     ) -> Result<Node<R, E>> {
         let n = compile(ctx, e.clone(), scope, top_id)?;
-        let id = match Path::dirnames(&scope.0)
-            .rev()
-            .find_map(|scope| ctx.env.catch.get(scope))
-        {
-            Some(id) => *id,
-            None => bail!("there is no catch visible in {scope}"),
-        };
+        let id = ctx.env.lookup_catch(scope)?;
         let typ = Type::empty_tvar();
-        let errchain = Type::Ref {
-            scope: ModPath::root(),
-            name: ModPath::from(["ErrChain"]),
-            params: Arc::from_iter([Type::empty_tvar()]),
-        };
-        Ok(Box::new(Self { spec, typ, errchain, id, n }))
+        Ok(Box::new(Self { spec, typ, id, n }))
     }
 }
 
@@ -977,30 +994,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         match self.n.update(ctx, event) {
             None => None,
             Some(Value::Error(e)) => {
-                let pos: Value = [
-                    (literal!("column"), self.spec.pos.column),
-                    (literal!("line"), self.spec.pos.line),
-                ]
-                .into();
-                let e: Value = if self.errchain.is_a(&ctx.env, &*e) {
-                    let error = (*e).clone().cast_to::<[(ArcStr, Value); 4]>().unwrap();
-                    let error = error[1].1.clone();
-                    [
-                        (literal!("cause"), (*e).clone()),
-                        (literal!("error"), error),
-                        (literal!("ori"), self.spec.ori.to_value()),
-                        (literal!("pos"), pos),
-                    ]
-                    .into()
-                } else {
-                    [
-                        (literal!("cause"), Value::Null),
-                        (literal!("error"), (*e).clone()),
-                        (literal!("ori"), self.spec.ori.to_value()),
-                        (literal!("pos"), pos),
-                    ]
-                    .into()
-                };
+                let e = wrap_error(&ctx.env, &self.spec, (*e).clone());
                 ctx.set_var(self.id, Value::Error(Arc::new(e)));
                 None
             }
@@ -1036,8 +1030,11 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         }
         let rtyp = self.n.typ().diff(&ctx.env, &err)?;
         wrap!(self, self.typ.check_contains(&ctx.env, &rtyp))?;
-        let bind =
-            ctx.env.by_id.get(&self.id).ok_or_else(|| anyhow!("missing catch id"))?;
+        let bind = ctx
+            .env
+            .by_id
+            .get(&self.id)
+            .ok_or_else(|| anyhow!("BUG: missing catch id"))?;
         let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
         let etyp = etyp
             .strip_error(&ctx.env)
