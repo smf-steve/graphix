@@ -5,7 +5,7 @@ use crate::{
     wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
-use arcstr::literal;
+use arcstr::{literal, ArcStr};
 use netidx_value::{Typ, Value};
 use std::{fmt, sync::LazyLock};
 use triomphe::Arc;
@@ -254,9 +254,10 @@ impl fmt::Display for Op {
     }
 }
 
+static ARITH_ERR_TAG: ArcStr = literal!("ArithError");
 static ARITH_ERR: LazyLock<Type> = LazyLock::new(|| {
     Type::Variant(
-        literal!("ArithError"),
+        ARITH_ERR_TAG.clone(),
         Arc::from_iter([Type::Primitive(Typ::String.into())]),
     )
 });
@@ -298,7 +299,7 @@ macro_rules! arith_op {
                 if lhs_up || rhs_up {
                     match lhs.clone() $op rhs.clone() {
                         Value::Error(e) => {
-                            let e: Value = (literal!("ArithError"), (*e).clone()).into();
+                            let e: Value = (ARITH_ERR_TAG.clone(), (*e).clone()).into();
                             let e = wrap_error(&ctx.env, &self.spec, e);
                             ctx.set_var(self.id, Value::Error(Arc::new(e)));
                             None

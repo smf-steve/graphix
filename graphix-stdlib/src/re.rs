@@ -1,7 +1,6 @@
 use crate::{deftype, CachedArgs, CachedVals, EvalCached};
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
-use compact_str::format_compact;
 use graphix_compiler::{errf, ExecCtx, Rt, UserEvent};
 use netidx::subscriber::Value;
 use netidx_value::ValArray;
@@ -18,6 +17,8 @@ fn maybe_compile(s: &str, re: &mut Option<Regex>) -> Result<()> {
     Ok(())
 }
 
+static TAG: ArcStr = literal!("ReError");
+
 #[derive(Debug, Default)]
 struct IsMatchEv {
     re: Option<Regex>,
@@ -25,12 +26,12 @@ struct IsMatchEv {
 
 impl EvalCached for IsMatchEv {
     const NAME: &str = "re_is_match";
-    deftype!("re", "fn(#pat:string, string) -> [bool, error]");
+    deftype!("re", "fn(#pat:string, string) -> Result<bool, `ReError(string)>");
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         if let Some(Value::String(s)) = &from.0[0] {
             if let Err(e) = maybe_compile(s, &mut self.re) {
-                return errf!("{e:?}");
+                return Some(errf!(TAG, "{e:?}"));
             }
         }
         if let Some(Value::String(s)) = &from.0[1] {
@@ -51,12 +52,12 @@ struct FindEv {
 
 impl EvalCached for FindEv {
     const NAME: &str = "re_find";
-    deftype!("re", "fn(#pat:string, string) -> [Array<string>, error]");
+    deftype!("re", "fn(#pat:string, string) -> Result<Array<string>, `ReError(string)>");
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         if let Some(Value::String(s)) = &from.0[0] {
             if let Err(e) = maybe_compile(s, &mut self.re) {
-                return errf!("{e:?}");
+                return Some(errf!(TAG, "{e:?}"));
             }
         }
         if let Some(Value::String(s)) = &from.0[1] {
@@ -80,12 +81,12 @@ struct CapturesEv {
 
 impl EvalCached for CapturesEv {
     const NAME: &str = "re_captures";
-    deftype!("re", "fn(#pat:string, string) -> [Array<Array<[null, string]>>, error]");
+    deftype!("re", "fn(#pat:string, string) -> Result<Array<Array<[null, string]>>, `ReError(string)>");
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         if let Some(Value::String(s)) = &from.0[0] {
             if let Err(e) = maybe_compile(s, &mut self.re) {
-                return errf!("{e:?}");
+                return Some(errf!(TAG, "{e:?}"));
             }
         }
         if let Some(Value::String(s)) = &from.0[1] {
@@ -113,12 +114,12 @@ struct SplitEv {
 
 impl EvalCached for SplitEv {
     const NAME: &str = "re_split";
-    deftype!("re", "fn(#pat:string, string) -> [Array<string>, error]");
+    deftype!("re", "fn(#pat:string, string) -> Result<Array<string>, `ReError(string)>");
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         if let Some(Value::String(s)) = &from.0[0] {
             if let Err(e) = maybe_compile(s, &mut self.re) {
-                return errf!("{e:?}");
+                return Some(errf!(TAG, "{e:?}"));
             }
         }
         if let Some(Value::String(s)) = &from.0[1] {
@@ -141,12 +142,15 @@ struct SplitNEv {
 
 impl EvalCached for SplitNEv {
     const NAME: &str = "re_splitn";
-    deftype!("re", "fn(#pat:string, #limit:i64, string) -> [Array<string>, error]");
+    deftype!(
+        "re",
+        "fn(#pat:string, #limit:i64, string) -> Result<Array<string>, `ReError(string)>"
+    );
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         if let Some(Value::String(s)) = &from.0[0] {
             if let Err(e) = maybe_compile(s, &mut self.re) {
-                return errf!("{e:?}");
+                return Some(errf!(TAG, "{e:?}"));
             }
         }
         if let Some(Value::I64(lim)) = &from.0[1] {

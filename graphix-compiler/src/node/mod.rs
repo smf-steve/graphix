@@ -1,6 +1,5 @@
 use crate::{
     env::{self, Env},
-    err,
     expr::{self, Expr, ExprId, ExprKind, ModPath},
     format_with_flags,
     typ::{TVal, TVar, Type},
@@ -883,18 +882,15 @@ impl<R: Rt, E: UserEvent> Deref<R, E> {
 impl<R: Rt, E: UserEvent> Update<R, E> for Deref<R, E> {
     fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         if let Some(v) = self.child.update(ctx, event) {
-            match v {
-                Value::U64(i) | Value::V64(i) => {
-                    let new_id = BindId::from(i);
-                    if self.id != Some(new_id) {
-                        if let Some(old) = self.id {
-                            ctx.rt.unref_var(old, self.top_id);
-                        }
-                        ctx.rt.ref_var(new_id, self.top_id);
-                        self.id = Some(new_id);
+            if let Value::U64(i) | Value::V64(i) = v {
+                let new_id = BindId::from(i);
+                if self.id != Some(new_id) {
+                    if let Some(old) = self.id {
+                        ctx.rt.unref_var(old, self.top_id);
                     }
+                    ctx.rt.ref_var(new_id, self.top_id);
+                    self.id = Some(new_id);
                 }
-                _ => return err!("expected u64 bind id"),
             }
         }
         self.id.and_then(|id| event.variables.get(&id).cloned())

@@ -1,6 +1,7 @@
 use crate::{
     compiler::compile,
     env::Env,
+    errf,
     expr::{
         parser, Expr, ExprId, ExprKind, ModPath, Origin, Sandbox, Sig, SigItem, Source,
         StructurePattern, TypeDef,
@@ -10,11 +11,11 @@ use crate::{
     wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent, KNOWN,
 };
 use anyhow::{bail, Context, Result};
-use arcstr::ArcStr;
+use arcstr::{literal, ArcStr};
 use compact_str::CompactString;
 use fxhash::{FxHashMap, FxHashSet};
 use netidx_value::{Typ, Value};
-use std::{any::Any, mem};
+use std::{any::Any, mem, sync::LazyLock};
 use triomphe::Arc;
 
 fn bind_sig<R: Rt, E: UserEvent>(
@@ -129,10 +130,16 @@ fn check_sig<R: Rt, E: UserEvent>(
     Ok(())
 }
 
+static ERR_TAG: ArcStr = literal!("DynamicLoadError");
+static TYP: LazyLock<Type> = LazyLock::new(|| {
+    let t = Arc::from_iter([Type::Primitive(Typ::String.into())]);
+    let err = Type::Error(Arc::new(Type::Variant(ERR_TAG.clone(), t)));
+    Type::Set(Arc::from_iter([err, Type::Primitive(Typ::Null.into())]))
+});
+
 #[derive(Debug)]
 pub(super) struct DynamicModule<R: Rt, E: UserEvent> {
     spec: Expr,
-    typ: Type,
     source: Node<R, E>,
     env: Env<R, E>,
     sig: Sig,
@@ -157,7 +164,6 @@ impl<R: Rt, E: UserEvent> DynamicModule<R, E> {
         bind_sig(&mut ctx.env, &scope, &sig).context("binding module signature")?;
         Ok(Box::new(Self {
             spec,
-            typ: Type::Primitive(Typ::Error | Typ::Null),
             env,
             sig,
             source,
@@ -212,14 +218,12 @@ impl<R: Rt, E: UserEvent> Update<R, E> for DynamicModule<R, E> {
         if let Some(v) = self.source.update(ctx, event) {
             self.clear_compiled(ctx);
             match v {
-                Value::Error(_) => return Some(v),
                 Value::String(s) => {
                     if let Err(e) = self.compile_inner(ctx, s) {
-                        let m = format!("invalid dynamic module, compile error {e:?}");
-                        return Some(Value::error(m));
+                        return Some(errf!(ERR_TAG, "compile error {e:?}"));
                     }
                 }
-                v => return Some(Value::error(format!("unexpected {v}"))),
+                v => return Some(errf!(ERR_TAG, "unexpected {v}")),
             }
             compiled = true;
         }
@@ -266,7 +270,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for DynamicModule<R, E> {
     }
 
     fn typ(&self) -> &Type {
-        &self.typ
+        &TYP
     }
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {

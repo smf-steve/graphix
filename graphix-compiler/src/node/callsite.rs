@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
-use compact_str::{format_compact, CompactString};
+use compact_str::CompactString;
 use fxhash::FxHashMap;
 use netidx::subscriber::Value;
 use std::{collections::hash_map::Entry, mem, sync::Arc};
@@ -200,29 +200,23 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
 
 impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
     fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
-        macro_rules! error {
-            ($m:literal) => {{
-                let m = format_compact!($m);
-                return Some(Value::error(m.as_str()));
-            }};
-        }
         let mut set = vec![];
         let bound = match (&self.function, self.fnode.update(ctx, event)) {
             (_, None) => false,
             (Some((cid, _)), Some(Value::U64(id))) if cid.0 == id => false,
             (_, Some(Value::U64(id))) => match ctx.env.lambdas.get(&LambdaId(id)) {
-                None => error!("no such function {id:?}"),
+                None => panic!("no such function {id:?}"),
                 Some(lb) => match lb.upgrade() {
-                    None => error!("function {id:?} is no longer callable"),
+                    None => panic!("function {id:?} is no longer callable"),
                     Some(lb) => {
                         if let Err(e) = self.bind(ctx, lb, event, &mut set) {
-                            error!("failed to bind to lambda {e:?}")
+                            panic!("failed to bind to lambda {e:?}")
                         }
                         true
                     }
                 },
             },
-            (_, Some(v)) => error!("invalid function {v}"),
+            (_, Some(v)) => panic!("invalid function {v}"),
         };
         match &mut self.function {
             None => None,

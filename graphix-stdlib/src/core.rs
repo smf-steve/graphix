@@ -1,7 +1,6 @@
 use crate::{deftype, CachedArgs, CachedVals, EvalCached};
 use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
-use compact_str::format_compact;
 use graphix_compiler::{
     err, errf,
     expr::{Expr, ExprId, ModPath},
@@ -47,7 +46,7 @@ struct FilterErr;
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for FilterErr {
     const NAME: &str = "filter_err";
-    deftype!("core", "fn(Any) -> error");
+    deftype!("core", "fn(Result<'a, 'b>) -> Error<'b>");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(FilterErr)))
@@ -75,7 +74,7 @@ struct ToError;
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for ToError {
     const NAME: &str = "error";
-    deftype!("core", "fn(Any) -> error");
+    deftype!("core", "fn('a) -> Error<'a>");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, _, _| Ok(Box::new(ToError)))
@@ -89,10 +88,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for ToError {
         from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
-        from[0].update(ctx, event).map(|v| match v.cast_to::<ArcStr>() {
-            Ok(s) => Value::Error(triomphe::Arc::new(Value::String(s))),
-            Err(e) => Value::error(format_compact!("{e}").as_str()),
-        })
+        from[0].update(ctx, event).map(|e| Value::Error(triomphe::Arc::new(e)))
     }
 
     fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
@@ -526,7 +522,7 @@ struct Seq {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Seq {
     const NAME: &str = "seq";
-    deftype!("core", "fn(i64, i64) -> i64");
+    deftype!("core", "fn(i64, i64) -> Result<i64, `SeqError(string)>");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, from, top_id| {
@@ -552,7 +548,10 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Seq {
                         ctx.rt.set_var(self.id, Value::I64(v));
                     }
                 }
-                _ => return err!("invalid args i must be <= j"),
+                _ => {
+                    let e = literal!("SeqError");
+                    return Some(err!(e, "invalid args i must be <= j"));
+                }
             }
         }
         event.variables.get(&self.id).cloned()
@@ -706,17 +705,18 @@ impl EvalCached for MeanEv {
     const NAME: &str = "mean";
     deftype!(
         "core",
-        "fn([Number, Array<Number>], @args: [Number, Array<Number>]) -> f64"
+        "fn([Number, Array<Number>], @args: [Number, Array<Number>]) -> Result<f64, `MeanError(string)>"
     );
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+        static TAG: ArcStr = literal!("MeanError");
         let mut total = 0.;
         let mut samples = 0;
         let mut error = None;
         for v in from.flat_iter() {
             if let Some(v) = v {
                 match v.cast_to::<f64>() {
-                    Err(e) => error = errf!("{e:?}"),
+                    Err(e) => error = Some(errf!(TAG, "{e:?}")),
                     Ok(v) => {
                         total += v;
                         samples += 1;
@@ -727,7 +727,7 @@ impl EvalCached for MeanEv {
         if let Some(e) = error {
             Some(e)
         } else if samples == 0 {
-            err!("mean requires at least one argument")
+            Some(err!(TAG, "mean requires at least one argument"))
         } else {
             Some(Value::F64(total / samples as f64))
         }

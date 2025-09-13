@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
 use graphix_compiler::{
-    errf,
+    err, errf,
     expr::{ExprId, ModPath},
     node::genn,
     typ::Type,
@@ -19,6 +19,7 @@ use netidx_protocols::rpc::server::{self, ArgSpec};
 use netidx_value::ValArray;
 use smallvec::{smallvec, SmallVec};
 use std::{collections::VecDeque, sync::Arc};
+use triomphe::Arc as TArc;
 
 fn as_path(v: Value) -> Option<Path> {
     match v.cast_to::<String>() {
@@ -42,7 +43,7 @@ struct Write {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Write {
     const NAME: &str = "write";
-    deftype!("net", "fn(string, Any) -> _");
+    deftype!("net", "fn(string, Any) -> Result<_, `WriteError(string)>");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, top_id| {
@@ -89,7 +90,8 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Write {
                     if let Either::Left(_) = &self.dv {
                         self.dv = Either::Right(vec![]);
                     }
-                    return errf!("write(path, val): invalid path {path:?}");
+                    let e = errf!(literal!("WriteError"), "invalid path {path:?}");
+                    return Some(Value::Error(TArc::new(e)));
                 }
                 Some(path) => {
                     let dv = ctx.rt.subscribe(
@@ -152,7 +154,7 @@ struct Subscribe {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Subscribe {
     const NAME: &str = "subscribe";
-    deftype!("net", "fn(string) -> Any");
+    deftype!("net", "fn(string) -> Result<Primitive, `SubscribeError(string)>");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, top_id| {
@@ -168,6 +170,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Subscribe {
         from: &mut [Node<R, E>],
         event: &mut Event<E>,
     ) -> Option<Value> {
+        static ERR_TAG: ArcStr = literal!("SubscribeError");
         let mut up = [false; 1];
         self.args.update_diff(&mut up, ctx, from, event);
         let (path, path_up) = arity1!(self.args.0, &up);
@@ -187,7 +190,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Subscribe {
                 }
                 let path = Path::from(path);
                 if !Path::is_absolute(&path) {
-                    return errf!("expected absolute path");
+                    return Some(err!(ERR_TAG, "expected absolute path"));
                 }
                 let dval = ctx.rt.subscribe(
                     UpdatesFlags::BEGIN_WITH_LAST,
@@ -197,7 +200,9 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Subscribe {
                 self.cur = Some((path, dval));
             }
             (Some(Value::String(_)), true) => (), // path unchanged
-            (Some(v), true) => return errf!("invalid path {v}, expected string"),
+            (Some(v), true) => {
+                return Some(errf!(ERR_TAG, "invalid path {v}, expected string"))
+            }
         }
         self.cur.as_ref().and_then(|(_, dv)| {
             event.netidx.get(&dv.id()).map(|e| match e {
@@ -230,7 +235,10 @@ struct RpcCall {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for RpcCall {
     const NAME: &str = "call";
-    deftype!("net", "fn(string, Array<(string, Any)>) -> Any");
+    deftype!(
+        "net",
+        "fn(string, Array<(string, Any)>) -> Result<Primitive, `RpcError(string)>"
+    );
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, from, top_id| {
@@ -276,7 +284,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for RpcCall {
         match ((path, args), (path_up, args_up)) {
             ((Some(path), Some(args)), (_, true))
             | ((Some(path), Some(args)), (true, _)) => match parse_args(path, args) {
-                Err(e) => return errf!("{e}"),
+                Err(e) => return Some(errf!(literal!("RpcError"), "{e}")),
                 Ok((path, args)) => ctx.rt.call_rpc(path, args, self.id),
             },
             ((None, _), (_, _)) | ((_, None), (_, _)) | ((_, _), (false, false)) => (),
@@ -353,6 +361,7 @@ macro_rules! list {
                 }
                 event.variables.get(&self.id).and_then(|v| match v {
                     Value::Null => None,
+                    Value::Error(e) => Some(errf!(literal!("ListError"), "{e}")),
                     v => Some(v.clone()),
                 })
             }
@@ -374,8 +383,19 @@ macro_rules! list {
     };
 }
 
-list!(List, "list", list, "fn(?#update:Any, string) -> Array<string>");
-list!(ListTable, "list_table", list_table, "fn(?#update:Any, string) -> Table");
+list!(
+    List,
+    "list",
+    list,
+    "fn(?#update:Any, string) -> Result<Array<string>, `ListError(string)>"
+);
+
+list!(
+    ListTable,
+    "list_table",
+    list_table,
+    "fn(?#update:Any, string) -> Result<Table, `ListError(string)>"
+);
 
 #[derive(Debug)]
 struct Publish<R: Rt, E: UserEvent> {
@@ -389,7 +409,10 @@ struct Publish<R: Rt, E: UserEvent> {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Publish<R, E> {
     const NAME: &str = "publish";
-    deftype!("net", "fn(?#on_write:fn(Any) -> _, string, Any) -> error");
+    deftype!(
+        "net",
+        "fn(?#on_write:fn(Any) -> _, string, Any) -> Result<_, `PublishError(string)>"
+    );
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
@@ -431,7 +454,11 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Publish<R, E> {
             ($path:expr, $v:expr) => {{
                 let path = Path::from($path.clone());
                 match ctx.rt.publish(path.clone(), $v.clone(), self.top_id) {
-                    Err(e) => return Some(Value::error(format!("{e:?}"))),
+                    Err(e) => {
+                        let msg: ArcStr = format_compact!("{e:?}").as_str().into();
+                        let e: Value = (literal!("PublishError"), msg).into();
+                        return Some(Value::Error(TArc::new(e)));
+                    }
                     Ok(id) => {
                         self.current = Some((path, id));
                     }
@@ -526,7 +553,12 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for PublishRpc<R, E> {
     const NAME: &str = "publish_rpc";
     deftype!(
         "net",
-        "fn(#path:string, #doc:string, #spec:Array<ArgSpec>, #f:fn(Array<(string, Any)>) -> Any) -> _"
+        r#"fn(
+            #path:string,
+            #doc:string,
+            #spec:Array<ArgSpec>,
+            #f:fn(Array<(string, Any)>) -> Any
+        ) -> Result<_, `PublishRpcError(string)>"#
     );
 
     fn init(_ctx: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
@@ -611,8 +643,9 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for PublishRpc<R, E> {
                 if let Err(e) =
                     ctx.rt.publish_rpc(path.clone(), doc.clone(), spec, self.id)
                 {
-                    let e = Value::error(format_compact!("{e:?}").as_str());
-                    return Some(e);
+                    let e: ArcStr = format_compact!("{e:?}").as_str().into();
+                    let e: Value = (literal!("PublishRpcError"), e).into();
+                    return Some(Value::Error(TArc::new(e)));
                 }
                 self.current = Some(path);
             }

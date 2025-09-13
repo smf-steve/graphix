@@ -93,6 +93,28 @@ macro_rules! tdbg {
     };
 }
 
+#[macro_export]
+macro_rules! err {
+    ($tag:expr, $err:literal) => {{
+        let e: Value = ($tag.clone(), literal!($err)).into();
+        Value::Error(triomphe::Arc::new(e))
+    }};
+}
+
+#[macro_export]
+macro_rules! errf {
+    ($tag:expr, $fmt:expr, $args:tt) => {{
+        let msg: ArcStr = compact_str::format_compact!($fmt, $args).as_str().into();
+        let e: Value = ($tag.clone(), msg).into();
+        Value::Error(triomphe::Arc::new(e))
+    }};
+    ($tag:expr, $fmt:expr) => {{
+        let msg: ArcStr = compact_str::format_compact!($fmt).as_str().into();
+        let e: Value = ($tag.clone(), msg).into();
+        Value::Error(triomphe::Arc::new(e))
+    }};
+}
+
 thread_local! {
     /// thread local shared refs structure
     pub static REFS: RefCell<Refs> = RefCell::new(Refs::new());
@@ -124,21 +146,6 @@ impl TryFrom<Value> for BindId {
             v => bail!("invalid bind id {v}"),
         }
     }
-}
-
-#[macro_export]
-macro_rules! errf {
-    ($pat:expr, $($arg:expr),*) => {
-        Some(Value::Error(ArcStr::from(format_compact!($pat, $($arg),*).as_str())))
-    };
-    ($pat:expr) => { Some(Value::error(ArcStr::from(format_compact!($pat).as_str()))) };
-}
-
-#[macro_export]
-macro_rules! err {
-    ($pat:literal) => {
-        Some(Value::error(literal!($pat)))
-    };
 }
 
 pub trait UserEvent: Clone + Debug + Any {

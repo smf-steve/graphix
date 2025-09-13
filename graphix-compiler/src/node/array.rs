@@ -1,14 +1,23 @@
 use super::{compiler::compile, Cached};
 use crate::{
-    err,
+    err, errf,
     expr::{Expr, ExprId, ModPath},
     typ::Type,
     update_args, wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
 };
 use anyhow::Result;
-use arcstr::literal;
+use arcstr::{literal, ArcStr};
 use netidx_value::{Typ, ValArray, Value};
+use std::sync::LazyLock;
 use triomphe::Arc;
+
+static ERR_TAG: ArcStr = literal!("ArrayIndexError");
+static ERR: LazyLock<Type> = LazyLock::new(|| {
+    Type::Error(Arc::new(Type::Variant(
+        ERR_TAG.clone(),
+        Arc::from_iter([Type::Primitive(Typ::String.into())]),
+    )))
+});
 
 #[derive(Debug)]
 pub(crate) struct ArrayRef<R: Rt, E: UserEvent> {
@@ -29,10 +38,9 @@ impl<R: Rt, E: UserEvent> ArrayRef<R, E> {
     ) -> Result<Node<R, E>> {
         let source = Cached::new(compile(ctx, source.clone(), scope, top_id)?);
         let i = Cached::new(compile(ctx, i.clone(), scope, top_id)?);
-        let ert = Type::Primitive(Typ::Error.into());
         let typ = match &source.node.typ() {
-            Type::Array(et) => Type::Set(Arc::from_iter([(**et).clone(), ert.clone()])),
-            _ => Type::Set(Arc::from_iter([Type::empty_tvar(), ert.clone()])),
+            Type::Array(et) => Type::Set(Arc::from_iter([(**et).clone(), ERR.clone()])),
+            _ => Type::Set(Arc::from_iter([Type::empty_tvar(), ERR.clone()])),
         };
         Ok(Box::new(Self { source, i, spec, typ }))
     }
@@ -49,7 +57,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArrayRef<R, E> {
             Some(Value::I64(i)) => *i,
             Some(v) => match v.clone().cast_to::<i64>() {
                 Ok(i) => i,
-                Err(_) => return err!("op::index(array, index): expected an integer"),
+                Err(_) => return Some(err!(ERR_TAG, "expected an integer")),
             },
             None => return None,
         };
@@ -59,7 +67,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArrayRef<R, E> {
                 if i < elts.len() {
                     Some(elts[i].clone())
                 } else {
-                    err!("array index out of bounds")
+                    Some(err!(ERR_TAG, "array index out of bounds"))
                 }
             }
             Some(Value::Array(elts)) if i < 0 => {
@@ -68,11 +76,11 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArrayRef<R, E> {
                 if i > 0 {
                     Some(elts[i as usize].clone())
                 } else {
-                    err!("array index out of bounds")
+                    Some(err!(ERR_TAG, "array index out of bounds"))
                 }
             }
             None => None,
-            _ => err!("op::index(array, index): expected an array"),
+            _ => Some(err!(ERR_TAG, "expected an array")),
         }
     }
 
@@ -137,10 +145,7 @@ impl<R: Rt, E: UserEvent> ArraySlice<R, E> {
             .as_ref()
             .map(|e| compile(ctx, (**e).clone(), scope, top_id).map(Cached::new))
             .transpose()?;
-        let typ = Type::Set(Arc::from_iter([
-            source.node.typ().clone(),
-            Type::Primitive(Typ::Error.into()),
-        ]));
+        let typ = Type::Set(Arc::from_iter([source.node.typ().clone(), ERR.clone()]));
         Ok(Box::new(Self { spec, typ, source, start, end }))
     }
 }
@@ -151,7 +156,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArraySlice<R, E> {
             ($e:expr) => {
                 match $e.clone().cast_to::<usize>() {
                     Ok(i) => i,
-                    Err(_) => return err!("expected a non negative number"),
+                    Err(_) => return Some(err!(ERR_TAG, "expected a non negative number")),
                 }
             };
         }
@@ -181,18 +186,18 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArraySlice<R, E> {
                 (None, None) => Some(Value::Array(elts.clone())),
                 (Some(i), Some(j)) => match elts.subslice(i..j) {
                     Ok(a) => Some(Value::Array(a)),
-                    Err(e) => Some(Value::error(e.to_string())),
+                    Err(e) => Some(errf!(ERR_TAG, "{e:?}")),
                 },
                 (Some(i), None) => match elts.subslice(i..) {
                     Ok(a) => Some(Value::Array(a)),
-                    Err(e) => Some(Value::error(e.to_string())),
+                    Err(e) => Some(errf!(ERR_TAG, "{e:?}")),
                 },
                 (None, Some(i)) => match elts.subslice(..i) {
                     Ok(a) => Some(Value::Array(a)),
-                    Err(e) => Some(Value::error(e.to_string())),
+                    Err(e) => Some(errf!(ERR_TAG, "{e:?}")),
                 },
             },
-            Some(_) => err!("expected array"),
+            Some(_) => Some(err!(ERR_TAG, "expected array")),
             None => None,
         }
     }

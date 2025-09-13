@@ -1677,9 +1677,19 @@ pub fn parse_one(s: &str) -> anyhow::Result<Expr> {
         .map_err(|e| anyhow::anyhow!(format!("{e}")))
 }
 
-/// Parse a fntype
+/// Parse one fntype expression
 pub fn parse_fn_type(s: &str) -> anyhow::Result<FnType> {
     fntype()
+        .skip(spaces())
+        .skip(eof())
+        .easy_parse(position::Stream::new(s))
+        .map(|(r, _)| r)
+        .map_err(|e| anyhow::anyhow!(format!("{e}")))
+}
+
+/// Parse one type expression
+pub fn parse_type(s: &str) -> anyhow::Result<Type> {
+    typexp()
         .skip(spaces())
         .skip(eof())
         .easy_parse(position::Stream::new(s))
