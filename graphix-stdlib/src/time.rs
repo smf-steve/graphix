@@ -1,10 +1,9 @@
 use crate::{arity2, deftype, CachedVals};
 use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
-use compact_str::format_compact;
 use graphix_compiler::{
-    err, errf, expr::ExprId, Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node,
-    Rt, UserEvent,
+    err, expr::ExprId, Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Rt,
+    UserEvent,
 };
 use netidx::{publisher::FromValue, subscriber::Value};
 use std::{ops::SubAssign, sync::Arc, time::Duration};
@@ -38,22 +37,21 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for AfterIdle {
         self.args.update_diff(&mut up, ctx, from, event);
         let ((timeout, val), (timeout_up, val_up)) = arity2!(self.args.0, &up);
         match ((timeout, val), (timeout_up, val_up)) {
-            ((Some(secs), _), (true, _)) | ((Some(secs), _), (_, true)) => match secs
-                .clone()
-                .cast_to::<Duration>()
-            {
-                Err(e) => {
-                    self.id = None;
-                    return errf!("after_idle(timeout, cur): expected duration {e:?}");
+            ((Some(secs), _), (true, _)) | ((Some(secs), _), (_, true)) => {
+                match secs.clone().cast_to::<Duration>() {
+                    Ok(dur) => {
+                        let id = BindId::new();
+                        self.id = Some(id);
+                        ctx.rt.ref_var(id, self.eid);
+                        ctx.rt.set_timer(id, dur);
+                        return None;
+                    }
+                    Err(_) => {
+                        self.id = None;
+                        return None;
+                    }
                 }
-                Ok(dur) => {
-                    let id = BindId::new();
-                    self.id = Some(id);
-                    ctx.rt.ref_var(id, self.eid);
-                    ctx.rt.set_timer(id, dur);
-                    return None;
-                }
-            },
+            }
             ((None, _), (_, _))
             | ((_, None), (_, _))
             | ((Some(_), Some(_)), (false, _)) => (),
@@ -133,7 +131,10 @@ struct Timer {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Timer {
     const NAME: &str = "timer";
-    deftype!("time", "fn([duration, Number], [bool, Number]) -> datetime");
+    deftype!(
+        "time",
+        "fn([duration, Number], [bool, Number]) -> Result<datetime, `TimerError(string)>"
+    );
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_, _, _, from, eid| {
@@ -160,7 +161,10 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Timer {
                 self.id = None;
                 self.timeout = None;
                 self.repeat = Repeat::No;
-                return err!("timer(per, rep): expected duration, bool or number >= 0");
+                return Some(err!(
+                    literal!("TimerError"),
+                    "timer(per, rep): expected duration, bool or number >= 0"
+                ));
             }};
         }
         macro_rules! schedule {
