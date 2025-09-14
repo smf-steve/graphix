@@ -186,7 +186,7 @@ pub enum Module {
 /// ```no_run
 /// use netidx::{publisher::Publisher, subscriber::Subscriber};
 /// use anyhow::Result;
-/// use netidx_core::pool::Pooled;
+/// use poolshark::global::GPooled;
 /// use graphix_compiler::ExecCtx;
 /// use graphix_rt::{GXRt, GXConfigBuilder, GXHandle, GXEvent, NoExt};
 /// use tokio::sync::mpsc;
@@ -195,7 +195,7 @@ pub enum Module {
 /// async fn start_runtime(
 ///     publisher: Publisher,
 ///     subscriber: Subscriber,
-///     sub: mpsc::Sender<Pooled<Vec<GXEvent<NoExt>>>>
+///     sub: mpsc::Sender<GPooled<Vec<GXEvent<NoExt>>>>
 /// ) -> Result<GXHandle<NoExt>> {
 ///     let mut ctx = ExecCtx::new(GXRt::<NoExt>::new(publisher, subscriber));
 ///     let (root, mods) = graphix_stdlib::register(&mut ctx, BitFlags::all())?;
