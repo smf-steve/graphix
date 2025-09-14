@@ -801,14 +801,14 @@ fn array() {
             ExprKind::Array {
                 args: Arc::from_iter([
                     ExprKind::Constant(Value::from("foo")).to_expr_nopos(),
-                    ExprKind::Constant(Value::from(42)).to_expr_nopos(),
+                    ExprKind::Constant(Value::I64(42)).to_expr_nopos(),
                 ]),
             }
             .to_expr_nopos(),
             ExprKind::Array {
                 args: Arc::from_iter([
                     ExprKind::Constant(Value::from("bar")).to_expr_nopos(),
-                    ExprKind::Constant(Value::from(42)).to_expr_nopos(),
+                    ExprKind::Constant(Value::I64(42)).to_expr_nopos(),
                 ]),
             }
             .to_expr_nopos(),
@@ -816,7 +816,9 @@ fn array() {
     }
     .to_expr_nopos();
     let s = r#"[["foo", 42], ["bar", 42]]"#;
-    assert_eq!(exp, parse_one(s).unwrap());
+    let exp1 = parse_one(s).unwrap();
+    eprintln!("{exp1}");
+    assert_eq!(exp, exp1);
 }
 
 #[test]
@@ -829,7 +831,7 @@ fn doexpr() {
                 typ: None,
                 export: false,
                 pattern: StructurePattern::Bind(literal!("baz")),
-                value: ExprKind::Constant(Value::from(42)).to_expr_nopos(),
+                value: ExprKind::Constant(Value::I64(42)).to_expr_nopos(),
             }))
             .to_expr_nopos(),
             ExprKind::Ref { name: ModPath::from(["baz"]) }.to_expr_nopos(),
@@ -1061,7 +1063,9 @@ fn labeled_argument_lambda() {
             args: Arc::from_iter([
                 Arg {
                     pattern: StructurePattern::Bind("foo".into()),
-                    labeled: Some(Some(ExprKind::Constant(3.into()).to_expr_nopos())),
+                    labeled: Some(Some(
+                        ExprKind::Constant(Value::I64(3)).to_expr_nopos(),
+                    )),
                     constraint: Some(Type::Ref {
                         scope: ModPath::root(),
                         name: ["Number"].into(),
