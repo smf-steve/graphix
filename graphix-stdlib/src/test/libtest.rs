@@ -4,7 +4,6 @@ use anyhow::Result;
 use arcstr::ArcStr;
 use netidx::subscriber::Value;
 
-#[cfg(test)]
 const IS_ERR: &str = r#"
 {
   let errors = never();
@@ -15,13 +14,11 @@ const IS_ERR: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(is_err, IS_ERR, |v: Result<&Value>| match v {
     Ok(Value::Bool(b)) => *b,
     _ => false,
 });
 
-#[cfg(test)]
 const FILTER_ERR: &str = r#"
 {
   let a = [42, 43, 44, error("foo")];
@@ -29,24 +26,20 @@ const FILTER_ERR: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(filter_err, FILTER_ERR, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const ERROR: &str = r#"
   error("foo")
 "#;
 
-#[cfg(test)]
 run!(error, ERROR, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const ONCE: &str = r#"
 {
   let x = [1, 2, 3, 4, 5, 6];
@@ -54,13 +47,11 @@ const ONCE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(once, ONCE, |v: Result<&Value>| match v {
     Ok(Value::I64(1)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const ALL: &str = r#"
 {
   let x = 1;
@@ -70,13 +61,11 @@ const ALL: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(all, ALL, |v: Result<&Value>| match v {
     Ok(Value::I64(1)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const SUM: &str = r#"
 {
   let tweeeeenywon = [1, 2, 3, 4, 5, 6];
@@ -84,13 +73,11 @@ const SUM: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(sum, SUM, |v: Result<&Value>| match v {
     Ok(Value::I64(21)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const PRODUCT: &str = r#"
 {
   let tweeeeenywon = [5, 2, 2, 1.05];
@@ -98,13 +85,11 @@ const PRODUCT: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(product, PRODUCT, |v: Result<&Value>| match v {
     Ok(Value::F64(21.0)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DIVIDE: &str = r#"
 {
   let tweeeeenywon = [84, 2, 2];
@@ -112,35 +97,29 @@ const DIVIDE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(divide, DIVIDE, |v: Result<&Value>| match v {
     Ok(Value::I64(21)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const MIN: &str = r#"
    min(1, 2, 3, 4, 5, 6, 0)
 "#;
 
-#[cfg(test)]
 run!(min, MIN, |v: Result<&Value>| match v {
     Ok(Value::I64(0)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const MAX: &str = r#"
    max(1, 2, 3, 4, 5, 6, 0)
 "#;
 
-#[cfg(test)]
 run!(max, MAX, |v: Result<&Value>| match v {
     Ok(Value::I64(6)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const AND: &str = r#"
 {
   let x = 1;
@@ -150,24 +129,20 @@ const AND: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(and, AND, |v: Result<&Value>| match v {
     Ok(Value::Bool(true)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const OR: &str = r#"
   or(false, false, true)
 "#;
 
-#[cfg(test)]
 run!(or, OR, |v: Result<&Value>| match v {
     Ok(Value::Bool(true)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const INDEX: &str = r#"
 {
   let a = ["foo", "bar", 1, 2, 3];
@@ -175,13 +150,11 @@ const INDEX: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(index, INDEX, |v: Result<&Value>| match v {
     Ok(Value::I64(3)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const SLICE: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -189,7 +162,6 @@ const SLICE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(slice, SLICE, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -200,7 +172,6 @@ run!(slice, SLICE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const FILTER0: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -208,7 +179,6 @@ const FILTER0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(filter0, FILTER0, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(8)) => true,
@@ -216,7 +186,6 @@ run!(filter0, FILTER0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const FILTER1: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -224,7 +193,6 @@ const FILTER1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(filter1, FILTER1, |v: Result<&Value>| {
     match v {
         Ok(_) => false,
@@ -232,7 +200,6 @@ run!(filter1, FILTER1, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const QUEUE: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -246,7 +213,6 @@ const QUEUE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(queue, QUEUE, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -259,7 +225,6 @@ run!(queue, QUEUE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const COUNT: &str = r#"
 {
   let a = [0, 1, 2, 3];
@@ -267,7 +232,6 @@ const COUNT: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(count, COUNT, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -278,7 +242,6 @@ run!(count, COUNT, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const SAMPLE: &str = r#"
 {
   let a = [0, 1, 2, 3];
@@ -287,7 +250,6 @@ const SAMPLE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(sample, SAMPLE, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -300,7 +262,6 @@ run!(sample, SAMPLE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const UNIQ: &str = r#"
 {
   let a = [1, 1, 1, 1, 1, 1, 1];
@@ -308,7 +269,6 @@ const UNIQ: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(uniq, UNIQ, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(1)) => true,
@@ -316,12 +276,10 @@ run!(uniq, UNIQ, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const SEQ: &str = r#"
   array::group(seq(0, 4), |n, _| n == 4)
 "#;
 
-#[cfg(test)]
 run!(seq, SEQ, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -332,7 +290,6 @@ run!(seq, SEQ, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const THROTTLE: &str = r#"
 {
     let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -341,7 +298,6 @@ const THROTTLE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(throttle, THROTTLE, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -352,7 +308,6 @@ run!(throttle, THROTTLE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const NEVER: &str = r#"
 {
    let x = never(100);
@@ -360,7 +315,6 @@ const NEVER: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(never, NEVER, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(0)) => true,
@@ -368,7 +322,6 @@ run!(never, NEVER, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const MEAN: &str = r#"
 {
   let a = [0, 1, 2, 3];
@@ -376,7 +329,6 @@ const MEAN: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(mean, MEAN, |v: Result<&Value>| {
     match v {
         Ok(Value::F64(1.5)) => true,
@@ -384,7 +336,6 @@ run!(mean, MEAN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_MAP0: &str = r#"
 {
   let a = [1, 2, 3, 4];
@@ -392,7 +343,6 @@ const ARRAY_MAP0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_map0, ARRAY_MAP0, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -405,7 +355,6 @@ run!(array_map0, ARRAY_MAP0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_MAP1: &str = r#"
 {
   let a = [1, 2];
@@ -414,7 +363,6 @@ const ARRAY_MAP1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_map1, ARRAY_MAP1, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<[[i64; 2]; 2]>() {
@@ -425,12 +373,10 @@ run!(array_map1, ARRAY_MAP1, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_MAP2: &str = r#"
   array::map([1, 2], |x| str::len(x))
 "#;
 
-#[cfg(test)]
 run!(array_map2, ARRAY_MAP2, |v: Result<&Value>| {
     match v {
         Err(_) => true,
@@ -438,7 +384,6 @@ run!(array_map2, ARRAY_MAP2, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FILTER: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -446,7 +391,6 @@ const ARRAY_FILTER: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_filter, ARRAY_FILTER, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -459,7 +403,6 @@ run!(array_filter, ARRAY_FILTER, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FLAT_MAP: &str = r#"
 {
   let a = [1, 2];
@@ -467,7 +410,6 @@ const ARRAY_FLAT_MAP: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_flat_map, ARRAY_FLAT_MAP, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -478,7 +420,6 @@ run!(array_flat_map, ARRAY_FLAT_MAP, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FILTER_MAP: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -489,7 +430,6 @@ const ARRAY_FILTER_MAP: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_filter_map, ARRAY_FILTER_MAP, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -500,7 +440,6 @@ run!(array_filter_map, ARRAY_FILTER_MAP, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FIND: &str = r#"
 {
   type T = (string, i64);
@@ -509,7 +448,6 @@ const ARRAY_FIND: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_find, ARRAY_FIND, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -520,7 +458,6 @@ run!(array_find, ARRAY_FIND, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FIND_MAP: &str = r#"
 {
   type T = (string, i64);
@@ -532,7 +469,6 @@ const ARRAY_FIND_MAP: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_find_map, ARRAY_FIND_MAP, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(2)) => true,
@@ -540,12 +476,10 @@ run!(array_find_map, ARRAY_FIND_MAP, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_ITER: &str = r#"
    filter(array::iter([1, 2, 3, 4]), |x| x == 4)
 "#;
 
-#[cfg(test)]
 run!(array_iter, ARRAY_ITER, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(4)) => true,
@@ -553,7 +487,6 @@ run!(array_iter, ARRAY_ITER, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_ITERQ: &str = r#"
 {
    let a = [1, 2, 3, 4];
@@ -565,7 +498,6 @@ const ARRAY_ITERQ: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_iterq, ARRAY_ITERQ, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(8)) => true,
@@ -573,7 +505,6 @@ run!(array_iterq, ARRAY_ITERQ, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FOLD0: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -581,7 +512,6 @@ const ARRAY_FOLD0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_fold0, ARRAY_FOLD0, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(55)) => true,
@@ -589,7 +519,6 @@ run!(array_fold0, ARRAY_FOLD0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FOLD1: &str = r#"
 {
   let a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -597,7 +526,6 @@ const ARRAY_FOLD1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_fold1, ARRAY_FOLD1, |v: Result<&Value>| {
     match v {
         Err(_) => true,
@@ -605,12 +533,10 @@ run!(array_fold1, ARRAY_FOLD1, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_CONCAT: &str = r#"
   array::concat([1, 2, 3], [4, 5], [6])
 "#;
 
-#[cfg(test)]
 run!(array_concat, ARRAY_CONCAT, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -623,12 +549,10 @@ run!(array_concat, ARRAY_CONCAT, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_PUSH: &str = r#"
   array::push([(1, 2), (3, 4)], (5, 6))
 "#;
 
-#[cfg(test)]
 run!(array_push, ARRAY_PUSH, |v: Result<&Value>| {
     match v.and_then(|v| v.clone().cast_to::<[(u64, u64); 3]>()) {
         Ok([(1, 2), (3, 4), (5, 6)]) => true,
@@ -636,12 +560,10 @@ run!(array_push, ARRAY_PUSH, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_PUSH_FRONT: &str = r#"
   array::push_front([(1, 2), (3, 4)], (5, 6))
 "#;
 
-#[cfg(test)]
 run!(array_push_front, ARRAY_PUSH_FRONT, |v: Result<&Value>| {
     match v.and_then(|v| v.clone().cast_to::<[(u64, u64); 3]>()) {
         Ok([(5, 6), (1, 2), (3, 4)]) => true,
@@ -649,12 +571,10 @@ run!(array_push_front, ARRAY_PUSH_FRONT, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_WINDOW0: &str = r#"
   array::window(#n:1, [(1, 2), (3, 4)], (5, 6))
 "#;
 
-#[cfg(test)]
 run!(array_window0, ARRAY_WINDOW0, |v: Result<&Value>| {
     match v.and_then(|v| v.clone().cast_to::<[(u64, u64); 1]>()) {
         Ok([(5, 6)]) => true,
@@ -662,12 +582,10 @@ run!(array_window0, ARRAY_WINDOW0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_WINDOW1: &str = r#"
   array::window(#n:2, [(1, 2), (3, 4)], (5, 6))
 "#;
 
-#[cfg(test)]
 run!(array_window1, ARRAY_WINDOW1, |v: Result<&Value>| {
     match v.and_then(|v| v.clone().cast_to::<[(u64, u64); 2]>()) {
         Ok([(3, 4), (5, 6)]) => true,
@@ -675,12 +593,10 @@ run!(array_window1, ARRAY_WINDOW1, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_WINDOW2: &str = r#"
   array::window(#n:3, [(1, 2), (3, 4)], (5, 6))
 "#;
 
-#[cfg(test)]
 run!(array_window2, ARRAY_WINDOW2, |v: Result<&Value>| {
     match v.and_then(|v| v.clone().cast_to::<[(u64, u64); 3]>()) {
         Ok([(1, 2), (3, 4), (5, 6)]) => true,
@@ -688,7 +604,6 @@ run!(array_window2, ARRAY_WINDOW2, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_LEN: &str = r#"
 {
   use array;
@@ -696,7 +611,6 @@ const ARRAY_LEN: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_len, ARRAY_LEN, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(6)) => true,
@@ -704,12 +618,10 @@ run!(array_len, ARRAY_LEN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_FLATTEN: &str = r#"
   array::flatten([[1, 2, 3], [4, 5], [6]])
 "#;
 
-#[cfg(test)]
 run!(array_flatten, ARRAY_FLATTEN, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -722,7 +634,6 @@ run!(array_flatten, ARRAY_FLATTEN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_GROUP0: &str = r#"
 {
     let a = array::iter([1, 2, 3]);
@@ -730,7 +641,6 @@ const ARRAY_GROUP0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_group0, ARRAY_GROUP0, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -741,7 +651,6 @@ run!(array_group0, ARRAY_GROUP0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_GROUP1: &str = r#"
 {
     let a = array::iter([1, 2, 3]);
@@ -749,7 +658,6 @@ const ARRAY_GROUP1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_group1, ARRAY_GROUP1, |v: Result<&Value>| {
     match v {
         Ok(_) => false,
@@ -757,7 +665,6 @@ run!(array_group1, ARRAY_GROUP1, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_GROUP2: &str = r#"
 {
     let a = array::iter([1, 2, 3]);
@@ -765,7 +672,6 @@ const ARRAY_GROUP2: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_group2, ARRAY_GROUP2, |v: Result<&Value>| {
     match v {
         Ok(_) => false,
@@ -773,7 +679,6 @@ run!(array_group2, ARRAY_GROUP2, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_SORT0: &str = r#"
 {
    let a = [5, 4, 3, 2, 1];
@@ -781,7 +686,6 @@ const ARRAY_SORT0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_sort0, ARRAY_SORT0, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<[i64; 5]>() {
@@ -792,7 +696,6 @@ run!(array_sort0, ARRAY_SORT0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_SORT1: &str = r#"
 {
    let a = [5, 4, 3, 2, 1];
@@ -800,7 +703,6 @@ const ARRAY_SORT1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_sort1, ARRAY_SORT1, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<[i64; 5]>() {
@@ -811,7 +713,6 @@ run!(array_sort1, ARRAY_SORT1, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_SORT2: &str = r#"
 {
    let a = ["5", "6", "50", "60", "40", "4", "3", "2", "1"];
@@ -819,7 +720,6 @@ const ARRAY_SORT2: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_sort2, ARRAY_SORT2, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<[ArcStr; 9]>() {
@@ -840,7 +740,6 @@ run!(array_sort2, ARRAY_SORT2, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_SORT3: &str = r#"
 {
    let a = ["5", "6", "50", "60", "40", "4", "3", "2", "1"];
@@ -848,7 +747,6 @@ const ARRAY_SORT3: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_sort3, ARRAY_SORT3, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<[ArcStr; 9]>() {
@@ -869,7 +767,6 @@ run!(array_sort3, ARRAY_SORT3, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_ENUMERATE: &str = r#"
 {
    let a = [1, 2, 3];
@@ -877,7 +774,6 @@ const ARRAY_ENUMERATE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_enumerate, ARRAY_ENUMERATE, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<[(i64, i64); 3]>() {
@@ -888,7 +784,6 @@ run!(array_enumerate, ARRAY_ENUMERATE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_ZIP: &str = r#"
 {
    let a0 = [1, 2, 5];
@@ -897,7 +792,6 @@ const ARRAY_ZIP: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_zip, ARRAY_ZIP, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<[(i64, i64); 3]>() {
@@ -908,7 +802,6 @@ run!(array_zip, ARRAY_ZIP, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const ARRAY_UNZIP: &str = r#"
 {
    let a = [(1, 1), (2, 2), (5, 3)];
@@ -916,7 +809,6 @@ const ARRAY_UNZIP: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(array_unzip, ARRAY_UNZIP, |v: Result<&Value>| {
     match v {
         Ok(v) => match v.clone().cast_to::<([i64; 3], [i64; 3])>() {
@@ -927,12 +819,10 @@ run!(array_unzip, ARRAY_UNZIP, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_STARTS_WITH: &str = r#"
   str::starts_with(#pfx:"foo", "foobarbaz")
 "#;
 
-#[cfg(test)]
 run!(str_starts_with, STR_STARTS_WITH, |v: Result<&Value>| {
     match v {
         Ok(Value::Bool(true)) => true,
@@ -940,12 +830,10 @@ run!(str_starts_with, STR_STARTS_WITH, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_ENDS_WITH: &str = r#"
   str::ends_with(#sfx:"baz", "foobarbaz")
 "#;
 
-#[cfg(test)]
 run!(str_ends_with, STR_ENDS_WITH, |v: Result<&Value>| {
     match v {
         Ok(Value::Bool(true)) => true,
@@ -953,12 +841,10 @@ run!(str_ends_with, STR_ENDS_WITH, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_CONTAINS: &str = r#"
   str::contains(#part:"bar", "foobarbaz")
 "#;
 
-#[cfg(test)]
 run!(str_contains, STR_CONTAINS, |v: Result<&Value>| {
     match v {
         Ok(Value::Bool(true)) => true,
@@ -966,12 +852,10 @@ run!(str_contains, STR_CONTAINS, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_STRIP_PREFIX: &str = r#"
   str::strip_prefix(#pfx:"foo", "foobarbaz")
 "#;
 
-#[cfg(test)]
 run!(str_strip_prefix, STR_STRIP_PREFIX, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "barbaz",
@@ -979,12 +863,10 @@ run!(str_strip_prefix, STR_STRIP_PREFIX, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_STRIP_SUFFIX: &str = r#"
   str::strip_suffix(#sfx:"baz", "foobarbaz")
 "#;
 
-#[cfg(test)]
 run!(str_strip_suffix, STR_STRIP_SUFFIX, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "foobar",
@@ -992,12 +874,10 @@ run!(str_strip_suffix, STR_STRIP_SUFFIX, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_TRIM: &str = r#"
   str::trim(" foobarbaz ")
 "#;
 
-#[cfg(test)]
 run!(str_trim, STR_TRIM, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "foobarbaz",
@@ -1005,12 +885,10 @@ run!(str_trim, STR_TRIM, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_TRIM_START: &str = r#"
   str::trim_start(" foobarbaz ")
 "#;
 
-#[cfg(test)]
 run!(str_trim_start, STR_TRIM_START, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "foobarbaz ",
@@ -1018,12 +896,10 @@ run!(str_trim_start, STR_TRIM_START, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_TRIM_END: &str = r#"
   str::trim_end(" foobarbaz ")
 "#;
 
-#[cfg(test)]
 run!(str_trim_end, STR_TRIM_END, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == " foobarbaz",
@@ -1031,12 +907,10 @@ run!(str_trim_end, STR_TRIM_END, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_REPLACE: &str = r#"
   str::replace(#pat:"foo", #rep:"baz", "foobarbazfoo")
 "#;
 
-#[cfg(test)]
 run!(str_replace, STR_REPLACE, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "bazbarbazbaz",
@@ -1044,12 +918,10 @@ run!(str_replace, STR_REPLACE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_DIRNAME: &str = r#"
   str::dirname("/foo/bar/baz")
 "#;
 
-#[cfg(test)]
 run!(str_dirname, STR_DIRNAME, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "/foo/bar",
@@ -1057,12 +929,10 @@ run!(str_dirname, STR_DIRNAME, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_BASENAME: &str = r#"
   str::basename("/foo/bar/baz")
 "#;
 
-#[cfg(test)]
 run!(str_basename, STR_BASENAME, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "baz",
@@ -1070,12 +940,10 @@ run!(str_basename, STR_BASENAME, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_JOIN: &str = r#"
   str::join(#sep:"/", "/foo", "bar", ["baz", "zam"])
 "#;
 
-#[cfg(test)]
 run!(str_join, STR_JOIN, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "/foo/bar/baz/zam",
@@ -1083,12 +951,10 @@ run!(str_join, STR_JOIN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_CONCAT: &str = r#"
   str::concat("foo", "bar", ["baz", "zam"])
 "#;
 
-#[cfg(test)]
 run!(str_concat, STR_CONCAT, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "foobarbazzam",
@@ -1096,12 +962,10 @@ run!(str_concat, STR_CONCAT, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_ESCAPE: &str = r#"
   str::escape("/foo/bar")
 "#;
 
-#[cfg(test)]
 run!(str_escape, STR_ESCAPE, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "\\/foo\\/bar",
@@ -1109,12 +973,10 @@ run!(str_escape, STR_ESCAPE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_UNESCAPE: &str = r#"
   str::unescape("\\/foo\\/bar")
 "#;
 
-#[cfg(test)]
 run!(str_unescape, STR_UNESCAPE, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "/foo/bar",
@@ -1122,7 +984,6 @@ run!(str_unescape, STR_UNESCAPE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_SPLIT: &str = r#"
 {
   let a = str::split(#pat:",", "foo, bar, baz");
@@ -1130,7 +991,6 @@ const STR_SPLIT: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(str_split, STR_SPLIT, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1143,7 +1003,6 @@ run!(str_split, STR_SPLIT, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_RSPLIT: &str = r#"
 {
   let a = str::rsplit(#pat:",", "foo, bar, baz");
@@ -1151,7 +1010,6 @@ const STR_RSPLIT: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(str_rsplit, STR_RSPLIT, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1164,7 +1022,6 @@ run!(str_rsplit, STR_RSPLIT, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_SPLITN: &str = r#"
 {
   let a = str::splitn(#pat:",", #n:2, "foo, bar, baz")?;
@@ -1172,7 +1029,6 @@ const STR_SPLITN: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(str_splitn, STR_SPLITN, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1183,7 +1039,6 @@ run!(str_splitn, STR_SPLITN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_RSPLITN: &str = r#"
 {
   let a = str::rsplitn(#pat:",", #n:2, "foo, bar, baz")?;
@@ -1191,7 +1046,6 @@ const STR_RSPLITN: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(str_rsplitn, STR_RSPLITN, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1202,7 +1056,6 @@ run!(str_rsplitn, STR_RSPLITN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_SPLIT_ESCAPED: &str = r#"
 {
   let a = str::split_escaped(#esc:"\\", #sep:",", "foo\\, bar, baz")?;
@@ -1210,7 +1063,6 @@ const STR_SPLIT_ESCAPED: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(str_split_escaped, STR_SPLIT_ESCAPED, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1221,7 +1073,6 @@ run!(str_split_escaped, STR_SPLIT_ESCAPED, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_SPLITN_ESCAPED: &str = r#"
 {
   let a = str::splitn_escaped(#n:2, #esc:"\\", #sep:",", "foo\\, bar, baz, bam")?;
@@ -1229,7 +1080,6 @@ const STR_SPLITN_ESCAPED: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(str_splitn_escaped, STR_SPLITN_ESCAPED, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1242,12 +1092,10 @@ run!(str_splitn_escaped, STR_SPLITN_ESCAPED, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_SPLIT_ONCE: &str = r#"
   str::split_once(#pat:", ", "foo, bar, baz")
 "#;
 
-#[cfg(test)]
 run!(str_split_once, STR_SPLIT_ONCE, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1258,12 +1106,10 @@ run!(str_split_once, STR_SPLIT_ONCE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_RSPLIT_ONCE: &str = r#"
   str::rsplit_once(#pat:", ", "foo, bar, baz")
 "#;
 
-#[cfg(test)]
 run!(str_rsplit_once, STR_RSPLIT_ONCE, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1274,12 +1120,10 @@ run!(str_rsplit_once, STR_RSPLIT_ONCE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_TO_LOWER: &str = r#"
   str::to_lower("FOO")
 "#;
 
-#[cfg(test)]
 run!(str_to_lower, STR_TO_LOWER, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "foo",
@@ -1287,12 +1131,10 @@ run!(str_to_lower, STR_TO_LOWER, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_TO_UPPER: &str = r#"
   str::to_upper("foo")
 "#;
 
-#[cfg(test)]
 run!(str_to_upper, STR_TO_UPPER, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) => s == "FOO",
@@ -1300,12 +1142,10 @@ run!(str_to_upper, STR_TO_UPPER, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_LEN: &str = r#"
   str::len("foo")
 "#;
 
-#[cfg(test)]
 run!(str_len, STR_LEN, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(3)) => true,
@@ -1313,12 +1153,10 @@ run!(str_len, STR_LEN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_SUB: &str = r#"
   str::sub(#start:1, #len:2, "💗💖🍇")
 "#;
 
-#[cfg(test)]
 run!(str_sub, STR_SUB, |v: Result<&Value>| {
     match v {
         Ok(Value::String(s)) if &*s == "💖🍇" => true,
@@ -1326,12 +1164,10 @@ run!(str_sub, STR_SUB, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const STR_PARSE: &str = r#"
   str::parse("42")
 "#;
 
-#[cfg(test)]
 run!(str_parse, STR_PARSE, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(42)) => true,
@@ -1339,12 +1175,10 @@ run!(str_parse, STR_PARSE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RE_IS_MATCH: &str = r#"
   re::is_match(#pat:r'[\\[\\]0-9]+', r'foo[0]')
 "#;
 
-#[cfg(test)]
 run!(re_is_match, RE_IS_MATCH, |v: Result<&Value>| {
     match v {
         Ok(Value::Bool(true)) => true,
@@ -1352,12 +1186,10 @@ run!(re_is_match, RE_IS_MATCH, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RE_FIND: &str = r#"
   re::find(#pat:r'foo', r'foobarfoobazfoo')
 "#;
 
-#[cfg(test)]
 run!(re_find, RE_FIND, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1370,12 +1202,10 @@ run!(re_find, RE_FIND, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RE_CAPTURES: &str = r#"
   re::captures(#pat:r'(fo)ob', r'foobarfoobazfoo')
 "#;
 
-#[cfg(test)]
 run!(re_captures, RE_CAPTURES, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1392,12 +1222,10 @@ run!(re_captures, RE_CAPTURES, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RE_SPLIT: &str = r#"
   re::split(#pat:r',\\s*', r'foo, bar, baz')
 "#;
 
-#[cfg(test)]
 run!(re_split, RE_SPLIT, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1410,12 +1238,10 @@ run!(re_split, RE_SPLIT, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RE_SPLITN: &str = r#"
   re::splitn(#pat:r',\\s*', #limit:2, r'foo, bar, baz')
 "#;
 
-#[cfg(test)]
 run!(re_splitn, RE_SPLITN, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1426,7 +1252,6 @@ run!(re_splitn, RE_SPLITN, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const NET_PUB_SUB: &str = r#"
 {
   net::publish("/local/foo", 42);
@@ -1434,7 +1259,6 @@ const NET_PUB_SUB: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(net_pub_sub, NET_PUB_SUB, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(42)) => true,
@@ -1442,7 +1266,6 @@ run!(net_pub_sub, NET_PUB_SUB, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const NET_WRITE0: &str = r#"
 {
   let p = "/local/foo";
@@ -1454,7 +1277,6 @@ const NET_WRITE0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(net_write0, NET_WRITE0, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1465,7 +1287,6 @@ run!(net_write0, NET_WRITE0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const NET_WRITE1: &str = r#"
 {
   let p = "/local/foo";
@@ -1477,7 +1298,6 @@ const NET_WRITE1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(net_write1, NET_WRITE1, |v: Result<&Value>| {
     match v {
         Ok(_) => false,
@@ -1485,7 +1305,6 @@ run!(net_write1, NET_WRITE1, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const NET_LIST: &str = r#"
 {
   net::publish("/local/foo", 42);
@@ -1494,7 +1313,6 @@ const NET_LIST: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(net_list, NET_LIST, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) => match &a[..] {
@@ -1509,7 +1327,6 @@ run!(net_list, NET_LIST, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const NET_LIST_TABLE: &str = r#"
 {
   net::publish("/local/t/0/foo", 42);
@@ -1523,7 +1340,6 @@ const NET_LIST_TABLE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(net_list_table, NET_LIST_TABLE, |v: Result<&Value>| {
     match v {
         Ok(Value::Bool(true)) => true,
@@ -1531,7 +1347,6 @@ run!(net_list_table, NET_LIST_TABLE, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const NET_RPC0: &str = r#"
 {
   let get_val = "/local/get_val";
@@ -1558,7 +1373,6 @@ const NET_RPC0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(net_rpc0, NET_RPC0, |v: Result<&Value>| {
     match v {
         Ok(Value::I64(42)) => true,
@@ -1566,12 +1380,10 @@ run!(net_rpc0, NET_RPC0, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RAND: &str = r#"
   rand::rand(#clock:null)
 "#;
 
-#[cfg(test)]
 run!(rand, RAND, |v: Result<&Value>| {
     match v {
         Ok(Value::F64(v)) if *v >= 0. && *v < 1.0 => true,
@@ -1579,12 +1391,10 @@ run!(rand, RAND, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RAND_PICK: &str = r#"
   rand::pick(["Chicken is coming", "Grape", "Pilot!"])
 "#;
 
-#[cfg(test)]
 run!(rand_pick, RAND_PICK, |v: Result<&Value>| {
     match v {
         Ok(Value::String(v)) => v == "Chicken is coming" || v == "Grape" || v == "Pilot!",
@@ -1592,12 +1402,10 @@ run!(rand_pick, RAND_PICK, |v: Result<&Value>| {
     }
 });
 
-#[cfg(test)]
 const RAND_SHUFFLE: &str = r#"
   rand::shuffle(["Chicken is coming", "Grape", "Pilot!"])
 "#;
 
-#[cfg(test)]
 run!(rand_shuffle, RAND_SHUFFLE, |v: Result<&Value>| {
     match v {
         Ok(Value::Array(a)) if a.len() == 3 => {

@@ -1,12 +1,10 @@
-#[cfg(test)]
-use std::time::Duration;
-
 use super::init;
 use crate::run;
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
 use graphix_rt::GXEvent;
 use netidx::publisher::Value;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 #[tokio::test(flavor = "current_thread")]
@@ -1001,7 +999,6 @@ run!(match_exhaust1, MATCH_EXHAUST1, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const ANY0: &str = r#"
 {
   let x = 1;
@@ -1011,13 +1008,11 @@ const ANY0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(any0, ANY0, |v: Result<&Value>| match v {
     Ok(Value::I64(3)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const ANY1: &str = r#"
 {
   let x = 1;
@@ -1027,7 +1022,6 @@ const ANY1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(any1, ANY1, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
         [Value::String(s0), Value::String(s1)] => {
@@ -1038,7 +1032,6 @@ run!(any1, ANY1, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const VARIANTS0: &str = r#"
 {
   let a = select array::iter([`Foo, `Bar("hello world")]) {
@@ -1050,7 +1043,6 @@ const VARIANTS0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(variants0, VARIANTS0, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
         [Value::I64(0), Value::I64(1)] => true,
@@ -1059,7 +1051,6 @@ run!(variants0, VARIANTS0, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const VARIANTS1: &str = r#"
 {
     let mode = select 0 {
@@ -1073,13 +1064,11 @@ const VARIANTS1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(variants1, VARIANTS1, |v: Result<&Value>| match v {
     Ok(Value::I64(0)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const LATE_BINDING0: &str = r#"
 {
   type T = { foo: string, bar: i64, f: fn(#x: i64, #y: i64) -> i64 };
@@ -1090,13 +1079,11 @@ const LATE_BINDING0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(late_binding0, LATE_BINDING0, |v: Result<&Value>| match v {
     Ok(Value::I64(1)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const LATE_BINDING1: &str = r#"
 {
   type F = fn(#x: i64, #y: i64) -> i64;
@@ -1112,7 +1099,6 @@ const LATE_BINDING1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(late_binding1, LATE_BINDING1, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
         [Value::I64(1), Value::I64(2)] => true,
@@ -1121,7 +1107,6 @@ run!(late_binding1, LATE_BINDING1, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const LATE_BINDING2: &str = r#"
 {
   type T = { foo: string, bar: i64, f: fn(#x: i64, #y: i64) -> i64 };
@@ -1130,13 +1115,11 @@ const LATE_BINDING2: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(late_binding2, LATE_BINDING2, |v: Result<&Value>| match v {
     Ok(Value::I64(1)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const LATE_BINDING3: &str = r#"
 {
     let f: fn(i64) -> i64 = never();
@@ -1146,13 +1129,11 @@ const LATE_BINDING3: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(late_binding3, LATE_BINDING3, |v: Result<&Value>| match v {
     Ok(Value::I64(2)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const RECTYPES0: &str = r#"
 {
   type List = [
@@ -1164,7 +1145,6 @@ const RECTYPES0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(rectypes0, RECTYPES0, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
         [Value::String(s), Value::I64(42), Value::Array(a)] if &**s == "Cons" =>
@@ -1179,7 +1159,6 @@ run!(rectypes0, RECTYPES0, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const RECTYPES1: &str = r#"
 {
   type List<'a> = [
@@ -1191,7 +1170,6 @@ const RECTYPES1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(rectypes1, RECTYPES1, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
         [Value::String(s), Value::I64(42), Value::Array(a)] if &**s == "Cons" =>
@@ -1206,7 +1184,6 @@ run!(rectypes1, RECTYPES1, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const RECTYPES2: &str = r#"
 {
   type List<'a> = [
@@ -1218,13 +1195,11 @@ const RECTYPES2: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(rectypes2, RECTYPES2, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const TYPEDEF_TVAR_ERR: &str = r#"
 {
   type T<'a, 'b> = { foo: 'a, bar: 'b, baz: 'c };
@@ -1232,13 +1207,11 @@ const TYPEDEF_TVAR_ERR: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(typedef_tvar_err, TYPEDEF_TVAR_ERR, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const TYPEDEF_TVAR_OK: &str = r#"
 {
   type T<'a, 'b> = { foo: 'a, bar: 'b, f: fn('a, 'b, 'c) -> 'a };
@@ -1246,13 +1219,11 @@ const TYPEDEF_TVAR_OK: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(typedef_tvar_ok, TYPEDEF_TVAR_OK, |v: Result<&Value>| match v {
     Ok(Value::I64(0)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const BYREF_DEREF: &str = r#"
 {
   let a = 42;
@@ -1261,13 +1232,11 @@ const BYREF_DEREF: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(byref_deref, BYREF_DEREF, |v: Result<&Value>| match v {
     Ok(Value::I64(42)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const BYREF_TUPLE: &str = r#"
 {
   let r = &(1, 2);
@@ -1276,13 +1245,11 @@ const BYREF_TUPLE: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(byref_tuple, BYREF_TUPLE, |v: Result<&Value>| match v {
     Ok(Value::I64(3)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const BYREF_PATTERN: &str = r#"
 {
   let r = &42;
@@ -1292,13 +1259,11 @@ const BYREF_PATTERN: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(byref_pattern, BYREF_PATTERN, |v: Result<&Value>| match v {
     Ok(Value::I64(42)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const CONNECT_DEREF0: &str = r#"
 {
   let v = 41;
@@ -1308,7 +1273,6 @@ const CONNECT_DEREF0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(connect_deref0, CONNECT_DEREF0, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
         [Value::I64(41), Value::I64(42)] => true,
@@ -1317,7 +1281,6 @@ run!(connect_deref0, CONNECT_DEREF0, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const CONNECT_DEREF1: &str = r#"
 {
   let f = |x: &i64| *x <- *x + 1;
@@ -1327,7 +1290,6 @@ const CONNECT_DEREF1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(connect_deref1, CONNECT_DEREF1, |v: Result<&Value>| match v {
     Ok(Value::Array(a)) => match &a[..] {
         [Value::I64(41), Value::I64(42)] => true,
@@ -1336,7 +1298,6 @@ run!(connect_deref1, CONNECT_DEREF1, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const NESTED_OPTIONAL0: &str = r#"
 mod b {
   mod a {
@@ -1351,13 +1312,11 @@ mod b {
 }
 "#;
 
-#[cfg(test)]
 run!(nested_optional0, NESTED_OPTIONAL0, |v: Result<&Value>| match v {
     Ok(Value::I64(42)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE0: &str = r#"
 {
     let source = "
@@ -1383,13 +1342,11 @@ const DYNAMIC_MODULE0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module0, DYNAMIC_MODULE0, |v: Result<&Value>| match v {
     Ok(Value::I64(2)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE1: &str = r#"
 {
     let source = "
@@ -1415,13 +1372,11 @@ const DYNAMIC_MODULE1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module1, DYNAMIC_MODULE1, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE2: &str = r#"
 {
     let source = "let add = 'a: Number |x: 'a| -> 'a x + x";
@@ -1440,13 +1395,11 @@ const DYNAMIC_MODULE2: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module2, DYNAMIC_MODULE2, |v: Result<&Value>| match v {
     Ok(Value::I64(4)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE3: &str = r#"
 {
     let source = "
@@ -1473,13 +1426,11 @@ const DYNAMIC_MODULE3: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module3, DYNAMIC_MODULE3, |v: Result<&Value>| match v {
     Ok(Value::String(s)) if s == "hello world" => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE4: &str = r#"
 {
     let source = "
@@ -1507,13 +1458,11 @@ const DYNAMIC_MODULE4: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module4, DYNAMIC_MODULE4, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE5: &str = r#"
 {
     let source = "
@@ -1541,13 +1490,11 @@ const DYNAMIC_MODULE5: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module5, DYNAMIC_MODULE5, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE6: &str = r#"
 {
     let source = "
@@ -1574,13 +1521,11 @@ const DYNAMIC_MODULE6: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module6, DYNAMIC_MODULE6, |v: Result<&Value>| match v {
     Ok(Value::String(s)) if s == "hello world" => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE7: &str = r#"
 {
     let source = "
@@ -1608,13 +1553,11 @@ const DYNAMIC_MODULE7: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module7, DYNAMIC_MODULE7, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DYNAMIC_MODULE8: &str = r#"
 {
     let source = "
@@ -1642,13 +1585,11 @@ const DYNAMIC_MODULE8: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(dynamic_module8, DYNAMIC_MODULE8, |v: Result<&Value>| match v {
     Ok(Value::String(s)) if s == "hello world" => true,
     _ => false,
 });
 
-#[cfg(test)]
 const RECURSIVE_LAMBDA0: &str = r#"
 {
     let rec f = |x: i64| select x { x if x < 10 => f(x + 1), x => x };
@@ -1656,7 +1597,6 @@ const RECURSIVE_LAMBDA0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(recursive_lambda0, RECURSIVE_LAMBDA0, |v: Result<&Value>| match v {
     Ok(Value::I64(10)) => true,
     _ => false,
@@ -1664,7 +1604,6 @@ run!(recursive_lambda0, RECURSIVE_LAMBDA0, |v: Result<&Value>| match v {
 
 use chrono::prelude::*;
 
-#[cfg(test)]
 const DATETIME_ARITH00: &str = r#"
 {
     let x: datetime = datetime:"2024-11-05T00:00:00Z" + duration:3600.s;
@@ -1672,7 +1611,6 @@ const DATETIME_ARITH00: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith00, DATETIME_ARITH00, |v: Result<&Value>| match v {
     Ok(Value::DateTime(dt))
         if *dt == "2024-11-05T01:00:00Z".parse::<DateTime<Utc>>().unwrap() =>
@@ -1680,7 +1618,6 @@ run!(datetime_arith00, DATETIME_ARITH00, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH01: &str = r#"
 {
     let x: datetime = datetime:"2024-11-05T00:00:00Z" - duration:3600.s;
@@ -1688,7 +1625,6 @@ const DATETIME_ARITH01: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith01, DATETIME_ARITH01, |v: Result<&Value>| match v {
     Ok(Value::DateTime(dt))
         if *dt == "2024-11-04T23:00:00Z".parse::<DateTime<Utc>>().unwrap() =>
@@ -1696,7 +1632,6 @@ run!(datetime_arith01, DATETIME_ARITH01, |v: Result<&Value>| match v {
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH02: &str = r#"
 {
     let x: duration = u32:2 * duration:3600.s;
@@ -1704,13 +1639,11 @@ const DATETIME_ARITH02: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith02, DATETIME_ARITH02, |v: Result<&Value>| match v {
     Ok(Value::Duration(dt)) if *dt == Duration::from_secs(7200) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH03: &str = r#"
 {
     let x: duration = duration:3600.s * u32:2;
@@ -1718,13 +1651,11 @@ const DATETIME_ARITH03: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith03, DATETIME_ARITH03, |v: Result<&Value>| match v {
     Ok(Value::Duration(dt)) if *dt == Duration::from_secs(7200) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH04: &str = r#"
 {
     let x: duration = duration:3600.s / u32:2;
@@ -1732,13 +1663,11 @@ const DATETIME_ARITH04: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith04, DATETIME_ARITH04, |v: Result<&Value>| match v {
     Ok(Value::Duration(dt)) if *dt == Duration::from_secs(1800) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH05: &str = r#"
 {
     let x: duration = duration:3600.s - duration:1800.s;
@@ -1746,13 +1675,11 @@ const DATETIME_ARITH05: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith05, DATETIME_ARITH05, |v: Result<&Value>| match v {
     Ok(Value::Duration(dt)) if *dt == Duration::from_secs(1800) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH06: &str = r#"
 {
     let x: duration = duration:0.s + duration:1800.s;
@@ -1760,13 +1687,11 @@ const DATETIME_ARITH06: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith06, DATETIME_ARITH06, |v: Result<&Value>| match v {
     Ok(Value::Duration(dt)) if *dt == Duration::from_secs(1800) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH07: &str = r#"
 {
     let x: duration = duration:2.s * duration:1800.s;
@@ -1774,13 +1699,11 @@ const DATETIME_ARITH07: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith07, DATETIME_ARITH07, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH08: &str = r#"
 {
     let x: duration = duration:2.s / duration:1800.s;
@@ -1788,13 +1711,11 @@ const DATETIME_ARITH08: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith08, DATETIME_ARITH08, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH09: &str = r#"
 {
     let x: duration = duration:2.s % duration:1800.s;
@@ -1802,13 +1723,11 @@ const DATETIME_ARITH09: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith09, DATETIME_ARITH09, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH10: &str = r#"
 {
     let x: duration = duration:2.s + u32:1;
@@ -1816,13 +1735,11 @@ const DATETIME_ARITH10: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith10, DATETIME_ARITH10, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH11: &str = r#"
 {
     let x: duration = duration:2.s - u32:1;
@@ -1830,13 +1747,11 @@ const DATETIME_ARITH11: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith11, DATETIME_ARITH11, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH12: &str = r#"
 {
     let x: duration = datetime:"2024-11-05T00:00:00Z" - 1;
@@ -1844,13 +1759,11 @@ const DATETIME_ARITH12: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith12, DATETIME_ARITH12, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH13: &str = r#"
 {
     let x: duration = datetime:"2024-11-05T00:00:00Z" + 1;
@@ -1858,13 +1771,11 @@ const DATETIME_ARITH13: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith13, DATETIME_ARITH13, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH14: &str = r#"
 {
     let x: duration = datetime:"2024-11-05T00:00:00Z" * 2;
@@ -1872,13 +1783,11 @@ const DATETIME_ARITH14: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith14, DATETIME_ARITH14, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH15: &str = r#"
 {
     let x: duration = datetime:"2024-11-05T00:00:00Z" / 2;
@@ -1886,13 +1795,11 @@ const DATETIME_ARITH15: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith15, DATETIME_ARITH15, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH16: &str = r#"
 {
     let x: duration = datetime:"2024-11-05T00:00:00Z" % 2;
@@ -1900,13 +1807,11 @@ const DATETIME_ARITH16: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith16, DATETIME_ARITH16, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH17: &str = r#"
 {
     let x: datetime = duration:1.0s - datetime:"2024-11-05T00:00:00Z";
@@ -1914,13 +1819,11 @@ const DATETIME_ARITH17: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith17, DATETIME_ARITH17, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const DATETIME_ARITH18: &str = r#"
 {
     let errors = never();
@@ -1930,13 +1833,11 @@ const DATETIME_ARITH18: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(datetime_arith18, DATETIME_ARITH18, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const CATCH0: &str = r#"
 {
     catch(e) => select e.error {
@@ -1946,13 +1847,11 @@ const CATCH0: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(catch0, CATCH0, |v: Result<&Value>| match v {
     Ok(Value::I64(4)) => true,
     _ => false,
 });
 
-#[cfg(test)]
 const CATCH1: &str = r#"
 {
     catch(e) => select e.error {
@@ -1963,14 +1862,12 @@ const CATCH1: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(catch1, CATCH1, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
 
 // CR estokes: figure out how to do exhaustiveness checking on catch
-#[cfg(test)]
 const CATCH2: &str = r#"
 {
     catch(e) => select e.error {
@@ -1981,7 +1878,6 @@ const CATCH2: &str = r#"
 }
 "#;
 
-#[cfg(test)]
 run!(catch2, CATCH2, |v: Result<&Value>| match v {
     Ok(Value::I64(4)) => true,
     _ => false,
