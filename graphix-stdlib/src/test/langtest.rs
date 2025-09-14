@@ -1951,3 +1951,38 @@ run!(catch0, CATCH0, |v: Result<&Value>| match v {
     Ok(Value::I64(4)) => true,
     _ => false,
 });
+
+#[cfg(test)]
+const CATCH1: &str = r#"
+{
+    catch(e) => select e.error {
+        `ArithError(s) => println("arithmetic operation error [s]")
+    };
+    let a = [1, 2, 3];
+    a[0]? + a[1]?
+}
+"#;
+
+#[cfg(test)]
+run!(catch1, CATCH1, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
+
+// CR estokes: figure out how to do exhaustiveness checking on catch
+#[cfg(test)]
+const CATCH2: &str = r#"
+{
+    catch(e) => select e.error {
+        `ArithError(s) => println("arithmetic operation error [s]"),
+        `ArrayIndexError(s) => println("array index error [s]")
+    };
+    2 + 2
+}
+"#;
+
+#[cfg(test)]
+run!(catch2, CATCH2, |v: Result<&Value>| match v {
+    Ok(Value::I64(4)) => true,
+    _ => false,
+});
