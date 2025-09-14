@@ -215,7 +215,20 @@ pub fn register<R: Rt, E: UserEvent>(
 ) -> Result<(ArcStr, ModuleResolver)> {
     let mut tbl = FxHashMap::default();
     tbl.insert(Path::from("/core"), core::register(ctx)?);
-    let mut root = String::from("pub mod core;\nuse core;\n");
+    let mut root = String::from(
+        r#"
+catch(e: Any) => {
+    type Log = [`Trace, `Debug, `Info, `Warn, `Error, `Stdout, `Stderr];
+    let println = |#dest: Log = `Stderr, msg| 'println;
+    let log = |#dest: Log = `Error, msg| 'log;
+    let e = "unhandled error: [e]";
+    println(e);
+    log(e)
+};
+pub mod core;
+use core;
+"#,
+    );
     for module in modules {
         match module {
             Module::Array => {

@@ -275,7 +275,10 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
     pub fn lookup_catch(&self, scope: &ModPath) -> Result<BindId> {
         match Path::dirnames(&scope.0).rev().find_map(|scope| self.catch.get(scope)) {
             Some(id) => Ok(*id),
-            None => bail!("there is no catch visible in {scope}"),
+            None => {
+                dbg!(&self.catch);
+                bail!("there is no catch visible in {scope}")
+            }
         }
     }
 

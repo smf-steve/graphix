@@ -120,11 +120,4 @@ pub let println = |#dest: Log = `Stdout, msg| 'println;
 /// be delivered. If the sequence, m0, m1, ..., mN, arrives simultaneously
 /// after a period of silence, first m0 will be delivered, then after the rate
 /// timer expires mN will be delivered, m1, ..., m(N-1) will be discarded.
-pub let throttle = |#rate = duration:0.5s, v| 'throttle;
-
-// catch errors and print them to the log and the console
-catch(e: Any) => {
-    let e = "unhandled error: [e]";
-    println(`Stderr, e);
-    log(`Error, e)
-}
+pub let throttle = |#rate = duration:0.5s, v| 'throttle
