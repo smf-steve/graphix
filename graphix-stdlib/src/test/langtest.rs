@@ -1923,7 +1923,9 @@ run!(datetime_arith17, DATETIME_ARITH17, |v: Result<&Value>| match v {
 #[cfg(test)]
 const DATETIME_ARITH18: &str = r#"
 {
-    let you_have_been_in_suspention_for = duration:9999999999999.0s * 99999999999999;
+    let errors = never();
+    catch(e: ErrChain<`ArithError(string)>) => errors <- e;
+    let you_have_been_in_suspention_for = duration:9999999999999.s * 99999999999999;
     any(you_have_been_in_suspention_for, errors)
 }
 "#;

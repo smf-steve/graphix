@@ -1,5 +1,6 @@
 use super::{compiler::compile, wrap_error, Cached};
 use crate::{
+    defetyp,
     expr::{Expr, ExprId, ModPath},
     typ::Type,
     wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
@@ -7,7 +8,7 @@ use crate::{
 use anyhow::{anyhow, bail, Result};
 use arcstr::{literal, ArcStr};
 use netidx_value::{Typ, Value};
-use std::{fmt, sync::LazyLock};
+use std::fmt;
 use triomphe::Arc;
 
 macro_rules! compare_op {
@@ -254,13 +255,7 @@ impl fmt::Display for Op {
     }
 }
 
-static ARITH_ERR_TAG: ArcStr = literal!("ArithError");
-static ARITH_ERR: LazyLock<Type> = LazyLock::new(|| {
-    Type::Variant(
-        ARITH_ERR_TAG.clone(),
-        Arc::from_iter([Type::Primitive(Typ::String.into())]),
-    )
-});
+defetyp!(ARITH_ERR, ARITH_ERR_TAG, "ArithError", "ErrChain<`{}(string)>");
 
 macro_rules! arith_op {
     ($name:ident, $opn:expr, $op:tt) => {

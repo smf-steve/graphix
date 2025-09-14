@@ -115,6 +115,20 @@ macro_rules! errf {
     }};
 }
 
+#[macro_export]
+macro_rules! defetyp {
+    ($name:ident, $tag_name:ident, $tag:literal, $typ:expr) => {
+        static $tag_name: ArcStr = literal!($tag);
+        static $name: ::std::sync::LazyLock<$crate::typ::Type> =
+            ::std::sync::LazyLock::new(|| {
+                let scope = $crate::expr::ModPath::root();
+                $crate::expr::parser::parse_type(&format!($typ, $tag))
+                    .expect("failed to parse type")
+                    .scope_refs(&scope)
+            });
+    };
+}
+
 thread_local! {
     /// thread local shared refs structure
     pub static REFS: RefCell<Refs> = RefCell::new(Refs::new());

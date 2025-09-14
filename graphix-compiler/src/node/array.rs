@@ -1,6 +1,6 @@
 use super::{compiler::compile, Cached};
 use crate::{
-    err, errf,
+    defetyp, err, errf,
     expr::{Expr, ExprId, ModPath},
     typ::Type,
     update_args, wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
@@ -8,22 +8,16 @@ use crate::{
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
 use netidx_value::{Typ, ValArray, Value};
-use std::sync::LazyLock;
 use triomphe::Arc;
 
-static ERR_TAG: ArcStr = literal!("ArrayIndexError");
-static ERR: LazyLock<Type> = LazyLock::new(|| {
-    Type::Error(Arc::new(Type::Variant(
-        ERR_TAG.clone(),
-        Arc::from_iter([Type::Primitive(Typ::String.into())]),
-    )))
-});
+defetyp!(ERR, ERR_TAG, "ArrayIndexError", "Error<`{}(string)>");
 
 #[derive(Debug)]
 pub(crate) struct ArrayRef<R: Rt, E: UserEvent> {
     source: Cached<R, E>,
     i: Cached<R, E>,
     spec: Expr,
+    etyp: Type,
     typ: Type,
 }
 
@@ -38,11 +32,12 @@ impl<R: Rt, E: UserEvent> ArrayRef<R, E> {
     ) -> Result<Node<R, E>> {
         let source = Cached::new(compile(ctx, source.clone(), scope, top_id)?);
         let i = Cached::new(compile(ctx, i.clone(), scope, top_id)?);
-        let typ = match &source.node.typ() {
-            Type::Array(et) => Type::Set(Arc::from_iter([(**et).clone(), ERR.clone()])),
-            _ => Type::Set(Arc::from_iter([Type::empty_tvar(), ERR.clone()])),
+        let etyp = match &source.node.typ() {
+            Type::Array(et) => (**et).clone(),
+            _ => Type::empty_tvar(),
         };
-        Ok(Box::new(Self { source, i, spec, typ }))
+        let typ = Type::Set(Arc::from_iter([etyp.clone(), ERR.clone()]));
+        Ok(Box::new(Self { source, i, spec, etyp, typ }))
     }
 }
 
@@ -87,7 +82,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArrayRef<R, E> {
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source.node, self.source.node.typecheck(ctx))?;
         wrap!(self.i.node, self.i.node.typecheck(ctx))?;
-        let at = Type::Array(Arc::new(self.typ.clone()));
+        let at = Type::Array(Arc::new(self.etyp.clone()));
         wrap!(self, at.check_contains(&ctx.env, self.source.node.typ()))?;
         let int = Type::Primitive(Typ::integer());
         wrap!(self.i.node, int.check_contains(&ctx.env, self.i.node.typ()))

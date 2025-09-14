@@ -1022,7 +1022,9 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         wrap!(self.n, self.n.typecheck(ctx))?;
         let err = Type::Error(Arc::new(Type::empty_tvar()));
         if !self.n.typ().contains(&ctx.env, &err)? {
-            bail!("cannot use the ? operator on a non error type")
+            format_with_flags(PrintFlag::DerefTVars, || {
+                bail!("cannot use the ? operator on a non error type {}", self.n.typ())
+            })?
         }
         let err = Type::Primitive(Typ::Error.into());
         let rtyp = self.n.typ().diff(&ctx.env, &err)?;
