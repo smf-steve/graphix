@@ -1840,7 +1840,7 @@ run!(datetime_arith18, DATETIME_ARITH18, |v: Result<&Value>| match v {
 
 const CATCH0: &str = r#"
 {
-    catch(e) => select e.error {
+    catch(e) => select (e.0).error {
         `ArithError(s) => println("arithmetic operation error [s]")
     };
     2 + 2
@@ -1854,7 +1854,7 @@ run!(catch0, CATCH0, |v: Result<&Value>| match v {
 
 const CATCH1: &str = r#"
 {
-    catch(e) => select e.error {
+    catch(e) => select (e.0).error {
         `ArithError(s) => println("arithmetic operation error [s]")
     };
     let a = [1, 2, 3];
@@ -1870,7 +1870,7 @@ run!(catch1, CATCH1, |v: Result<&Value>| match v {
 // CR estokes: figure out how to do exhaustiveness checking on catch
 const CATCH2: &str = r#"
 {
-    catch(e) => select e.error {
+    catch(e) => select (e.0).error {
         `ArithError(s) => println("arithmetic operation error [s]"),
         `ArrayIndexError(s) => println("array index error [s]")
     };
@@ -1880,5 +1880,21 @@ const CATCH2: &str = r#"
 
 run!(catch2, CATCH2, |v: Result<&Value>| match v {
     Ok(Value::I64(4)) => true,
+    _ => false,
+});
+
+const CATCH3: &str = r#"
+{
+    let f = |x| x / x;
+    let res = never();
+    catch(e) => select (e.0).error {
+        `ArithError(s) => res <- s
+    };
+    any(f(0), res)
+}
+"#;
+
+run!(catch3, CATCH3, |v: Result<&Value>| match v {
+    Ok(Value::String(_)) => true,
     _ => false,
 });

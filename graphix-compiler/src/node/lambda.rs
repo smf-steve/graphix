@@ -2,12 +2,10 @@ use super::{compiler::compile, Nop};
 use crate::{
     env::LambdaDef,
     expr::{self, Arg, Expr, ExprId, ModPath},
-    format_with_flags,
     node::pattern::StructPatternNode,
-    trace,
     typ::{FnArgType, FnType, Type},
-    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, PrintFlag, Refs, Rt, Update,
-    UserEvent, KNOWN,
+    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Update, UserEvent,
+    KNOWN,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -48,31 +46,11 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for GXLambda<R, E> {
         ctx: &mut ExecCtx<R, E>,
         args: &mut [Node<R, E>],
     ) -> Result<()> {
-        if trace() {
-            format_with_flags(PrintFlag::DerefTVars, || {
-                eprintln!("lambda tc typ {}", self.typ);
-            });
-        }
         for (arg, FnArgType { typ, .. }) in args.iter_mut().zip(self.typ.args.iter()) {
             wrap!(arg, arg.typecheck(ctx))?;
             wrap!(arg, typ.check_contains(&ctx.env, &arg.typ()))?;
         }
-        if trace() {
-            format_with_flags(PrintFlag::DerefTVars, || {
-                eprintln!("body {}", self.body.typ());
-                eprintln!("body spec {}", self.body.spec());
-            });
-        }
-        wrap!(self.body, self.body.typecheck(ctx)).map_err(|e| {
-            eprintln!("failing spec: {}", self.body.spec());
-            e
-        })?;
-        if trace() {
-            format_with_flags(PrintFlag::DerefTVars, || {
-                eprintln!("body {}", self.body.typ());
-                eprintln!("body spec {}", self.body.spec());
-            });
-        }
+        wrap!(self.body, self.body.typecheck(ctx))?;
         wrap!(self.body, self.typ.rtype.check_contains(&ctx.env, &self.body.typ()))?;
         for (tv, tc) in self.typ.constraints.read().iter() {
             tc.check_contains(&ctx.env, &Type::TVar(tv.clone()))?

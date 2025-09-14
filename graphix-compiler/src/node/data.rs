@@ -264,13 +264,13 @@ impl<R: Rt, E: UserEvent> Update<R, E> for StructWith<R, E> {
 }
 
 macro_rules! deref_typ {
-    ($name:literal, $ctx:expr, $typ:expr, $pat:pat, $body:expr) => {
+    ($name:literal, $ctx:expr, $typ:expr, $($pat:pat => $body:expr),+) => {
         $typ.with_deref(|typ| {
             let mut typ = typ.cloned();
             let mut hist: LPooled<FxHashSet<usize>> = LPooled::take();
             loop {
                 match &typ {
-                    Some($pat) => break $body,
+                    $($pat => break $body),+,
                     Some(rt @ Type::Ref { .. }) => {
                         let rt = rt.lookup_ref(&$ctx.env)?;
                         if hist.insert(rt as *const _ as usize) {
@@ -383,7 +383,8 @@ impl<R: Rt, E: UserEvent> Update<R, E> for StructRef<R, E> {
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
-        let etyp = deref_typ!("struct", ctx, self.source.typ(), Type::Struct(flds), {
+        let etyp = deref_typ!("struct", ctx, self.source.typ(),
+        Some(Type::Struct(flds)) => {
             let typ = flds.iter().enumerate().find_map(|(i, (n, t))| {
                 if &self.field_name == n {
                     Some((i, t.clone()))
@@ -592,6 +593,7 @@ impl<R: Rt, E: UserEvent> TupleRef<R, E> {
             Type::Tuple(ts) => {
                 ts.get(field).map(|t| t.clone()).unwrap_or_else(Type::empty_tvar)
             }
+            Type::Error(t) => (**t).clone(),
             _ => Type::empty_tvar(),
         };
         Ok(Box::new(Self { spec, typ, source, field }))
@@ -602,6 +604,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for TupleRef<R, E> {
     fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         self.source.update(ctx, event).and_then(|v| match v {
             Value::Array(a) => a.get(self.field).map(|v| v.clone()),
+            Value::Error(v) => Some((*v).clone()),
             _ => None,
         })
     }
@@ -628,9 +631,15 @@ impl<R: Rt, E: UserEvent> Update<R, E> for TupleRef<R, E> {
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
-        let etyp = deref_typ!("tuple", ctx, self.source.typ(), Type::Tuple(flds), {
-            Ok(flds[self.field].clone())
-        });
+        let etyp = deref_typ!("tuple", ctx, self.source.typ(),
+            Some(Type::Tuple(flds)) => Ok(flds[self.field].clone()),
+            Some(Type::Error(t)) => {
+                if self.field != 0 {
+                    bail!("no such field {}", self.field);
+                }
+                Ok((**t).clone())
+            }
+        );
         let etyp = wrap!(self, etyp)?;
         wrap!(self, self.typ.check_contains(&ctx.env, &etyp))
     }
