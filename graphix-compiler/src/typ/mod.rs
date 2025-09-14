@@ -145,9 +145,15 @@ impl Type {
         }
         match (self, t) {
             (
-                Self::Ref { scope: s0, name: n0, .. },
-                Self::Ref { scope: s1, name: n1, .. },
-            ) if s0 == s1 && n0 == n1 => Ok(true),
+                Self::Ref { scope: s0, name: n0, params: p0 },
+                Self::Ref { scope: s1, name: n1, params: p1 },
+            ) if s0 == s1 && n0 == n1 => Ok(p0.len() == p1.len()
+                && p0
+                    .iter()
+                    .zip(p1.iter())
+                    .map(|(t0, t1)| t0.contains_int(env, hist, t1))
+                    .collect::<Result<AndAc>>()?
+                    .0),
             (t0 @ Self::Ref { .. }, t1) | (t0, t1 @ Self::Ref { .. }) => {
                 let t0 = t0.lookup_ref(env)?;
                 let t1 = t1.lookup_ref(env)?;
@@ -636,16 +642,6 @@ impl Type {
         t: &Self,
     ) -> Result<Self> {
         match (self, t) {
-            (
-                Type::Array(_) | Type::Struct(_) | Type::Tuple(_) | Type::Variant(_, _),
-                Type::Primitive(p),
-            ) => {
-                if p.contains(Typ::Array) {
-                    Ok(Type::Primitive(BitFlags::empty()))
-                } else {
-                    Ok(self.clone())
-                }
-            }
             (Type::Set(s0), Type::Set(s1)) => {
                 let mut s: SmallVec<[Type; 4]> = smallvec![];
                 for i in 0..s0.len() {
@@ -705,6 +701,14 @@ impl Type {
                     (Some(t0), Some(t1)) => t0.diff_int(env, hist, t1)?,
                 })
             }
+            (Type::TVar(tv), t) => Ok(match &*tv.read().typ.read() {
+                Some(tv) => tv.diff_int(env, hist, t)?,
+                None => self.clone(),
+            }),
+            (t, Type::TVar(tv)) => Ok(match &*tv.read().typ.read() {
+                Some(tv) => t.diff_int(env, hist, tv)?,
+                None => self.clone(),
+            }),
             (Type::Array(t0), Type::Array(t1)) => {
                 if t0 == t1 {
                     Ok(Type::Primitive(BitFlags::empty()))
@@ -719,6 +723,16 @@ impl Type {
                     Ok(Type::Primitive(s))
                 } else {
                     Ok(Type::Primitive(*p))
+                }
+            }
+            (
+                Type::Array(_) | Type::Struct(_) | Type::Tuple(_) | Type::Variant(_, _),
+                Type::Primitive(p),
+            ) => {
+                if p.contains(Typ::Array) {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(self.clone())
                 }
             }
             (_, Type::Any) => Ok(Type::Primitive(BitFlags::empty())),
@@ -797,8 +811,7 @@ impl Type {
             | (_, Type::Error(_))
             | (Type::Primitive(_), _)
             | (_, Type::Primitive(_))
-            | (Type::Bottom, _)
-            | (_, Type::Bottom) => Ok(self.clone()),
+            | (Type::Bottom, _) => Ok(self.clone()),
         }
     }
 
@@ -1102,12 +1115,20 @@ impl Type {
                     None
                 }
             }
+            Type::Set(s) => {
+                let r = Self::flatten_set(
+                    s.iter().filter_map(|t| t.strip_error_int(env, hist)),
+                );
+                match r {
+                    Type::Primitive(p) if p.is_empty() => None,
+                    t => Some(t),
+                }
+            }
             Type::Array(_)
             | Type::ByRef(_)
             | Type::Tuple(_)
             | Type::Struct(_)
             | Type::Variant(_, _)
-            | Type::Set(_)
             | Type::Fn(_)
             | Type::Any
             | Type::Bottom => None,

@@ -7,6 +7,8 @@ use netidx::subscriber::Value;
 #[cfg(test)]
 const IS_ERR: &str = r#"
 {
+  let errors = never();
+  catch(e: Any) => errors <- e;
   let a = [42, 43, 44];
   let y = a[0]? + a[3]?;
   is_err(errors)
@@ -1514,7 +1516,7 @@ const NET_LIST_TABLE: &str = r#"
   net::publish("/local/t/0/bar", 42);
   net::publish("/local/t/1/foo", 42);
   net::publish("/local/t/1/bar", 42);
-  let t = dbg(net::list_table("/local/t"));
+  let t = dbg(net::list_table("/local/t"))?;
   let cols = array::map(t.columns, |(n, _): (string, _)| n);
   (array::sort(cols) == ["bar", "foo"])
   && (array::sort(t.rows) == ["/local/t/0", "/local/t/1"])

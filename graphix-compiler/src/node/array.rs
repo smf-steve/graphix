@@ -17,7 +17,6 @@ pub(crate) struct ArrayRef<R: Rt, E: UserEvent> {
     source: Cached<R, E>,
     i: Cached<R, E>,
     spec: Expr,
-    etyp: Type,
     typ: Type,
 }
 
@@ -37,7 +36,7 @@ impl<R: Rt, E: UserEvent> ArrayRef<R, E> {
             _ => Type::empty_tvar(),
         };
         let typ = Type::Set(Arc::from_iter([etyp.clone(), ERR.clone()]));
-        Ok(Box::new(Self { source, i, spec, etyp, typ }))
+        Ok(Box::new(Self { source, i, spec, typ }))
     }
 }
 
@@ -82,7 +81,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ArrayRef<R, E> {
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source.node, self.source.node.typecheck(ctx))?;
         wrap!(self.i.node, self.i.node.typecheck(ctx))?;
-        let at = Type::Array(Arc::new(self.etyp.clone()));
+        let at = Type::Array(Arc::new(self.typ.clone()));
         wrap!(self, at.check_contains(&ctx.env, self.source.node.typ()))?;
         let int = Type::Primitive(Typ::integer());
         wrap!(self.i.node, int.check_contains(&ctx.env, self.i.node.typ()))

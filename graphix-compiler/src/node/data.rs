@@ -1,11 +1,14 @@
 use super::{compiler::compile, Cached};
 use crate::{
     expr::{Expr, ExprId, ExprKind, ModPath},
+    format_with_flags,
     typ::Type,
-    update_args, wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
+    update_args, wrap, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
+use fxhash::FxHashSet;
+use netidx::pool::local::LPooled;
 use netidx_value::{ValArray, Value};
 use smallvec::SmallVec;
 use std::iter;
@@ -260,6 +263,34 @@ impl<R: Rt, E: UserEvent> Update<R, E> for StructWith<R, E> {
     }
 }
 
+macro_rules! deref_typ {
+    ($name:literal, $ctx:expr, $typ:expr, $pat:pat, $body:expr) => {
+        $typ.with_deref(|typ| {
+            let mut typ = typ.cloned();
+            let mut hist: LPooled<FxHashSet<usize>> = LPooled::take();
+            loop {
+                match &typ {
+                    Some($pat) => break $body,
+                    Some(rt @ Type::Ref { .. }) => {
+                        let rt = rt.lookup_ref(&$ctx.env)?;
+                        if hist.insert(rt as *const _ as usize) {
+                            typ = Some(rt.clone());
+                        } else {
+                            format_with_flags(PrintFlag::DerefTVars, || {
+                                bail!("expected {} not {rt}", $name)
+                            })?
+                        }
+                    }
+                    Some(t) => format_with_flags(PrintFlag::DerefTVars, || {
+                        bail!("expected {} not {t}", $name)
+                    })?,
+                    None => bail!("type must be known, annotations needed"),
+                }
+            }
+        })
+    };
+}
+
 #[derive(Debug)]
 pub(crate) struct StructRef<R: Rt, E: UserEvent> {
     spec: Expr,
@@ -352,22 +383,18 @@ impl<R: Rt, E: UserEvent> Update<R, E> for StructRef<R, E> {
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
-        let etyp = self.source.typ().with_deref(|typ| match typ {
-            Some(Type::Struct(flds)) => {
-                let typ = flds.iter().enumerate().find_map(|(i, (n, t))| {
-                    if &self.field_name == n {
-                        Some((i, t.clone()))
-                    } else {
-                        None
-                    }
-                });
-                match typ {
-                    Some((i, t)) => Ok((i, t)),
-                    None => bail!("in struct, unknown field {}", self.field_name),
+        let etyp = deref_typ!("struct", ctx, self.source.typ(), Type::Struct(flds), {
+            let typ = flds.iter().enumerate().find_map(|(i, (n, t))| {
+                if &self.field_name == n {
+                    Some((i, t.clone()))
+                } else {
+                    None
                 }
+            });
+            match typ {
+                Some((i, t)) => Ok((i, t)),
+                None => bail!("in struct, unknown field {}", self.field_name),
             }
-            None => bail!("type must be known, annotations needed"),
-            _ => bail!("expected struct"),
         });
         let (idx, typ) = wrap!(self, etyp)?;
         self.field = Some(idx);
@@ -601,12 +628,8 @@ impl<R: Rt, E: UserEvent> Update<R, E> for TupleRef<R, E> {
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
-        let etyp = self.source.typ().with_deref(|typ| match typ {
-            Some(Type::Tuple(flds)) if flds.len() > self.field => {
-                Ok(flds[self.field].clone())
-            }
-            None => bail!("type must be known, annotations needed"),
-            _ => bail!("expected tuple with at least {} elements", self.field),
+        let etyp = deref_typ!("tuple", ctx, self.source.typ(), Type::Tuple(flds), {
+            Ok(flds[self.field].clone())
         });
         let etyp = wrap!(self, etyp)?;
         wrap!(self, self.typ.check_contains(&ctx.env, &etyp))

@@ -933,12 +933,16 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Deref<R, E> {
     }
 }
 
-fn wrap_error<R: Rt, E: UserEvent>(env: &Env<R, E>, spec: &Expr, e: Value) -> Value {
-    static ERRCHAIN: LazyLock<Type> = LazyLock::new(|| Type::Ref {
+fn typ_echain(param: Type) -> Type {
+    Type::Ref {
         scope: ModPath::root(),
         name: ModPath::from(["ErrChain"]),
-        params: Arc::from_iter([Type::empty_tvar()]),
-    });
+        params: Arc::from_iter([param]),
+    }
+}
+
+fn wrap_error<R: Rt, E: UserEvent>(env: &Env<R, E>, spec: &Expr, e: Value) -> Value {
+    static ERRCHAIN: LazyLock<Type> = LazyLock::new(|| typ_echain(Type::empty_tvar()));
     let pos: Value =
         [(literal!("column"), spec.pos.column), (literal!("line"), spec.pos.line)].into();
     if ERRCHAIN.is_a(env, &e) {
@@ -1023,7 +1027,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         let err = Type::Error(Arc::new(Type::empty_tvar()));
         if !self.n.typ().contains(&ctx.env, &err)? {
             format_with_flags(PrintFlag::DerefTVars, || {
-                bail!("cannot use the ? operator on a non error type {}", self.n.typ())
+                bail!("cannot use the ? operator on non error type {}", self.n.typ())
             })?
         }
         let err = Type::Primitive(Typ::Error.into());
@@ -1035,10 +1039,11 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
             .get(&self.id)
             .ok_or_else(|| anyhow!("BUG: missing catch id"))?;
         let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
-        let etyp = etyp
-            .strip_error(&ctx.env)
-            .ok_or_else(|| anyhow!("expected an error got {etyp}"));
-        let etyp = wrap!(self.n, etyp)?;
+        let etyp = typ_echain(wrap!(
+            self.n,
+            etyp.strip_error(&ctx.env)
+                .ok_or_else(|| anyhow!("expected an error got {etyp}"))
+        )?);
         wrap!(self, bind.typ.check_contains(&ctx.env, &etyp))?;
         Ok(())
     }

@@ -2,8 +2,9 @@ use super::{compiler::compile, wrap_error, Cached};
 use crate::{
     defetyp,
     expr::{Expr, ExprId, ModPath},
+    format_with_flags,
     typ::Type,
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
+    wrap, BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::{literal, ArcStr};
@@ -384,6 +385,7 @@ macro_rules! arith_op {
                 };
                 wrap!(self, self.typ.check_contains(&ctx.env, &ut))?;
                 let bind = ctx.env.by_id.get(&self.id).ok_or_else(|| anyhow!("BUG: missing catch id"))?;
+                format_with_flags(PrintFlag::DerefTVars, || eprintln!("{}", bind.typ));
                 wrap!(self, bind.typ.check_contains(&ctx.env, &ARITH_ERR))
             }
         }
