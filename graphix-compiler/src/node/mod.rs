@@ -1272,10 +1272,10 @@ impl<R: Rt, E: UserEvent> Catch<R, E> {
     ) -> Result<Node<R, E>> {
         let name = format_compact!("ca{}", BindId::new().inner());
         let inner_scope = ModPath(scope.append(name.as_str()));
-        let typ = match constraint {
+        let typ = typ_echain(match constraint {
             Some(t) => t.clone(),
             None => Type::empty_tvar(),
-        };
+        });
         let id = ctx.env.bind_variable(&inner_scope, bind, typ).id;
         let handler = compile(ctx, (**handler).clone(), &inner_scope, top_id)?;
         ctx.env.catch.insert_cow(scope.clone(), id);

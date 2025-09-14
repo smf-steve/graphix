@@ -1924,7 +1924,7 @@ run!(datetime_arith17, DATETIME_ARITH17, |v: Result<&Value>| match v {
 const DATETIME_ARITH18: &str = r#"
 {
     let errors = never();
-    catch(e: ErrChain<`ArithError(string)>) => errors <- e;
+    catch(e: `ArithError(string)) => errors <- e;
     let you_have_been_in_suspention_for = duration:9999999999999.s * 99999999999999;
     any(you_have_been_in_suspention_for, errors)
 }
@@ -1933,5 +1933,21 @@ const DATETIME_ARITH18: &str = r#"
 #[cfg(test)]
 run!(datetime_arith18, DATETIME_ARITH18, |v: Result<&Value>| match v {
     Ok(Value::Error(_)) => true,
+    _ => false,
+});
+
+#[cfg(test)]
+const CATCH0: &str = r#"
+{
+    catch(e) => select e.error {
+        `ArithError(s) => println("arithmetic operation error [s]")
+    };
+    2 + 2
+}
+"#;
+
+#[cfg(test)]
+run!(catch0, CATCH0, |v: Result<&Value>| match v {
+    Ok(Value::I64(4)) => true,
     _ => false,
 });
