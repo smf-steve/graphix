@@ -636,50 +636,6 @@ impl Type {
         t: &Self,
     ) -> Result<Self> {
         match (self, t) {
-            (_, Type::Any) => Ok(Type::Primitive(BitFlags::empty())),
-            (Type::Any, _) => Ok(Type::Any),
-            (
-                Type::Ref { scope: s0, name: n0, .. },
-                Type::Ref { scope: s1, name: n1, .. },
-            ) if s0 == s1 && n0 == n1 => Ok(Type::Primitive(BitFlags::empty())),
-            (t0 @ Type::Ref { .. }, t1) | (t0, t1 @ Type::Ref { .. }) => {
-                let t0 = t0.lookup_ref(env)?;
-                let t1 = t1.lookup_ref(env)?;
-                let t0_addr = (t0 as *const Type).addr();
-                let t1_addr = (t1 as *const Type).addr();
-                match hist.get(&(t0_addr, t1_addr)) {
-                    Some(r) => Ok(r.clone()),
-                    None => {
-                        let r = Type::Primitive(BitFlags::empty());
-                        hist.insert((t0_addr, t1_addr), r);
-                        match t0.diff_int(env, hist, &t1) {
-                            Ok(r) => {
-                                hist.insert((t0_addr, t1_addr), r.clone());
-                                Ok(r)
-                            }
-                            Err(e) => {
-                                hist.remove(&(t0_addr, t1_addr));
-                                Err(e)
-                            }
-                        }
-                    }
-                }
-            }
-            (Type::Bottom, t) | (t, Type::Bottom) => Ok(t.clone()),
-            (Type::Primitive(s0), Type::Primitive(s1)) => {
-                let mut s = *s0;
-                s.remove(*s1);
-                Ok(Type::Primitive(s))
-            }
-            (Type::Primitive(p), Type::Array(t)) => {
-                if &**t == &Type::Any {
-                    let mut s = *p;
-                    s.remove(Typ::Array);
-                    Ok(Type::Primitive(s))
-                } else {
-                    Ok(Type::Primitive(*p))
-                }
-            }
             (
                 Type::Array(_) | Type::Struct(_) | Type::Tuple(_) | Type::Variant(_, _),
                 Type::Primitive(p),
@@ -689,42 +645,6 @@ impl Type {
                 } else {
                     Ok(self.clone())
                 }
-            }
-            (Type::Array(t0), Type::Array(t1)) => {
-                if t0 == t1 {
-                    Ok(Type::Primitive(BitFlags::empty()))
-                } else {
-                    Ok(Type::Array(Arc::new(t0.diff_int(env, hist, t1)?)))
-                }
-            }
-            (Type::Array(_), _) | (_, Type::Array(_)) => Ok(self.clone()),
-            (Type::Primitive(p), Type::Error(e)) => {
-                if &**e == &Type::Any {
-                    let mut s = *p;
-                    s.remove(Typ::Error);
-                    Ok(Type::Primitive(s))
-                } else {
-                    Ok(Type::Primitive(*p))
-                }
-            }
-            (Type::Error(_), Type::Primitive(p)) => {
-                if p.contains(Typ::Error) {
-                    Ok(Type::Primitive(BitFlags::empty()))
-                } else {
-                    Ok(self.clone())
-                }
-            }
-            (Type::Error(e0), Type::Error(e1)) => {
-                if e0 == e1 {
-                    Ok(Type::Primitive(BitFlags::empty()))
-                } else {
-                    Ok(Type::Error(Arc::new(e0.diff_int(env, hist, e1)?)))
-                }
-            }
-            (Type::Error(_), _) | (_, Type::Error(_)) => Ok(self.clone()),
-            (Type::Primitive(_), _) | (_, Type::Primitive(_)) => Ok(self.clone()),
-            (Type::ByRef(t0), Type::ByRef(t1)) => {
-                Ok(Type::ByRef(Arc::new(t0.diff_int(env, hist, t1)?)))
             }
             (Type::Set(s0), Type::Set(s1)) => {
                 let mut s: SmallVec<[Type; 4]> = smallvec![];
@@ -755,7 +675,6 @@ impl Type {
                     Ok(self.clone())
                 }
             }
-            (Type::Tuple(_), _) | (_, Type::Tuple(_)) => Ok(self.clone()),
             (Type::Struct(t0), Type::Struct(t1)) => {
                 if t0.len() == t1.len() && t0 == t1 {
                     Ok(Type::Primitive(BitFlags::empty()))
@@ -763,8 +682,6 @@ impl Type {
                     Ok(self.clone())
                 }
             }
-            (Type::Struct(_), _) | (_, Type::Struct(_)) => Ok(self.clone()),
-            (Type::ByRef(_), _) | (_, Type::ByRef(_)) => Ok(self.clone()),
             (Type::Variant(tg0, t0), Type::Variant(tg1, t1)) => {
                 if tg0 == tg1 && t0.len() == t1.len() && t0 == t1 {
                     Ok(Type::Primitive(BitFlags::empty()))
@@ -772,7 +689,6 @@ impl Type {
                     Ok(self.clone())
                 }
             }
-            (Type::Variant(_, _), _) | (_, Type::Variant(_, _)) => Ok(self.clone()),
             (Type::Fn(f0), Type::Fn(f1)) => {
                 if f0 == f1 {
                     Ok(Type::Primitive(BitFlags::empty()))
@@ -780,8 +696,6 @@ impl Type {
                     Ok(Type::Fn(f0.clone()))
                 }
             }
-            (f @ Type::Fn(_), _) => Ok(f.clone()),
-            (t, Type::Fn(_)) => Ok(t.clone()),
             (Type::TVar(tv0), Type::TVar(tv1)) => {
                 if tv0.read().typ.as_ptr() == tv1.read().typ.as_ptr() {
                     return Ok(Type::Primitive(BitFlags::empty()));
@@ -791,6 +705,100 @@ impl Type {
                     (Some(t0), Some(t1)) => t0.diff_int(env, hist, t1)?,
                 })
             }
+            (Type::Array(t0), Type::Array(t1)) => {
+                if t0 == t1 {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(Type::Array(Arc::new(t0.diff_int(env, hist, t1)?)))
+                }
+            }
+            (Type::Primitive(p), Type::Array(t)) => {
+                if &**t == &Type::Any {
+                    let mut s = *p;
+                    s.remove(Typ::Array);
+                    Ok(Type::Primitive(s))
+                } else {
+                    Ok(Type::Primitive(*p))
+                }
+            }
+            (_, Type::Any) => Ok(Type::Primitive(BitFlags::empty())),
+            (Type::Any, _) => Ok(Type::Any),
+            (
+                Type::Ref { scope: s0, name: n0, .. },
+                Type::Ref { scope: s1, name: n1, .. },
+            ) if s0 == s1 && n0 == n1 => Ok(Type::Primitive(BitFlags::empty())),
+            (t0 @ Type::Ref { .. }, t1) | (t0, t1 @ Type::Ref { .. }) => {
+                let t0 = t0.lookup_ref(env)?;
+                let t1 = t1.lookup_ref(env)?;
+                let t0_addr = (t0 as *const Type).addr();
+                let t1_addr = (t1 as *const Type).addr();
+                match hist.get(&(t0_addr, t1_addr)) {
+                    Some(r) => Ok(r.clone()),
+                    None => {
+                        let r = Type::Primitive(BitFlags::empty());
+                        hist.insert((t0_addr, t1_addr), r);
+                        match t0.diff_int(env, hist, &t1) {
+                            Ok(r) => {
+                                hist.insert((t0_addr, t1_addr), r.clone());
+                                Ok(r)
+                            }
+                            Err(e) => {
+                                hist.remove(&(t0_addr, t1_addr));
+                                Err(e)
+                            }
+                        }
+                    }
+                }
+            }
+            (Type::Primitive(s0), Type::Primitive(s1)) => {
+                let mut s = *s0;
+                s.remove(*s1);
+                Ok(Type::Primitive(s))
+            }
+            (Type::Primitive(p), Type::Error(e)) => {
+                if &**e == &Type::Any {
+                    let mut s = *p;
+                    s.remove(Typ::Error);
+                    Ok(Type::Primitive(s))
+                } else {
+                    Ok(Type::Primitive(*p))
+                }
+            }
+            (Type::Error(_), Type::Primitive(p)) => {
+                if p.contains(Typ::Error) {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(self.clone())
+                }
+            }
+            (Type::Error(e0), Type::Error(e1)) => {
+                if e0 == e1 {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(Type::Error(Arc::new(e0.diff_int(env, hist, e1)?)))
+                }
+            }
+            (Type::ByRef(t0), Type::ByRef(t1)) => {
+                Ok(Type::ByRef(Arc::new(t0.diff_int(env, hist, t1)?)))
+            }
+            (Type::Fn(_), _)
+            | (_, Type::Fn(_))
+            | (Type::Array(_), _)
+            | (_, Type::Array(_))
+            | (Type::Tuple(_), _)
+            | (_, Type::Tuple(_))
+            | (Type::Struct(_), _)
+            | (_, Type::Struct(_))
+            | (Type::Variant(_, _), _)
+            | (_, Type::Variant(_, _))
+            | (Type::ByRef(_), _)
+            | (_, Type::ByRef(_))
+            | (Type::Error(_), _)
+            | (_, Type::Error(_))
+            | (Type::Primitive(_), _)
+            | (_, Type::Primitive(_))
+            | (Type::Bottom, _)
+            | (_, Type::Bottom) => Ok(self.clone()),
         }
     }
 
