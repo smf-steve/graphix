@@ -35,6 +35,7 @@ netidx-protocols = { workspace = true }
 netidx-value = { workspace = true }
 netidx = { workspace = true }
 parking_lot = { workspace = true }
+poolshark = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 serde_derive = { workspace = true }

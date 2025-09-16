@@ -1,14 +1,12 @@
 use super::{compiler::compile, Cached};
 use crate::{
+    deref_typ,
     expr::{Expr, ExprId, ExprKind, ModPath},
-    format_with_flags,
     typ::Type,
     update_args, wrap, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
-use fxhash::FxHashSet;
-use netidx::pool::local::LPooled;
 use netidx_value::{ValArray, Value};
 use smallvec::SmallVec;
 use std::iter;
@@ -261,34 +259,6 @@ impl<R: Rt, E: UserEvent> Update<R, E> for StructWith<R, E> {
         )?;
         wrap!(self, self.typ.check_contains(&ctx.env, self.source.typ()))
     }
-}
-
-macro_rules! deref_typ {
-    ($name:literal, $ctx:expr, $typ:expr, $($pat:pat => $body:expr),+) => {
-        $typ.with_deref(|typ| {
-            let mut typ = typ.cloned();
-            let mut hist: LPooled<FxHashSet<usize>> = LPooled::take();
-            loop {
-                match &typ {
-                    $($pat => break $body),+,
-                    Some(rt @ Type::Ref { .. }) => {
-                        let rt = rt.lookup_ref(&$ctx.env)?;
-                        if hist.insert(rt as *const _ as usize) {
-                            typ = Some(rt.clone());
-                        } else {
-                            format_with_flags(PrintFlag::DerefTVars, || {
-                                bail!("expected {} not {rt}", $name)
-                            })?
-                        }
-                    }
-                    Some(t) => format_with_flags(PrintFlag::DerefTVars, || {
-                        bail!("expected {} not {t}", $name)
-                    })?,
-                    None => bail!("type must be known, annotations needed"),
-                }
-            }
-        })
-    };
 }
 
 #[derive(Debug)]

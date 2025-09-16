@@ -1,9 +1,10 @@
 use super::{compiler::compile, pattern::StructPatternNode, Cached};
 use crate::{
     expr::{Expr, ExprId, ModPath, Pattern},
+    format_with_flags,
     node::pattern::PatternNode,
     typ::Type,
-    BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent, REFS,
+    BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent, REFS,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use compact_str::format_compact;
@@ -209,20 +210,26 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Select<R, E> {
             n.node.typecheck(ctx)?;
             rtype = rtype.union(&ctx.env, n.node.typ())?;
         }
-        itype
-            .check_contains(&ctx.env, &self.arg.node.typ())
-            .map_err(|e| anyhow!("missing match cases {e}"))?;
-        mtype
-            .check_contains(&ctx.env, &self.arg.node.typ())
-            .map_err(|e| anyhow!("missing match cases {e}"))?;
+        itype.check_contains(&ctx.env, &self.arg.node.typ()).map_err(|e| {
+            format_with_flags(PrintFlag::DerefTVars, || {
+                anyhow!("missing match cases {e}")
+            })
+        })?;
+        mtype.check_contains(&ctx.env, &self.arg.node.typ()).map_err(|e| {
+            format_with_flags(PrintFlag::DerefTVars, || {
+                anyhow!("missing match cases {e}")
+            })
+        })?;
         let mut atype = self.arg.node.typ().clone().normalize();
         for (pat, _) in self.arms.iter() {
-            if !&pat.type_predicate.could_match(&ctx.env, &atype)? {
-                bail!(
-                    "pattern {} will never match {}, unused match cases",
-                    pat.type_predicate,
-                    atype
-                )
+            if !pat.type_predicate.could_match(&ctx.env, &atype)? {
+                format_with_flags(PrintFlag::DerefTVars, || {
+                    bail!(
+                        "pattern {} will never match {}, unused match cases",
+                        pat.type_predicate,
+                        atype
+                    )
+                })?
             }
             if !pat.structure_predicate.is_refutable() && pat.guard.is_none() {
                 atype = atype.diff(&ctx.env, &pat.type_predicate)?;

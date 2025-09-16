@@ -1898,3 +1898,26 @@ run!(catch3, CATCH3, |v: Result<&Value>| match v {
     Ok(Value::String(_)) => true,
     _ => false,
 });
+
+const CATCH4: &str = r#"
+{
+    let a = [0, 1, 2, 3, 4, 5];
+    let err0 = never();
+    let err1 = never();
+    catch(e) => err0 <- e;
+    catch(e: Any) => select (e.0).error {
+        `ArithError(_) => err1 <- e,
+        _ => e?
+    };
+    a[5]? / a[0]?;
+    a[6]?;
+    [err0, err1]
+}
+"#;
+
+run!(catch4, CATCH4, |v: Result<&Value>| match v
+    .and_then(|v| v.clone().cast_to::<[Value; 2]>())
+{
+    Ok([Value::Error(_), Value::Error(_)]) => true,
+    _ => false,
+});

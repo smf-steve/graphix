@@ -12,6 +12,7 @@ use compiler::compile;
 use enumflags2::BitFlags;
 use netidx_value::{Typ, Value};
 use pattern::StructPatternNode;
+use poolshark::local::LPooled;
 use std::{cell::RefCell, sync::LazyLock};
 use triomphe::Arc;
 
@@ -49,6 +50,35 @@ macro_rules! update_args {
         }
         (updated, determined)
     }};
+}
+
+#[macro_export]
+macro_rules! deref_typ {
+    ($name:literal, $ctx:expr, $typ:expr, $($pat:pat => $body:expr),+) => {
+        $typ.with_deref(|typ| {
+            let mut typ = typ.cloned();
+            let mut hist: poolshark::local::LPooled<fxhash::FxHashSet<usize>> = poolshark::local::LPooled::take();
+            loop {
+                match &typ {
+                    $($pat => break $body),+,
+                    Some(rt @ Type::Ref { .. }) => {
+                        let rt = rt.lookup_ref(&$ctx.env)?;
+                        if hist.insert(rt as *const _ as usize) {
+                            typ = Some(rt.clone());
+                        } else {
+                            $crate::format_with_flags(PrintFlag::DerefTVars, || {
+                                anyhow::bail!("expected {} not {rt}", $name)
+                            })?
+                        }
+                    }
+                    Some(t) => $crate::format_with_flags(PrintFlag::DerefTVars, || {
+                        anyhow::bail!("expected {} not {t}", $name)
+                    })?,
+                    None => anyhow::bail!("type must be known, annotations needed"),
+                }
+            }
+        })
+    };
 }
 
 static NOP: LazyLock<Arc<Expr>> = LazyLock::new(|| {
@@ -933,10 +963,12 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Deref<R, E> {
     }
 }
 
+static ECHAIN: LazyLock<ModPath> = LazyLock::new(|| ModPath::from(["ErrChain"]));
+
 fn typ_echain(param: Type) -> Type {
     Type::Ref {
         scope: ModPath::root(),
-        name: ModPath::from(["ErrChain"]),
+        name: ECHAIN.clone(),
         params: Arc::from_iter([param]),
     }
 }
@@ -1023,6 +1055,46 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
     }
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
+        fn fix_echain_typ<R: Rt, E: UserEvent>(
+            ctx: &ExecCtx<R, E>,
+            etyp: &Type,
+        ) -> Result<Type> {
+            deref_typ!("error", ctx, etyp,
+                Some(Type::Primitive(p)) => {
+                    if !p.contains(Typ::Error) {
+                        bail!("expected error not {}", Type::Primitive(*p))
+                    }
+                    if *p == BitFlags::from(Typ::Error) {
+                        Ok(Type::Error(Arc::new(typ_echain(Type::Any))))
+                    } else {
+                        let mut p = *p;
+                        p.remove(Typ::Error);
+                        Ok(Type::Set(Arc::from_iter([
+                            Type::Error(Arc::new(typ_echain(Type::Any))),
+                            Type::Primitive(p)
+                        ])))
+                    }
+                },
+                Some(Type::Error(et)) => et.with_deref(|et| match et {
+                    None => bail!("type must be known"),
+                    Some(Type::Ref { scope, name, .. })
+                        if scope == &ModPath::root() && name == &*ECHAIN =>
+                    {
+                        Ok(etyp.clone())
+                    }
+                    Some(et) => {
+                        Ok(Type::Error(Arc::new(typ_echain(et.clone()))))
+                    }
+                }),
+                Some(Type::Set(elts)) => {
+                    let mut res = elts
+                        .iter()
+                        .map(|et| fix_echain_typ(ctx, et))
+                        .collect::<Result<LPooled<Vec<Type>>>>()?;
+                    Ok(Type::Set(Arc::from_iter(res.drain(..))))
+                }
+            )
+        }
         wrap!(self.n, self.n.typecheck(ctx))?;
         let err = Type::Error(Arc::new(Type::empty_tvar()));
         if !self.n.typ().contains(&ctx.env, &err)? {
@@ -1039,11 +1111,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
             .get(&self.id)
             .ok_or_else(|| anyhow!("BUG: missing catch id"))?;
         let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
-        let etyp = typ_echain(wrap!(
-            self.n,
-            etyp.strip_error(&ctx.env)
-                .ok_or_else(|| anyhow!("expected an error got {etyp}"))
-        )?);
+        let etyp: Type = wrap!(self, fix_echain_typ(&ctx, &etyp))?;
         wrap!(self, bind.typ.check_contains(&ctx.env, &etyp))?;
         Ok(())
     }

@@ -250,7 +250,11 @@ impl Type {
                     .collect::<Result<AndAc>>()?
                     .0),
             (Self::ByRef(t0), Self::ByRef(t1)) => t0.contains_int(env, hist, t1),
-            (Self::TVar(t0), Self::TVar(t1)) if t0.addr() == t1.addr() => Ok(true),
+            (Self::TVar(t0), Self::TVar(t1))
+                if t0.addr() == t1.addr() || t0.read().id == t1.read().id =>
+            {
+                Ok(true)
+            }
             (Self::TVar(t0), tt1 @ Self::TVar(t1)) => {
                 #[derive(Debug)]
                 enum Act {
@@ -400,9 +404,15 @@ impl Type {
     ) -> Result<bool> {
         match (self, t) {
             (
-                Self::Ref { scope: s0, name: n0, .. },
-                Self::Ref { scope: s1, name: n1, .. },
-            ) if s0 == s1 && n0 == n1 => Ok(true),
+                Self::Ref { scope: s0, name: n0, params: p0 },
+                Self::Ref { scope: s1, name: n1, params: p1 },
+            ) if s0 == s1 && n0 == n1 => Ok(p0.len() == p1.len()
+                && p0
+                    .iter()
+                    .zip(p1.iter())
+                    .map(|(t0, t1)| t0.could_match_int(env, hist, t1))
+                    .collect::<Result<AndAc>>()?
+                    .0),
             (t0 @ Self::Ref { .. }, t1) | (t0, t1 @ Self::Ref { .. }) => {
                 let t0 = t0.lookup_ref(env)?;
                 let t1 = t1.lookup_ref(env)?;
@@ -443,12 +453,13 @@ impl Type {
             }
             (Type::TVar(t0), t1) => match &*t0.read().typ.read() {
                 Some(t0) => t0.could_match_int(env, hist, t1),
-                None => Ok(false),
+                None => Ok(true),
             },
             (t0, Type::TVar(t1)) => match &*t1.read().typ.read() {
                 Some(t1) => t0.could_match_int(env, hist, t1),
-                None => Ok(false),
+                None => Ok(true),
             },
+            (Type::Any, _) | (_, Type::Any) => Ok(true),
             (t0, t1) => t0.contains_int(env, hist, t1),
         }
     }
