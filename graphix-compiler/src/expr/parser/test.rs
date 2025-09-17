@@ -1352,7 +1352,6 @@ fn tupleref() {
 
 #[test]
 fn prop0() {
-    //let s = "(u32:0)[error:decimal:0..]";
-    let s = "error:decimal:0.";
+    let s = "try use a catch(a) => u32:0";
     dbg!(parse_one(s).unwrap());
 }

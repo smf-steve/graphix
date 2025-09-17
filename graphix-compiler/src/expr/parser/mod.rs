@@ -1575,7 +1575,7 @@ parser! {
         (
             position().skip(string("try")),
             sep_by1(expr(), attempt(sptoken(';'))),
-            string("catch").with(
+            spstring("catch").with(
                 between(
                     sptoken('('),
                     sptoken(')'),
