@@ -392,7 +392,7 @@ impl ExprKind {
                 }
                 match &tc.handler.kind {
                     ExprKind::Do { exprs } => {
-                        pretty_print_exprs(indent + 2, limit, buf, exprs, "", "", "; ")
+                        pretty_print_exprs(indent + 2, limit, buf, exprs, "{", "}", "; ")
                     }
                     _ => {
                         writeln!(buf, "")?;
