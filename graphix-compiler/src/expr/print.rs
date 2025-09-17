@@ -382,13 +382,23 @@ impl ExprKind {
                 kill_newline!(buf);
                 writeln!(buf, "?")
             }
-            ExprKind::Catch { bind, constraint, handler } => {
+            ExprKind::TryCatch(tc) => {
                 try_single_line!(true);
-                match constraint {
-                    None => writeln!(buf, "catch({bind}) => ")?,
-                    Some(t) => writeln!(buf, "catch({bind}: {t}) => ")?,
+                writeln!(buf, "try")?;
+                pretty_print_exprs(indent + 2, limit, buf, &tc.exprs, "", "", "; ")?;
+                match &tc.constraint {
+                    None => write!(buf, "catch({}) => ", tc.bind)?,
+                    Some(t) => write!(buf, "catch({}: {t}) => ", tc.bind)?,
                 }
-                handler.kind.pretty_print(indent + 2, limit, true, buf)
+                match &tc.handler.kind {
+                    ExprKind::Do { exprs } => {
+                        pretty_print_exprs(indent + 2, limit, buf, exprs, "", "", "; ")
+                    }
+                    _ => {
+                        writeln!(buf, "")?;
+                        tc.handler.kind.pretty_print(indent + 2, limit, true, buf)
+                    }
+                }
             }
             ExprKind::Apply { function, args } => {
                 try_single_line!(true);
@@ -762,10 +772,14 @@ impl fmt::Display for ExprKind {
                 write!(f, " }}")
             }
             ExprKind::Qop(e) => write!(f, "{}?", e),
-            ExprKind::Catch { bind, constraint, handler } => match constraint {
-                None => write!(f, "catch({bind}) => {handler}"),
-                Some(t) => write!(f, "catch({bind}: {t}) => {handler}"),
-            },
+            ExprKind::TryCatch(tc) => {
+                write!(f, "try ")?;
+                print_exprs(f, &tc.exprs, "", "", "; ")?;
+                match &tc.constraint {
+                    None => write!(f, " catch({}) => {}", tc.bind, tc.handler),
+                    Some(t) => write!(f, " catch({}: {t}) => {}", tc.bind, tc.handler),
+                }
+            }
             ExprKind::StringInterpolate { args } => {
                 write!(f, "\"")?;
                 for s in args.iter() {

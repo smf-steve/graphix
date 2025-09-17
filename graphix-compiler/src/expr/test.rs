@@ -419,13 +419,18 @@ macro_rules! qop {
     };
 }
 
-macro_rules! catch {
+macro_rules! try_catch {
     ($inner:expr) => {
-        (random_fname(), option::of(typexp()), $inner).prop_map(
-            |(bind, constraint, e)| {
-                ExprKind::Catch { bind, constraint, handler: Arc::new(e) }.to_expr_nopos()
-            },
-        )
+        (random_fname(), option::of(typexp()), $inner, collection::vec($inner, (0, 10)))
+            .prop_map(|(bind, constraint, handler, exprs)| {
+                ExprKind::TryCatch(Arc::new(TryCatch {
+                    bind,
+                    constraint,
+                    exprs: Arc::from_iter(exprs),
+                    handler: Arc::new(handler),
+                }))
+                .to_expr_nopos()
+            })
     };
 }
 
@@ -739,7 +744,7 @@ fn expr() -> impl Strategy<Value = Expr> {
             tupleref!(inner.clone()),
             any!(inner.clone()),
             apply!(inner.clone(), false),
-            catch!(inner.clone()),
+            try_catch!(inner.clone()),
             typecast!(inner.clone()),
             do_block!(inner.clone()),
             lambda!(inner.clone()),

@@ -1,7 +1,8 @@
 use crate::{
     expr::{
         get_origin, set_origin, Arg, Bind, Expr, ExprId, ExprKind, Lambda, ModPath,
-        ModuleKind, Origin, Pattern, Sandbox, Sig, SigItem, StructurePattern, TypeDef,
+        ModuleKind, Origin, Pattern, Sandbox, Sig, SigItem, StructurePattern, TryCatch,
+        TypeDef,
     },
     typ::{FnArgType, FnType, TVar, Type},
 };
@@ -34,6 +35,7 @@ use netidx_value::parser::{
     escaped_string, int, value as parse_value, VAL_ESC, VAL_MUST_ESC,
 };
 use parking_lot::RwLock;
+use poolshark::local::LPooled;
 use smallvec::{smallvec, SmallVec};
 use std::sync::LazyLock;
 use triomphe::Arc;
@@ -60,7 +62,7 @@ pub const RESERVED: LazyLock<FxHashSet<&str>> = LazyLock::new(|| {
         "true", "false", "ok", "null", "mod", "let", "select", "pub", "type", "fn",
         "cast", "if", "u32", "v32", "i32", "z32", "u64", "v64", "i64", "z64", "f32",
         "f64", "decimal", "datetime", "duration", "bool", "string", "bytes", "result",
-        "null", "_", "?", "fn", "Array", "any", "Any", "use", "rec", "catch",
+        "null", "_", "?", "fn", "Array", "any", "Any", "use", "rec", "catch", "try",
     ])
 });
 
@@ -329,7 +331,7 @@ parser! {
                                 | (Some(Expr { kind: ExprKind::Variant { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Struct { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Qop(_), .. }), _)
-                                | (Some(Expr { kind: ExprKind::Catch { .. }, .. }), _)
+                                | (Some(Expr { kind: ExprKind::TryCatch(_), .. }), _)
                                 | (Some(Expr { kind: ExprKind::Do { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Module { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Use { .. }, .. }), _)
@@ -1567,20 +1569,30 @@ parser! {
 }
 
 parser! {
-    fn catch[I]()(I) -> Expr
+    fn try_catch[I]()(I) -> Expr
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
     {
         (
-            position().skip(string("catch")),
-            between(
-                sptoken('('),
-                sptoken(')'),
-                (spfname(), optional(attempt(sptoken(':').with(typexp()))))
+            position().skip(string("try")),
+            sep_by1(expr(), attempt(sptoken(';'))),
+            string("catch").with(
+                between(
+                    sptoken('('),
+                    sptoken(')'),
+                    (spfname(), optional(attempt(sptoken(':').with(typexp()))))
+                )
             ),
             spstring("=>").with(expr())
         )
-            .map(|(pos, (bind, constraint), handler)| {
-                ExprKind::Catch { bind, constraint, handler: Arc::new(handler) }.to_expr(pos)
+            .map(|(pos, mut exprs, (bind, constraint), handler):
+                  (_, LPooled<Vec<Expr>>, _, _)|
+            {
+                ExprKind::TryCatch(Arc::new(TryCatch {
+                    bind,
+                    constraint,
+                    exprs: Arc::from_iter(exprs.drain(..)),
+                    handler: Arc::new(handler)
+                })).to_expr(pos)
             })
     }
 }
@@ -1618,7 +1630,7 @@ parser! {
     {
         choice((
             attempt(choice((
-                attempt(spaces().with(catch())),
+                attempt(spaces().with(try_catch())),
                 attempt(spaces().with(module())),
                 attempt(spaces().with(use_module())),
                 attempt(spaces().with(typedef())),

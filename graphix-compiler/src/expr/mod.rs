@@ -133,6 +133,14 @@ pub struct Lambda {
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct TryCatch {
+    pub bind: ArcStr,
+    pub constraint: Option<Type>,
+    pub handler: Arc<Expr>,
+    pub exprs: Arc<[Expr]>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum ExprKind {
     Constant(Value),
     Module { name: ArcStr, export: bool, value: ModuleKind },
@@ -158,7 +166,7 @@ pub enum ExprKind {
     Struct { args: Arc<[(ArcStr, Expr)]> },
     Select { arg: Arc<Expr>, arms: Arc<[(Pattern, Expr)]> },
     Qop(Arc<Expr>),
-    Catch { bind: ArcStr, constraint: Option<Type>, handler: Arc<Expr> },
+    TryCatch(Arc<TryCatch>),
     ByRef(Arc<Expr>),
     Deref(Arc<Expr>),
     Eq { lhs: Arc<Expr>, rhs: Arc<Expr> },
@@ -460,8 +468,11 @@ impl Expr {
                     e.fold(init, f)
                 })
             }
+            ExprKind::TryCatch(tc) => {
+                let init = tc.exprs.iter().fold(init, |init, e| e.fold(init, f));
+                tc.handler.fold(init, f)
+            }
             ExprKind::Qop(e)
-            | ExprKind::Catch { bind: _, constraint: _, handler: e }
             | ExprKind::ByRef(e)
             | ExprKind::Deref(e)
             | ExprKind::Not { expr: e } => e.fold(init, f),

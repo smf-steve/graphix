@@ -1105,14 +1105,15 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         let err = Type::Primitive(Typ::Error.into());
         let rtyp = self.n.typ().diff(&ctx.env, &err)?;
         wrap!(self, self.typ.check_contains(&ctx.env, &rtyp))?;
+        let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
+        let etyp = wrap!(self, fix_echain_typ(&ctx, &etyp))?;
         let bind = ctx
             .env
             .by_id
             .get(&self.id)
             .ok_or_else(|| anyhow!("BUG: missing catch id"))?;
-        let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
-        let etyp: Type = wrap!(self, fix_echain_typ(&ctx, &etyp))?;
-        wrap!(self, bind.typ.check_contains(&ctx.env, &etyp))?;
+        let bind_type = bind.typ.union(&ctx.env, &etyp)?;
+        ctx.env.by_id[&self.id].typ = bind_type;
         Ok(())
     }
 }
@@ -1323,49 +1324,64 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Sample<R, E> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Catch<R: Rt, E: UserEvent> {
+pub(crate) struct TryCatch<R: Rt, E: UserEvent> {
     spec: Expr,
+    typ: Type,
+    nodes: LPooled<Vec<Node<R, E>>>,
     handler: Node<R, E>,
 }
 
-impl<R: Rt, E: UserEvent> Catch<R, E> {
+impl<R: Rt, E: UserEvent> TryCatch<R, E> {
     pub(crate) fn new(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
         scope: &ModPath,
         top_id: ExprId,
-        bind: &ArcStr,
-        constraint: &Option<Type>,
-        handler: &Arc<Expr>,
+        tc: &Arc<expr::TryCatch>,
     ) -> Result<Node<R, E>> {
-        let name = format_compact!("ca{}", BindId::new().inner());
-        let inner_scope = ModPath(scope.append(name.as_str()));
-        let typ = Type::Error(Arc::new(typ_echain(match constraint {
-            Some(t) => t.clone(),
-            None => Type::empty_tvar(),
-        })));
-        let id = ctx.env.bind_variable(&inner_scope, bind, typ).id;
-        let handler = compile(ctx, (**handler).clone(), &inner_scope, top_id)?;
-        ctx.env.catch.insert_cow(scope.clone(), id);
-        Ok(Box::new(Self { spec, handler }))
+        let inner_name = format_compact!("tc{}", BindId::new().inner());
+        let inner_scope = ModPath(scope.append(inner_name.as_str()));
+        let catch_name = format_compact!("ca{}", BindId::new().inner());
+        let catch_scope = ModPath(scope.append(catch_name.as_str()));
+        let id = ctx.env.bind_variable(&catch_scope, &tc.bind, Type::Bottom).id;
+        let handler = compile(ctx, (*tc.handler).clone(), &catch_scope, top_id)?;
+        ctx.env.catch.insert_cow(inner_scope.clone(), id);
+        let nodes = tc
+            .exprs
+            .iter()
+            .map(|e| compile(ctx, e.clone(), &inner_scope, top_id))
+            .collect::<Result<LPooled<Vec<_>>>>()?;
+        let typ =
+            nodes.last().ok_or_else(|| anyhow!("empty try catch block"))?.typ().clone();
+        Ok(Box::new(Self { spec, typ, nodes, handler }))
     }
 }
 
-impl<R: Rt, E: UserEvent> Update<R, E> for Catch<R, E> {
+impl<R: Rt, E: UserEvent> Update<R, E> for TryCatch<R, E> {
     fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
+        let res = self.nodes.iter_mut().fold(None, |_, n| n.update(ctx, event));
         let _ = self.handler.update(ctx, event);
-        None
+        res
     }
 
     fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        for n in self.nodes.iter_mut() {
+            n.delete(ctx);
+        }
         self.handler.delete(ctx);
     }
 
     fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        for n in self.nodes.iter_mut() {
+            n.sleep(ctx)
+        }
         self.handler.sleep(ctx);
     }
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
+        for n in self.nodes.iter_mut() {
+            wrap!(n, n.typecheck(ctx))?
+        }
         wrap!(self.handler, self.handler.typecheck(ctx))
     }
 
@@ -1374,10 +1390,13 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Catch<R, E> {
     }
 
     fn typ(&self) -> &Type {
-        &Type::Bottom
+        &self.typ
     }
 
     fn refs(&self, refs: &mut Refs) {
+        for n in self.nodes.iter() {
+            n.refs(refs);
+        }
         self.handler.refs(refs);
     }
 }

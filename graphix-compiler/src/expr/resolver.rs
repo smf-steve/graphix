@@ -1,7 +1,7 @@
 use crate::{
     expr::{
         parser, Bind, Expr, ExprId, ExprKind, Lambda, ModPath, ModuleKind, Origin,
-        Pattern, Source,
+        Pattern, Source, TryCatch,
     },
     format_with_flags, PrintFlag,
 };
@@ -522,17 +522,23 @@ impl Expr {
                     kind: ExprKind::Qop(Arc::new(e)),
                 })
             }),
-            ExprKind::Catch { bind, constraint, handler } => Box::pin(async move {
-                let e = handler.resolve_modules_int(scope, prepend, resolvers).await?;
+            ExprKind::TryCatch(tc) => Box::pin(async move {
+                let exprs = try_join_all(tc.exprs.iter().map(|e| async {
+                    e.resolve_modules_int(&scope, &prepend, resolvers).await
+                }))
+                .await?;
+                let handler =
+                    tc.handler.resolve_modules_int(scope, prepend, resolvers).await?;
                 Ok(Expr {
                     id: self.id,
                     ori: self.ori.clone(),
                     pos: self.pos,
-                    kind: ExprKind::Catch {
-                        bind: bind.clone(),
-                        constraint: constraint.clone(),
-                        handler: Arc::new(e),
-                    },
+                    kind: ExprKind::TryCatch(Arc::new(TryCatch {
+                        bind: tc.bind.clone(),
+                        constraint: tc.constraint.clone(),
+                        handler: Arc::new(handler),
+                        exprs: Arc::from_iter(exprs),
+                    })),
                 })
             }),
             ExprKind::ByRef(e) => Box::pin(async move {
