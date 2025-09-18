@@ -1132,15 +1132,17 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
             let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
             let etyp = wrap!(self, fix_echain_typ(&ctx, &etyp))?;
             let bind = ctx.env.by_id.get(&id).ok_or_else(|| anyhow!("BUG: catch"))?;
-            format_with_flags(PrintFlag::DerefTVars, || {
-                eprintln!("bind typ: {}", bind.typ);
-                eprintln!("etyp: {etyp}")
-            });
-            let bind_type = bind.typ.union(&ctx.env, &etyp)?;
-            format_with_flags(PrintFlag::DerefTVars, || {
-                eprintln!("new typ: {}", bind_type)
-            });
-            ctx.env.by_id[&id].typ = bind_type;
+            match &bind.typ {
+                Type::TVar(tv) => {
+                    let tv = tv.read();
+                    let mut typ = tv.typ.write();
+                    match &mut *typ {
+                        None => *typ = Some(etyp.clone()),
+                        Some(t) => *typ = Some(t.union(&ctx.env, &etyp)?),
+                    }
+                }
+                _ => unreachable!(),
+            }
         }
         Ok(())
     }
@@ -1371,7 +1373,14 @@ impl<R: Rt, E: UserEvent> TryCatch<R, E> {
         let inner_scope = scope.append(inner_name.as_str());
         let catch_name = format_compact!("ca{}", BindId::new().inner());
         let catch_scope = scope.append(catch_name.as_str());
-        let typ = Type::Error(Arc::new(typ_echain(Type::Bottom)));
+        let typ = Type::empty_tvar();
+        match &typ {
+            Type::TVar(tv) => {
+                let mut tv = tv.write();
+                tv.frozen = true;
+            }
+            _ => unreachable!(),
+        }
         let id = ctx.env.bind_variable(&catch_scope.lexical, &tc.bind, typ).id;
         let handler = compile(ctx, (*tc.handler).clone(), &catch_scope, top_id)?;
         ctx.env.catch.insert_cow(inner_scope.dynamic.clone(), id);

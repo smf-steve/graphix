@@ -50,15 +50,15 @@ pub(super) fn would_cycle_inner(addr: usize, t: &Type) -> bool {
 
 #[derive(Debug)]
 pub struct TVarInnerInner {
-    pub(super) id: TVarId,
-    pub(super) frozen: bool,
-    pub(super) typ: Arc<RwLock<Option<Type>>>,
+    pub(crate) id: TVarId,
+    pub(crate) frozen: bool,
+    pub(crate) typ: Arc<RwLock<Option<Type>>>,
 }
 
 #[derive(Debug)]
 pub struct TVarInner {
     pub name: ArcStr,
-    pub(super) typ: RwLock<TVarInnerInner>,
+    pub(crate) typ: RwLock<TVarInnerInner>,
 }
 
 #[derive(Debug, Clone)]
