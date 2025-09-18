@@ -275,7 +275,7 @@ pub type BuiltInInitFn<R, E> = sync::Arc<
     dyn for<'a, 'b, 'c> Fn(
             &'a mut ExecCtx<R, E>,
             &'a FnType,
-            &'b ModPath,
+            &'b Scope,
             &'c [Node<R, E>],
             ExprId,
         ) -> Result<Box<dyn Apply<R, E>>>
@@ -285,9 +285,10 @@ pub type BuiltInInitFn<R, E> = sync::Arc<
 >;
 
 pub type InitFn<R, E> = sync::Arc<
-    dyn for<'a, 'b> Fn(
-            &'a mut ExecCtx<R, E>,
-            &'b [Node<R, E>],
+    dyn for<'a, 'b, 'c> Fn(
+            &'a Scope,
+            &'b mut ExecCtx<R, E>,
+            &'c [Node<R, E>],
             ExprId,
         ) -> Result<Box<dyn Apply<R, E>>>
         + Send
@@ -562,11 +563,30 @@ impl<R: Rt, E: UserEvent> ExecCtx<R, E> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Scope {
+    pub lexical: ModPath,
+    pub dynamic: ModPath,
+}
+
+impl Scope {
+    pub fn append<S: AsRef<str> + ?Sized>(&self, s: &S) -> Self {
+        Self {
+            lexical: ModPath(self.lexical.append(s)),
+            dynamic: ModPath(self.dynamic.append(s)),
+        }
+    }
+
+    pub fn root() -> Self {
+        Self { lexical: ModPath::root(), dynamic: ModPath::root() }
+    }
+}
+
 /// compile the expression into a node graph in the specified context
 /// and scope, return the root node or an error if compilation failed.
 pub fn compile<R: Rt, E: UserEvent>(
     ctx: &mut ExecCtx<R, E>,
-    scope: &ModPath,
+    scope: &Scope,
     spec: Expr,
 ) -> Result<Node<R, E>> {
     let top_id = spec.id;

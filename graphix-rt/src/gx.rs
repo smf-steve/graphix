@@ -10,7 +10,7 @@ use graphix_compiler::{
     },
     node::genn,
     typ::Type,
-    BindId, Event, ExecCtx, LambdaId, Node, REFS,
+    BindId, Event, ExecCtx, LambdaId, Node, Scope, REFS,
 };
 use indexmap::IndexMap;
 use log::{debug, error, info};
@@ -321,7 +321,7 @@ impl<X: GXExt> GX<X> {
     }
 
     async fn compile_root(&mut self, text: ArcStr) -> Result<()> {
-        let scope = ModPath::root();
+        let scope = Scope::root();
         let ori = Origin { parent: None, source: Source::Unspecified, text };
         let exprs =
             expr::parser::parse(ori.clone()).context("parsing the root module")?;
@@ -345,7 +345,7 @@ impl<X: GXExt> GX<X> {
     }
 
     async fn compile(&mut self, rt: GXHandle<X>, text: ArcStr) -> Result<CompRes<X>> {
-        let scope = ModPath::root();
+        let scope = Scope::root();
         let ori = Origin { parent: None, source: Source::Unspecified, text };
         let exprs = expr::parser::parse(ori.clone())?;
         let exprs =
@@ -372,7 +372,7 @@ impl<X: GXExt> GX<X> {
     }
 
     async fn load(&mut self, rt: GXHandle<X>, file: &PathBuf) -> Result<CompRes<X>> {
-        let scope = ModPath::root();
+        let scope = Scope::root();
         let st = Instant::now();
         let (ori, exprs) = match file.extension() {
             Some(e) if e.as_encoded_bytes() == b"gx" => {
@@ -479,7 +479,7 @@ impl<X: GXExt> GX<X> {
             .map(|(arg, id)| genn::reference(&mut self.ctx, *id, arg.typ.clone(), eid))
             .collect::<Vec<_>>();
         let fnode = genn::constant(Value::U64(id.inner()));
-        let mut n = genn::apply(fnode, argn, &lb.typ, eid);
+        let mut n = genn::apply(fnode, Scope::root(), argn, &lb.typ, eid);
         self.event.init = true;
         n.update(&mut self.ctx, &mut self.event);
         self.event.clear();

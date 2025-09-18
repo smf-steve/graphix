@@ -1827,9 +1827,10 @@ run!(datetime_arith17, DATETIME_ARITH17, |v: Result<&Value>| match v {
 const DATETIME_ARITH18: &str = r#"
 {
     let errors = never();
-    catch(e: `ArithError(string)) => errors <- e;
-    let you_have_been_in_suspention_for = duration:9999999999999.s * 99999999999999;
-    any(you_have_been_in_suspention_for, errors)
+    try
+        let you_have_been_in_suspention_for = duration:9999999999999.s * 99999999999999;
+        any(you_have_been_in_suspention_for, errors)
+    catch(e: `ArithError(string)) => errors <- e
 }
 "#;
 
@@ -1839,11 +1840,9 @@ run!(datetime_arith18, DATETIME_ARITH18, |v: Result<&Value>| match v {
 });
 
 const CATCH0: &str = r#"
-{
-    catch(e) => select (e.0).error {
-        `ArithError(s) => println("arithmetic operation error [s]")
-    };
-    2 + 2
+try 2 + 2
+catch(e) => select (e.0).error {
+    `ArithError(s) => println("arithmetic operation error [s]")
 }
 "#;
 
@@ -1853,12 +1852,11 @@ run!(catch0, CATCH0, |v: Result<&Value>| match v {
 });
 
 const CATCH1: &str = r#"
-{
-    catch(e) => select (e.0).error {
-        `ArithError(s) => println("arithmetic operation error [s]")
-    };
+try
     let a = [1, 2, 3];
     a[0]? + a[1]?
+catch(e) => select (e.0).error {
+    `ArithError(s) => println("arithmetic operation error [s]")
 }
 "#;
 
@@ -1867,19 +1865,16 @@ run!(catch1, CATCH1, |v: Result<&Value>| match v {
     _ => false,
 });
 
-// CR estokes: figure out how to do exhaustiveness checking on catch
 const CATCH2: &str = r#"
-{
-    catch(e) => select (e.0).error {
-        `ArithError(s) => println("arithmetic operation error [s]"),
-        `ArrayIndexError(s) => println("array index error [s]")
-    };
-    2 + 2
+try 2 + 2
+catch(e) => select (e.0).error {
+    `ArithError(s) => println("arithmetic operation error [s]"),
+    `ArrayIndexError(s) => println("array index error [s]")
 }
 "#;
 
 run!(catch2, CATCH2, |v: Result<&Value>| match v {
-    Ok(Value::I64(4)) => true,
+    Err(_) => true,
     _ => false,
 });
 
@@ -1887,10 +1882,10 @@ const CATCH3: &str = r#"
 {
     let f = |x| x / x;
     let res = never();
+    try any(f(0), res)
     catch(e) => select (e.0).error {
         `ArithError(s) => res <- s
-    };
-    any(f(0), res)
+    }
 }
 "#;
 
@@ -1902,15 +1897,17 @@ run!(catch3, CATCH3, |v: Result<&Value>| match v {
 const CATCH4: &str = r#"
 {
     let a = [0, 1, 2, 3, 4, 5];
-    let err0 = never();
-    let err1 = never();
+    let err0: Error<ErrChain<`ArrayIndexError(string)>> = never();
+    let err1: Error<ErrChain<`ArithError(string)>> = never();
+    try
+       try
+           a[5]? / a[0]?;
+           a[6]?
+       catch(e) => select (e.0).error {
+          `ArithError(_) => err1 <- e,
+          _ => e?
+       }
     catch(e) => err0 <- e;
-    catch(e: Any) => select (e.0).error {
-        `ArithError(_) => err1 <- e,
-        _ => e?
-    };
-    a[5]? / a[0]?;
-    a[6]?;
     [err0, err1]
 }
 "#;

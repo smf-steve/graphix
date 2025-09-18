@@ -10,9 +10,9 @@ use super::{
     StringInterpolate, TypeCast, TypeDef, Use,
 };
 use crate::{
-    expr::{self, Expr, ExprId, ExprKind, ModPath, ModuleKind},
+    expr::{self, Expr, ExprId, ExprKind, ModuleKind},
     node::TryCatch,
-    ExecCtx, Node, Rt, UserEvent,
+    ExecCtx, Node, Rt, Scope, UserEvent,
 };
 use anyhow::{bail, Context, Result};
 use compact_str::format_compact;
@@ -20,13 +20,13 @@ use compact_str::format_compact;
 pub(crate) fn compile<R: Rt, E: UserEvent>(
     ctx: &mut ExecCtx<R, E>,
     spec: Expr,
-    scope: &ModPath,
+    scope: &Scope,
     top_id: ExprId,
 ) -> Result<Node<R, E>> {
     match &spec.kind {
         ExprKind::Constant(v) => Constant::compile(spec.clone(), v),
         ExprKind::Do { exprs } => {
-            let scope = ModPath(scope.append(&format_compact!("do{}", spec.id.inner())));
+            let scope = scope.append(&format_compact!("do{}", spec.id.inner()));
             Block::compile(ctx, spec.clone(), &scope, top_id, false, exprs)
         }
         ExprKind::Array { args } => {
@@ -51,7 +51,7 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
             Struct::compile(ctx, spec.clone(), scope, top_id, args)
         }
         ExprKind::Module { name, export: _, value } => {
-            let scope = ModPath(scope.append(&name));
+            let scope = scope.append(&name);
             match value {
                 ModuleKind::Unresolved => {
                     bail!("external modules are not allowed in this context")
@@ -60,14 +60,14 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
                     let res =
                         Block::compile(ctx, spec.clone(), &scope, top_id, true, exprs)
                             .with_context(|| spec.ori.clone())?;
-                    ctx.env.modules.insert_cow(scope.clone());
+                    ctx.env.modules.insert_cow(scope.lexical.clone());
                     Ok(res)
                 }
                 ModuleKind::Inline(exprs) => {
                     let res =
                         Block::compile(ctx, spec.clone(), &scope, top_id, true, exprs)
                             .with_context(|| spec.ori.clone())?;
-                    ctx.env.modules.insert_cow(scope.clone());
+                    ctx.env.modules.insert_cow(scope.lexical.clone());
                     Ok(res)
                 }
                 ModuleKind::Dynamic { sandbox, sig, source } => DynamicModule::compile(

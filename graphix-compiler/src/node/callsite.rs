@@ -1,10 +1,10 @@
 use super::{compiler::compile, Nop};
 use crate::{
     env::LambdaDef,
-    expr::{Expr, ExprId, ModPath},
+    expr::{Expr, ExprId},
     typ::{FnArgType, FnType, TVar, Type},
-    wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, Refs, Rt, Update, UserEvent,
-    KNOWN, REFS,
+    wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope, Update,
+    UserEvent, KNOWN, REFS,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
@@ -45,7 +45,7 @@ fn check_extra_named(named: &FxHashMap<ArcStr, Expr>) -> Result<()> {
 
 fn compile_apply_args<R: Rt, E: UserEvent>(
     ctx: &mut ExecCtx<R, E>,
-    scope: &ModPath,
+    scope: &Scope,
     top_id: ExprId,
     typ: &FnType,
     args: &TArc<[(Option<ArcStr>, Expr)]>,
@@ -90,6 +90,7 @@ pub(crate) struct CallSite<R: Rt, E: UserEvent> {
     pub(super) args: Vec<Node<R, E>>,
     pub(super) arg_spec: FxHashMap<ArcStr, bool>, // true if arg is using the default value
     pub(super) function: Option<(LambdaId, Box<dyn Apply<R, E>>)>,
+    pub(super) scope: Scope,
     pub(super) top_id: ExprId,
 }
 
@@ -97,7 +98,7 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         args: &TArc<[(Option<ArcStr>, Expr)]>,
         f: &TArc<Expr>,
@@ -120,13 +121,23 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
         let (args, arg_spec) = compile_apply_args(ctx, scope, top_id, &ftype, &args)
             .with_context(|| format!("in apply at {}", spec.pos))?;
         let spec = TArc::new(spec);
-        let site = Self { spec, ftype, args, arg_spec, fnode, function: None, top_id };
+        let site = Self {
+            spec,
+            ftype,
+            args,
+            arg_spec,
+            fnode,
+            function: None,
+            top_id,
+            scope: scope.clone(),
+        };
         Ok(Box::new(site))
     }
 
     fn bind(
         &mut self,
         ctx: &mut ExecCtx<R, E>,
+        scope: Scope,
         f: Arc<LambdaDef<R, E>>,
         event: &mut Event<E>,
         set: &mut Vec<BindId>,
@@ -136,7 +147,11 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
                 match &$f.argspec[$i].labeled {
                     None | Some(None) => bail!("expected default value"),
                     Some(Some(expr)) => ctx.with_restored($f.env.clone(), |ctx| {
-                        let n = compile(ctx, expr.clone(), &$f.scope, self.top_id)?;
+                        let scope = Scope {
+                            dynamic: scope.dynamic.clone(),
+                            lexical: $f.scope.lexical.clone(),
+                        };
+                        let n = compile(ctx, expr.clone(), &scope, self.top_id)?;
                         REFS.with_borrow_mut(|refs| {
                             refs.clear();
                             n.refs(refs);
@@ -190,7 +205,7 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
                 (None, None) => bail!("unexpected args"),
             }
         }
-        let mut rf = (f.init)(ctx, &self.args, self.top_id)?;
+        let mut rf = (f.init)(&scope, ctx, &self.args, self.top_id)?;
         // for type directed pretty printing to work
         let _ = rf.typecheck(ctx, &mut self.args);
         self.function = Some((f.id, rf));
@@ -209,7 +224,9 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
                 Some(lb) => match lb.upgrade() {
                     None => panic!("function {id:?} is no longer callable"),
                     Some(lb) => {
-                        if let Err(e) = self.bind(ctx, lb, event, &mut set) {
+                        if let Err(e) =
+                            self.bind(ctx, self.scope.clone(), lb, event, &mut set)
+                        {
                             panic!("failed to bind to lambda {e:?}")
                         }
                         true
@@ -246,8 +263,16 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
     }
 
     fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
-        let Self { spec: _, ftype: _, fnode, args, arg_spec: _, function, top_id: _ } =
-            self;
+        let Self {
+            spec: _,
+            ftype: _,
+            fnode,
+            args,
+            arg_spec: _,
+            function,
+            top_id: _,
+            scope: _,
+        } = self;
         if let Some((_, f)) = function {
             f.delete(ctx)
         }
@@ -258,8 +283,16 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
     }
 
     fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
-        let Self { spec: _, ftype: _, fnode, args, arg_spec: _, function, top_id: _ } =
-            self;
+        let Self {
+            spec: _,
+            ftype: _,
+            fnode,
+            args,
+            arg_spec: _,
+            function,
+            top_id: _,
+            scope: _,
+        } = self;
         if let Some((_, f)) = function {
             f.sleep(ctx)
         }
@@ -309,8 +342,16 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
     }
 
     fn refs(&self, refs: &mut Refs) {
-        let Self { spec: _, ftype: _, fnode, args, arg_spec: _, function, top_id: _ } =
-            self;
+        let Self {
+            spec: _,
+            ftype: _,
+            fnode,
+            args,
+            arg_spec: _,
+            function,
+            top_id: _,
+            scope: _,
+        } = self;
         if let Some((_, fun)) = function {
             fun.refs(refs)
         }

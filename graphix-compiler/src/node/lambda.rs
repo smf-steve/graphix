@@ -1,11 +1,11 @@
 use super::{compiler::compile, Nop};
 use crate::{
     env::LambdaDef,
-    expr::{self, Arg, Expr, ExprId, ModPath},
+    expr::{self, Arg, Expr, ExprId},
     node::pattern::StructPatternNode,
     typ::{FnArgType, FnType, Type},
-    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Update, UserEvent,
-    KNOWN,
+    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Scope, Update,
+    UserEvent, KNOWN,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -89,7 +89,7 @@ impl<R: Rt, E: UserEvent> GXLambda<R, E> {
         typ: Arc<FnType>,
         argspec: Arc<[Arg]>,
         args: &[Node<R, E>],
-        scope: &ModPath,
+        scope: &Scope,
         tid: ExprId,
         body: Expr,
     ) -> Result<Self> {
@@ -98,7 +98,7 @@ impl<R: Rt, E: UserEvent> GXLambda<R, E> {
         }
         let mut argpats = vec![];
         for (a, atyp) in argspec.iter().zip(typ.args.iter()) {
-            let pattern = StructPatternNode::compile(ctx, &atyp.typ, &a.pattern, &scope)?;
+            let pattern = StructPatternNode::compile(ctx, &atyp.typ, &a.pattern, scope)?;
             if pattern.is_refutable() {
                 bail!(
                     "refutable patterns are not allowed in lambda arguments {}",
@@ -189,7 +189,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         l: &expr::Lambda,
         top_id: ExprId,
     ) -> Result<Node<R, E>> {
@@ -204,16 +204,16 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
             bail!("arguments must have unique names");
         }
         let id = LambdaId::new();
-        let scope = ModPath(scope.0.append(&format_compact!("fn{}", id.0)));
+        let scope = scope.append(&format_compact!("fn{}", id.0));
         let _scope = scope.clone();
         let env = ctx.env.clone();
         let _env = ctx.env.clone();
         let vargs = match l.vargs.as_ref() {
             None => None,
             Some(None) => Some(None),
-            Some(Some(typ)) => Some(Some(typ.scope_refs(&scope))),
+            Some(Some(typ)) => Some(Some(typ.scope_refs(&scope.lexical))),
         };
-        let rtype = l.rtype.as_ref().map(|t| t.scope_refs(&scope));
+        let rtype = l.rtype.as_ref().map(|t| t.scope_refs(&scope.lexical));
         let argspec = l
             .args
             .iter()
@@ -226,7 +226,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                 Some(typ) => Arg {
                     labeled: a.labeled.clone(),
                     pattern: a.pattern.clone(),
-                    constraint: Some(typ.scope_refs(&scope)),
+                    constraint: Some(typ.scope_refs(&scope.lexical)),
                 },
             })
             .collect::<SmallVec<[_; 16]>>();
@@ -235,8 +235,8 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
             .constraints
             .iter()
             .map(|(tv, tc)| {
-                let tv = tv.scope_refs(&scope);
-                let tc = tc.scope_refs(&scope);
+                let tv = tv.scope_refs(&scope.lexical);
+                let tc = tc.scope_refs(&scope.lexical);
                 Ok((tv, tc))
             })
             .collect::<Result<SmallVec<[_; 4]>>>()?;
@@ -266,7 +266,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                     if !ctx.builtins_allowed {
                         bail!("defining builtins is not allowed in this context")
                     }
-                    Arc::new(styp.clone().scope_refs(&_scope))
+                    Arc::new(styp.clone().scope_refs(&_scope.lexical))
                 }
             },
         };
@@ -277,17 +277,21 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
         let _typ = typ.clone();
         let _argspec = argspec.clone();
         let body = l.body.clone();
-        let init: InitFn<R, E> = SArc::new(move |ctx, args, tid| {
+        let init: InitFn<R, E> = SArc::new(move |scope, ctx, args, tid| {
             // restore the lexical environment to the state it was in
             // when the closure was created
             ctx.with_restored(_env.clone(), |ctx| match body.clone() {
                 Either::Left(body) => {
+                    let scope = Scope {
+                        dynamic: scope.dynamic.clone(),
+                        lexical: _scope.lexical.clone(),
+                    };
                     let apply = GXLambda::new(
                         ctx,
                         _typ.clone(),
                         _argspec.clone(),
                         args,
-                        &_scope,
+                        &scope,
                         tid,
                         body.clone(),
                     );
@@ -361,7 +365,10 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
                 }
             })
             .collect::<Result<_>>()?;
-        let mut f = wrap!(self, (self.def.init)(ctx, &faux_args, ExprId::new()))?;
+        let mut f = wrap!(
+            self,
+            (self.def.init)(&self.def.scope, ctx, &faux_args, ExprId::new())
+        )?;
         let res = wrap!(self, f.typecheck(ctx, &mut faux_args));
         f.typ().constrain_known();
         self.typ.unbind_tvars();

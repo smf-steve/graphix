@@ -1,10 +1,10 @@
 use super::{compiler::compile, pattern::StructPatternNode, Cached};
 use crate::{
-    expr::{Expr, ExprId, ModPath, Pattern},
+    expr::{Expr, ExprId, Pattern},
     format_with_flags,
     node::pattern::PatternNode,
     typ::Type,
-    BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent, REFS,
+    BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update, UserEvent, REFS,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use compact_str::format_compact;
@@ -29,7 +29,7 @@ impl<R: Rt, E: UserEvent> Select<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         arg: &Expr,
         arms: &[(Pattern, Expr)],
@@ -39,8 +39,7 @@ impl<R: Rt, E: UserEvent> Select<R, E> {
         let arms = arms
             .iter()
             .map(|(pat, spec)| {
-                let scope =
-                    ModPath(scope.append(&format_compact!("sel{}", SelectId::new().0)));
+                let scope = scope.append(&format_compact!("sel{}", SelectId::new().0));
                 let pat = PatternNode::compile(ctx, &atype, pat, &scope, top_id)
                     .with_context(|| format!("in select at {}", spec.pos))?;
                 if !pat.guard.is_some() && !pat.structure_predicate.is_refutable() {

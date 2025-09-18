@@ -3,11 +3,11 @@ use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
 use graphix_compiler::{
-    expr::{ExprId, ModPath},
+    expr::ExprId,
     node::genn,
     typ::{FnType, Type},
     Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Refs, Rt,
-    UserEvent,
+    Scope, UserEvent,
 };
 use netidx::{publisher::Typ, subscriber::Value, utils::Either};
 use netidx_value::ValArray;
@@ -49,7 +49,7 @@ impl<R: Rt, E: UserEvent> Slot<R, E> {
 
 #[derive(Debug)]
 pub struct MapQ<R: Rt, E: UserEvent, T: MapFn<R, E>> {
-    scope: ModPath,
+    scope: Scope,
     predid: BindId,
     top_id: ExprId,
     mftyp: TArc<FnType>,
@@ -65,26 +65,22 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> BuiltIn<R, E> for MapQ<R, E, T> {
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_ctx, typ, scope, from, top_id| match from {
-            [_, _] => {
-                Ok(Box::new(Self {
-                    scope: ModPath(scope.0.append(
-                        format_compact!("fn{}", LambdaId::new().inner()).as_str(),
-                    )),
-                    predid: BindId::new(),
-                    top_id,
-                    etyp: match &typ.args[0].typ {
-                        Type::Array(et) => (**et).clone(),
-                        t => bail!("expected array not {t}"),
-                    },
-                    mftyp: match &typ.args[1].typ {
-                        Type::Fn(ft) => ft.clone(),
-                        t => bail!("expected a function not {t}"),
-                    },
-                    slots: vec![],
-                    cur: ValArray::from([]),
-                    t: T::default(),
-                }))
-            }
+            [_, _] => Ok(Box::new(Self {
+                scope: scope.append(&format_compact!("fn{}", LambdaId::new().inner())),
+                predid: BindId::new(),
+                top_id,
+                etyp: match &typ.args[0].typ {
+                    Type::Array(et) => (**et).clone(),
+                    t => bail!("expected array not {t}"),
+                },
+                mftyp: match &typ.args[1].typ {
+                    Type::Fn(ft) => ft.clone(),
+                    t => bail!("expected a function not {t}"),
+                },
+                slots: vec![],
+                cur: ValArray::from([]),
+                t: T::default(),
+            })),
             _ => bail!("expected two arguments"),
         })
     }
@@ -114,8 +110,13 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
             }
             Some(Value::Array(a)) => {
                 while self.slots.len() < a.len() {
-                    let (id, node) =
-                        genn::bind(ctx, &self.scope, "x", self.etyp.clone(), self.top_id);
+                    let (id, node) = genn::bind(
+                        ctx,
+                        &self.scope.lexical,
+                        "x",
+                        self.etyp.clone(),
+                        self.top_id,
+                    );
                     let fargs = vec![node];
                     let fnode = genn::reference(
                         ctx,
@@ -123,7 +124,13 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
                         Type::Fn(self.mftyp.clone()),
                         self.top_id,
                     );
-                    let pred = genn::apply(fnode, fargs, &self.mftyp, self.top_id);
+                    let pred = genn::apply(
+                        fnode,
+                        self.scope.clone(),
+                        fargs,
+                        &self.mftyp,
+                        self.top_id,
+                    );
                     self.slots.push(Slot { id, pred, cur: None });
                 }
                 (Some(a), true)
@@ -170,11 +177,12 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
         ctx: &mut ExecCtx<R, E>,
         _from: &mut [Node<R, E>],
     ) -> anyhow::Result<()> {
-        let (_, node) = genn::bind(ctx, &self.scope, "x", self.etyp.clone(), self.top_id);
+        let (_, node) =
+            genn::bind(ctx, &self.scope.lexical, "x", self.etyp.clone(), self.top_id);
         let fargs = vec![node];
         let ft = self.mftyp.clone();
         let fnode = genn::reference(ctx, self.predid, Type::Fn(ft.clone()), self.top_id);
-        let mut node = genn::apply(fnode, fargs, &ft, self.top_id);
+        let mut node = genn::apply(fnode, self.scope.clone(), fargs, &ft, self.top_id);
         let r = node.typecheck(ctx);
         node.delete(ctx);
         r
@@ -323,6 +331,7 @@ pub(super) type FindMap<R, E> = MapQ<R, E, FindMapImpl>;
 pub(super) struct Fold<R: Rt, E: UserEvent> {
     top_id: ExprId,
     fid: BindId,
+    scope: Scope,
     binds: Vec<BindId>,
     nodes: Vec<Node<R, E>>,
     inits: Vec<Option<Value>>,
@@ -339,9 +348,10 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Fold<R, E> {
     deftype!("core::array", "fn(Array<'a>, 'b, fn('b, 'a) -> 'b) -> 'b");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
-        Arc::new(|_ctx, typ, _, from, top_id| match from {
+        Arc::new(|_ctx, typ, scope, from, top_id| match from {
             [_, _, _] => Ok(Box::new(Self {
                 top_id,
+                scope: scope.clone(),
                 binds: vec![],
                 nodes: vec![],
                 inits: vec![],
@@ -421,8 +431,13 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Fold<R, E> {
                             Type::Fn(self.mftype.clone()),
                             self.top_id,
                         );
-                        let node =
-                            genn::apply(fnode, vec![n, x], &self.mftype, self.top_id);
+                        let node = genn::apply(
+                            fnode,
+                            self.scope.clone(),
+                            vec![n, x],
+                            &self.mftype,
+                            self.top_id,
+                        );
                         self.nodes.push(node);
                     }
                 }
@@ -486,7 +501,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Fold<R, E> {
         let x = genn::reference(ctx, BindId::new(), self.etyp.clone(), self.top_id);
         let fnode =
             genn::reference(ctx, self.fid, Type::Fn(self.mftype.clone()), self.top_id);
-        n = genn::apply(fnode, vec![n, x], &self.mftype, self.top_id);
+        n = genn::apply(fnode, self.scope.clone(), vec![n, x], &self.mftype, self.top_id);
         let r = n.typecheck(ctx);
         n.delete(ctx);
         r
@@ -855,20 +870,19 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [_, _] => {
                 let scope =
-                    ModPath(scope.0.append(
-                        format_compact!("fn{}", LambdaId::new().inner()).as_str(),
-                    ));
+                    scope.append(&format_compact!("fn{}", LambdaId::new().inner()));
                 let n_typ = Type::Primitive(Typ::I64.into());
                 let etyp = typ.args[0].typ.clone();
                 let mftyp = match &typ.args[1].typ {
                     Type::Fn(ft) => ft.clone(),
                     t => bail!("expected function not {t}"),
                 };
-                let (nid, n) = genn::bind(ctx, &scope, "n", n_typ.clone(), top_id);
-                let (xid, x) = genn::bind(ctx, &scope, "x", etyp.clone(), top_id);
+                let (nid, n) =
+                    genn::bind(ctx, &scope.lexical, "n", n_typ.clone(), top_id);
+                let (xid, x) = genn::bind(ctx, &scope.lexical, "x", etyp.clone(), top_id);
                 let pid = BindId::new();
                 let fnode = genn::reference(ctx, pid, Type::Fn(mftyp.clone()), top_id);
-                let pred = genn::apply(fnode, vec![n, x], &mftyp, top_id);
+                let pred = genn::apply(fnode, scope, vec![n, x], &mftyp, top_id);
                 Ok(Box::new(Self {
                     queue: VecDeque::new(),
                     buf: smallvec![],

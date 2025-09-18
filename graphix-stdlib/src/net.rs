@@ -3,11 +3,8 @@ use anyhow::{anyhow, bail, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::format_compact;
 use graphix_compiler::{
-    err, errf,
-    expr::{ExprId, ModPath},
-    node::genn,
-    typ::Type,
-    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Rt, UserEvent,
+    err, errf, expr::ExprId, node::genn, typ::Type, Apply, BindId, BuiltIn,
+    BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Rt, UserEvent,
 };
 use netidx::{
     path::Path,
@@ -418,17 +415,15 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Publish<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [_, _, _] => {
                 let scope =
-                    ModPath(scope.append(
-                        format_compact!("fn{}", LambdaId::new().inner()).as_str(),
-                    ));
+                    scope.append(&format_compact!("fn{}", LambdaId::new().inner()));
                 let pid = BindId::new();
                 let mftyp = match &typ.args[0].typ {
                     Type::Fn(ft) => ft.clone(),
                     t => bail!("expected function not {t}"),
                 };
-                let (x, xn) = genn::bind(ctx, &scope, "x", Type::Any, top_id);
+                let (x, xn) = genn::bind(ctx, &scope.lexical, "x", Type::Any, top_id);
                 let fnode = genn::reference(ctx, pid, Type::Fn(mftyp.clone()), top_id);
-                let on_write = genn::apply(fnode, vec![xn], &mftyp, top_id);
+                let on_write = genn::apply(fnode, scope, vec![xn], &mftyp, top_id);
                 Ok(Box::new(Publish {
                     args: CachedVals::new(from),
                     current: None,
@@ -565,9 +560,7 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for PublishRpc<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [_, _, _, _] => {
                 let scope =
-                    ModPath(scope.append(
-                        format_compact!("fn{}", LambdaId::new().inner()).as_str(),
-                    ));
+                    scope.append(&format_compact!("fn{}", LambdaId::new().inner()));
                 let id = BindId::new();
                 ctx.rt.ref_var(id, top_id);
                 let pid = BindId::new();
@@ -575,10 +568,15 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for PublishRpc<R, E> {
                     Type::Fn(ft) => ft.clone(),
                     t => bail!("expected a function not {t}"),
                 };
-                let (x, xn) =
-                    genn::bind(ctx, &scope, "x", mftyp.args[0].typ.clone(), top_id);
+                let (x, xn) = genn::bind(
+                    ctx,
+                    &scope.lexical,
+                    "x",
+                    mftyp.args[0].typ.clone(),
+                    top_id,
+                );
                 let fnode = genn::reference(ctx, pid, Type::Fn(mftyp.clone()), top_id);
-                let f = genn::apply(fnode, vec![xn], &mftyp, top_id);
+                let f = genn::apply(fnode, scope, vec![xn], &mftyp, top_id);
                 Ok(Box::new(PublishRpc {
                     queue: VecDeque::new(),
                     args: CachedVals::new(from),

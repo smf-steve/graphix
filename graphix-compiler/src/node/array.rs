@@ -1,9 +1,9 @@
 use super::{compiler::compile, Cached};
 use crate::{
     defetyp, err, errf,
-    expr::{Expr, ExprId, ModPath},
+    expr::{Expr, ExprId},
     typ::Type,
-    update_args, wrap, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
+    update_args, wrap, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
@@ -24,7 +24,7 @@ impl<R: Rt, E: UserEvent> ArrayRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         i: &Expr,
@@ -124,7 +124,7 @@ impl<R: Rt, E: UserEvent> ArraySlice<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         start: &Option<Arc<Expr>>,
@@ -264,7 +264,7 @@ impl<R: Rt, E: UserEvent> Array<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         args: &Arc<[Expr]>,
     ) -> Result<Node<R, E>> {

@@ -1,14 +1,14 @@
 use super::{compiler::compile, wrap_error, Cached};
 use crate::{
     defetyp,
-    expr::{Expr, ExprId, ModPath},
+    expr::{Expr, ExprId},
     typ::Type,
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent,
+    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::{literal, ArcStr};
 use netidx_value::{Typ, Value};
-use std::fmt;
+use std::{collections::hash_map::Entry, fmt};
 use triomphe::Arc;
 
 macro_rules! compare_op {
@@ -25,7 +25,7 @@ macro_rules! compare_op {
             pub(crate) fn compile(
                 ctx: &mut ExecCtx<R, E>,
                 spec: Expr,
-                scope: &ModPath,
+                scope: &Scope,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
@@ -110,7 +110,7 @@ macro_rules! bool_op {
             pub(crate) fn compile(
                 ctx: &mut ExecCtx<R, E>,
                 spec: Expr,
-                scope: &ModPath,
+                scope: &Scope,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
@@ -188,7 +188,7 @@ impl<R: Rt, E: UserEvent> Not<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         n: &Expr,
     ) -> Result<Node<R, E>> {
@@ -263,7 +263,7 @@ macro_rules! arith_op {
         pub(crate) struct $name<R: Rt, E: UserEvent> {
             spec: Expr,
             typ: Type,
-            id: BindId,
+            id: Option<BindId>,
             lhs: Cached<R, E>,
             rhs: Cached<R, E>
         }
@@ -272,7 +272,7 @@ macro_rules! arith_op {
             pub(crate) fn compile(
                 ctx: &mut ExecCtx<R, E>,
                 spec: Expr,
-                scope: &ModPath,
+                scope: &Scope,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
@@ -280,7 +280,7 @@ macro_rules! arith_op {
                 let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
                 let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
                 let typ = Type::empty_tvar();
-                let id = ctx.env.lookup_catch(scope)?;
+                let id = ctx.env.lookup_catch(&scope.dynamic).ok();
                 Ok(Box::new(Self { spec, id, typ, lhs, rhs }))
             }
         }
@@ -293,11 +293,24 @@ macro_rules! arith_op {
                 let rhs = self.rhs.cached.as_ref()?;
                 if lhs_up || rhs_up {
                     match lhs.clone() $op rhs.clone() {
-                        Value::Error(e) => {
-                            let e: Value = (ARITH_ERR_TAG.clone(), (*e).clone()).into();
-                            let e = wrap_error(&ctx.env, &self.spec, e);
-                            ctx.set_var(self.id, Value::Error(Arc::new(e)));
-                            None
+                        Value::Error(e) => match self.id {
+                            Some(id) => {
+                                let e: Value = (ARITH_ERR_TAG.clone(), (*e).clone()).into();
+                                let e = wrap_error(&ctx.env, &self.spec, e);
+                                let v = Value::Error(Arc::new(e));
+                                match event.variables.entry(id) {
+                                    Entry::Vacant(e) => {
+                                        e.insert(v);
+                                    }
+                                    Entry::Occupied(_) => ctx.set_var(id, v),
+                                }
+                                None
+                            }
+                            None => {
+                                log::error!("unhandled error in {} at {} {e}", self.spec.ori, self.spec.pos);
+                                eprintln!("unhandled error in {} at {} {e}", self.spec.ori, self.spec.pos);
+                                None
+                            }
                         }
                         v => Some(v)
                     }
@@ -383,8 +396,11 @@ macro_rules! arith_op {
                     (Some(_), Some(_)) => wrap!(self, lhs.union(&ctx.env, rhs))?
                 };
                 wrap!(self, self.typ.check_contains(&ctx.env, &ut))?;
-                let bind = ctx.env.by_id.get(&self.id).ok_or_else(|| anyhow!("BUG: missing catch id"))?;
-                wrap!(self, bind.typ.check_contains(&ctx.env, &ARITH_ERR))
+                if let Some(id) = self.id {
+                    let bind = ctx.env.by_id.get(&id).ok_or_else(|| anyhow!("BUG: arith"))?;
+                    wrap!(self, bind.typ.check_contains(&ctx.env, &ARITH_ERR))?
+                }
+                Ok(())
             }
         }
     }

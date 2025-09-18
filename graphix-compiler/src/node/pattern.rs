@@ -1,9 +1,9 @@
 use crate::{
     env::Env,
-    expr::{ExprId, ModPath, Pattern, StructurePattern},
+    expr::{ExprId, Pattern, StructurePattern},
     node::{compiler, Cached},
     typ::Type,
-    BindId, Event, ExecCtx, Rt, UserEvent,
+    BindId, Event, ExecCtx, Rt, Scope, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
@@ -48,7 +48,7 @@ impl StructPatternNode {
         ctx: &mut ExecCtx<R, E>,
         type_predicate: &Type,
         spec: &StructurePattern,
-        scope: &ModPath,
+        scope: &Scope,
     ) -> Result<Self> {
         if !spec.binds_uniq() {
             bail!("bound variables must have unique names")
@@ -60,7 +60,7 @@ impl StructPatternNode {
         ctx: &mut ExecCtx<R, E>,
         type_predicate: &Type,
         spec: &StructurePattern,
-        scope: &ModPath,
+        scope: &Scope,
     ) -> Result<Self> {
         macro_rules! with_pref_suf {
             ($all:expr, $single:expr, $multi:expr) => {{
@@ -71,10 +71,14 @@ impl StructPatternNode {
                 match &type_predicate.with_deref(|t| t.cloned()) {
                     Some(Type::Array(et)) => {
                         let all = $all.as_ref().map(|n| {
-                            ctx.env.bind_variable(scope, n, type_predicate.clone()).id
+                            ctx.env
+                                .bind_variable(&scope.lexical, n, type_predicate.clone())
+                                .id
                         });
                         let single = $single.as_ref().map(|n| {
-                            ctx.env.bind_variable(scope, n, type_predicate.clone()).id
+                            ctx.env
+                                .bind_variable(&scope.lexical, n, type_predicate.clone())
+                                .id
                         });
                         let multi = $multi
                             .iter()
@@ -98,7 +102,10 @@ impl StructPatternNode {
                 Self::Literal(v.clone())
             }
             StructurePattern::Bind(name) => {
-                let id = ctx.env.bind_variable(scope, name, type_predicate.clone()).id;
+                let id = ctx
+                    .env
+                    .bind_variable(&scope.lexical, name, type_predicate.clone())
+                    .id;
                 Self::Bind(id)
             }
             StructurePattern::SlicePrefix { all, prefix, tail } => {
@@ -117,7 +124,9 @@ impl StructPatternNode {
                 match &type_predicate.with_deref(|t| t.cloned()) {
                     Some(Type::Array(et)) => {
                         let all = all.as_ref().map(|n| {
-                            ctx.env.bind_variable(scope, n, type_predicate.clone()).id
+                            ctx.env
+                                .bind_variable(&scope.lexical, n, type_predicate.clone())
+                                .id
                         });
                         let binds = binds
                             .iter()
@@ -141,7 +150,9 @@ impl StructPatternNode {
                             bail!("expected a tuple of length {}", elts.len())
                         }
                         let all = all.as_ref().map(|n| {
-                            ctx.env.bind_variable(scope, n, type_predicate.clone()).id
+                            ctx.env
+                                .bind_variable(&scope.lexical, n, type_predicate.clone())
+                                .id
                         });
                         let binds = elts
                             .iter()
@@ -172,7 +183,9 @@ impl StructPatternNode {
                             bail!("expected a variant with {} args", elts.len())
                         }
                         let all = all.as_ref().map(|n| {
-                            ctx.env.bind_variable(scope, n, type_predicate.clone()).id
+                            ctx.env
+                                .bind_variable(&scope.lexical, n, type_predicate.clone())
+                                .id
                         });
                         let binds = elts
                             .iter()
@@ -229,7 +242,9 @@ impl StructPatternNode {
                             bail!("missing bindings for struct fields")
                         }
                         let all = all.as_ref().map(|n| {
-                            ctx.env.bind_variable(scope, n, type_predicate.clone()).id
+                            ctx.env
+                                .bind_variable(&scope.lexical, n, type_predicate.clone())
+                                .id
                         });
                         let binds = binds
                             .into_iter()
@@ -576,11 +591,11 @@ impl<R: Rt, E: UserEvent> PatternNode<R, E> {
         ctx: &mut ExecCtx<R, E>,
         arg_type: &Type,
         spec: &Pattern,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
     ) -> Result<Self> {
         let (explicit, type_predicate) = match &spec.type_predicate {
-            Some(t) => (true, t.scope_refs(scope).lookup_ref(&ctx.env)?.clone()),
+            Some(t) => (true, t.scope_refs(&scope.lexical).lookup_ref(&ctx.env)?.clone()),
             None => {
                 let typ = spec.structure_predicate.infer_type_predicate(&ctx.env)?;
                 match &spec.structure_predicate {

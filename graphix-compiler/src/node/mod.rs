@@ -3,7 +3,7 @@ use crate::{
     expr::{self, Expr, ExprId, ExprKind, ModPath},
     format_with_flags,
     typ::{TVal, TVar, Type},
-    wrap, BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent,
+    wrap, BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::{literal, ArcStr};
@@ -13,7 +13,7 @@ use enumflags2::BitFlags;
 use netidx_value::{Typ, Value};
 use pattern::StructPatternNode;
 use poolshark::local::LPooled;
-use std::{cell::RefCell, sync::LazyLock};
+use std::{cell::RefCell, collections::hash_map::Entry, sync::LazyLock};
 use triomphe::Arc;
 
 pub(crate) mod array;
@@ -167,15 +167,19 @@ impl Use {
     pub(crate) fn compile<R: Rt, E: UserEvent>(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         name: &ModPath,
     ) -> Result<Node<R, E>> {
-        match ctx.env.canonical_modpath(scope, name) {
+        match ctx.env.canonical_modpath(&scope.lexical, name) {
             None => bail!("at {} no such module {name}", spec.pos),
             Some(_) => {
-                let used = ctx.env.used.get_or_default_cow(scope.clone());
+                let used = ctx.env.used.get_or_default_cow(scope.lexical.clone());
                 Arc::make_mut(used).push(name.clone());
-                Ok(Box::new(Self { spec, scope: scope.clone(), name: name.clone() }))
+                Ok(Box::new(Self {
+                    spec,
+                    scope: scope.lexical.clone(),
+                    name: name.clone(),
+                }))
             }
         }
     }
@@ -227,18 +231,17 @@ impl TypeDef {
     pub(crate) fn compile<R: Rt, E: UserEvent>(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         name: &ArcStr,
         params: &Arc<[(TVar, Option<Type>)]>,
         typ: &Type,
     ) -> Result<Node<R, E>> {
-        let typ = typ.scope_refs(scope);
+        let typ = typ.scope_refs(&scope.lexical);
         ctx.env
-            .deftype(scope, name, params.clone(), typ)
+            .deftype(&scope.lexical, name, params.clone(), typ)
             .with_context(|| format!("in typedef at {}", spec.pos))?;
         let name = name.clone();
-        let scope = scope.clone();
-        Ok(Box::new(Self { spec, scope, name }))
+        Ok(Box::new(Self { spec, scope: scope.lexical.clone(), name }))
     }
 }
 
@@ -335,7 +338,7 @@ impl<R: Rt, E: UserEvent> Block<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         module: bool,
         exprs: &Arc<[Expr]>,
@@ -404,7 +407,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         b: &expr::Bind,
     ) -> Result<Node<R, E>> {
@@ -418,7 +421,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
                 _ => bail!("let rec may only be used for lambdas"),
             }
             let typ = match typ {
-                Some(typ) => typ.scope_refs(scope),
+                Some(typ) => typ.scope_refs(&scope.lexical),
                 None => Type::empty_tvar(),
             };
             let pattern = StructPatternNode::compile(ctx, &typ, pattern, scope)
@@ -434,7 +437,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
         } else {
             let node = compile(ctx, value.clone(), &scope, top_id)?;
             let typ = match typ {
-                Some(typ) => typ.scope_refs(scope),
+                Some(typ) => typ.scope_refs(&scope.lexical),
                 None => {
                     let typ = node.typ().clone();
                     let ptyp = pattern.infer_type_predicate(&ctx.env)?;
@@ -541,11 +544,11 @@ impl Ref {
     pub(crate) fn compile<R: Rt, E: UserEvent>(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         name: &ModPath,
     ) -> Result<Node<R, E>> {
-        match ctx.env.lookup_bind(scope, name) {
+        match ctx.env.lookup_bind(&scope.lexical, name) {
             None => bail!("at {} {name} not defined", spec.pos),
             Some((_, bind)) => {
                 ctx.rt.ref_var(bind.id, top_id);
@@ -601,7 +604,7 @@ impl<R: Rt, E: UserEvent> StringInterpolate<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         args: &[Expr],
     ) -> Result<Node<R, E>> {
@@ -688,12 +691,12 @@ impl<R: Rt, E: UserEvent> Connect<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         name: &ModPath,
         value: &Expr,
     ) -> Result<Node<R, E>> {
-        let id = match ctx.env.lookup_bind(scope, name) {
+        let id = match ctx.env.lookup_bind(&scope.lexical, name) {
             None => bail!("at {} {name} is undefined", spec.pos),
             Some((_, env::Bind { id, .. })) => *id,
         };
@@ -753,12 +756,12 @@ impl<R: Rt, E: UserEvent> ConnectDeref<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         name: &ModPath,
         value: &Expr,
     ) -> Result<Node<R, E>> {
-        let src_id = match ctx.env.lookup_bind(scope, name) {
+        let src_id = match ctx.env.lookup_bind(&scope.lexical, name) {
             None => bail!("at {} {name} is undefined", spec.pos),
             Some((_, env::Bind { id, .. })) => *id,
         };
@@ -832,7 +835,7 @@ impl<R: Rt, E: UserEvent> ByRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         expr: &Expr,
     ) -> Result<Node<R, E>> {
@@ -899,7 +902,7 @@ impl<R: Rt, E: UserEvent> Deref<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         expr: &Expr,
     ) -> Result<Node<R, E>> {
@@ -1002,7 +1005,7 @@ fn wrap_error<R: Rt, E: UserEvent>(env: &Env<R, E>, spec: &Expr, e: Value) -> Va
 pub(crate) struct Qop<R: Rt, E: UserEvent> {
     spec: Expr,
     typ: Type,
-    id: BindId,
+    id: Option<BindId>,
     n: Node<R, E>,
 }
 
@@ -1010,12 +1013,12 @@ impl<R: Rt, E: UserEvent> Qop<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         e: &Expr,
     ) -> Result<Node<R, E>> {
         let n = compile(ctx, e.clone(), scope, top_id)?;
-        let id = ctx.env.lookup_catch(scope)?;
+        let id = ctx.env.lookup_catch(&scope.dynamic).ok();
         let typ = Type::empty_tvar();
         Ok(Box::new(Self { spec, typ, id, n }))
     }
@@ -1025,11 +1028,31 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
     fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
         match self.n.update(ctx, event) {
             None => None,
-            Some(Value::Error(e)) => {
-                let e = wrap_error(&ctx.env, &self.spec, (*e).clone());
-                ctx.set_var(self.id, Value::Error(Arc::new(e)));
-                None
-            }
+            Some(Value::Error(e)) => match self.id {
+                Some(id) => {
+                    let e = wrap_error(&ctx.env, &self.spec, (*e).clone());
+                    let v = Value::Error(Arc::new(e));
+                    match event.variables.entry(id) {
+                        Entry::Vacant(e) => {
+                            e.insert(v);
+                        }
+                        Entry::Occupied(_) => ctx.set_var(id, v),
+                    }
+                    None
+                }
+                None => {
+                    log::error!(
+                        "unhandled error in {} at {} {e}",
+                        self.spec.ori,
+                        self.spec.pos
+                    );
+                    eprintln!(
+                        "unhandled error in {} at {} {e}",
+                        self.spec.ori, self.spec.pos
+                    );
+                    None
+                }
+            },
             Some(v) => Some(v),
         }
     }
@@ -1105,15 +1128,13 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         let err = Type::Primitive(Typ::Error.into());
         let rtyp = self.n.typ().diff(&ctx.env, &err)?;
         wrap!(self, self.typ.check_contains(&ctx.env, &rtyp))?;
-        let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
-        let etyp = wrap!(self, fix_echain_typ(&ctx, &etyp))?;
-        let bind = ctx
-            .env
-            .by_id
-            .get(&self.id)
-            .ok_or_else(|| anyhow!("BUG: missing catch id"))?;
-        let bind_type = bind.typ.union(&ctx.env, &etyp)?;
-        ctx.env.by_id[&self.id].typ = bind_type;
+        if let Some(id) = self.id {
+            let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
+            let etyp = wrap!(self, fix_echain_typ(&ctx, &etyp))?;
+            let bind = ctx.env.by_id.get(&id).ok_or_else(|| anyhow!("BUG: catch"))?;
+            let bind_type = bind.typ.union(&ctx.env, &etyp)?;
+            ctx.env.by_id[&id].typ = bind_type;
+        }
         Ok(())
     }
 }
@@ -1130,13 +1151,13 @@ impl<R: Rt, E: UserEvent> TypeCast<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         expr: &Expr,
         typ: &Type,
     ) -> Result<Node<R, E>> {
         let n = compile(ctx, expr.clone(), scope, top_id)?;
-        let target = typ.scope_refs(scope);
+        let target = typ.scope_refs(&scope.lexical);
         if let Err(e) = target.check_cast(&ctx.env) {
             bail!("in cast at {} {e}", spec.pos);
         }
@@ -1186,7 +1207,7 @@ impl<R: Rt, E: UserEvent> Any<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         args: &[Expr],
     ) -> Result<Node<R, E>> {
@@ -1256,7 +1277,7 @@ impl<R: Rt, E: UserEvent> Sample<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         lhs: &Arc<Expr>,
         rhs: &Arc<Expr>,
@@ -1335,17 +1356,18 @@ impl<R: Rt, E: UserEvent> TryCatch<R, E> {
     pub(crate) fn new(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         tc: &Arc<expr::TryCatch>,
     ) -> Result<Node<R, E>> {
         let inner_name = format_compact!("tc{}", BindId::new().inner());
-        let inner_scope = ModPath(scope.append(inner_name.as_str()));
+        let inner_scope = scope.append(inner_name.as_str());
         let catch_name = format_compact!("ca{}", BindId::new().inner());
-        let catch_scope = ModPath(scope.append(catch_name.as_str()));
-        let id = ctx.env.bind_variable(&catch_scope, &tc.bind, Type::Bottom).id;
+        let catch_scope = scope.append(catch_name.as_str());
+        let typ = Type::Error(Arc::new(typ_echain(Type::Bottom)));
+        let id = ctx.env.bind_variable(&catch_scope.lexical, &tc.bind, typ).id;
         let handler = compile(ctx, (*tc.handler).clone(), &catch_scope, top_id)?;
-        ctx.env.catch.insert_cow(inner_scope.clone(), id);
+        ctx.env.catch.insert_cow(inner_scope.dynamic.clone(), id);
         let nodes = tc
             .exprs
             .iter()

@@ -1,7 +1,7 @@
 use crate::{
     expr::{Arg, ModPath, Sandbox},
     typ::{FnType, TVar, Type},
-    BindId, InitFn, LambdaId, Rt, UserEvent,
+    BindId, InitFn, LambdaId, Rt, Scope, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
@@ -15,7 +15,7 @@ use triomphe::Arc;
 pub struct LambdaDef<R: Rt, E: UserEvent> {
     pub id: LambdaId,
     pub env: Env<R, E>,
-    pub scope: ModPath,
+    pub scope: Scope,
     pub argspec: Arc<[Arg]>,
     pub typ: Arc<FnType>,
     pub init: InitFn<R, E>,
@@ -275,10 +275,7 @@ impl<R: Rt, E: UserEvent> Env<R, E> {
     pub fn lookup_catch(&self, scope: &ModPath) -> Result<BindId> {
         match Path::dirnames(&scope.0).rev().find_map(|scope| self.catch.get(scope)) {
             Some(id) => Ok(*id),
-            None => {
-                dbg!(&self.catch);
-                bail!("there is no catch visible in {scope}")
-            }
+            None => bail!("there is no catch visible in {scope}"),
         }
     }
 

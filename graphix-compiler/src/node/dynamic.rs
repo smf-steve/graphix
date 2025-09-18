@@ -3,12 +3,12 @@ use crate::{
     env::Env,
     errf,
     expr::{
-        parser, Expr, ExprId, ExprKind, ModPath, Origin, Sandbox, Sig, SigItem, Source,
+        parser, Expr, ExprId, ExprKind, Origin, Sandbox, Sig, SigItem, Source,
         StructurePattern, TypeDef,
     },
     node::{Bind, Block},
     typ::Type,
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Update, UserEvent, KNOWN,
+    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent, KNOWN,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
@@ -20,21 +20,21 @@ use triomphe::Arc;
 
 fn bind_sig<R: Rt, E: UserEvent>(
     env: &mut Env<R, E>,
-    scope: &ModPath,
+    scope: &Scope,
     sig: &Sig,
 ) -> Result<()> {
-    env.modules.insert_cow(scope.clone());
+    env.modules.insert_cow(scope.lexical.clone());
     for si in sig.iter() {
         match si {
             SigItem::Bind(name, typ) => {
                 KNOWN.with_borrow_mut(|known| typ.alias_tvars(known));
-                env.bind_variable(&scope, name, typ.clone());
+                env.bind_variable(&scope.lexical, name, typ.clone());
             }
             SigItem::TypeDef(td) => {
-                env.deftype(&scope, &td.name, td.params.clone(), td.typ.clone())?
+                env.deftype(&scope.lexical, &td.name, td.params.clone(), td.typ.clone())?
             }
             SigItem::Module(name, sig) => {
-                let scope = ModPath(scope.append(&name));
+                let scope = scope.append(&name);
                 bind_sig(env, &scope, sig)?
             }
         }
@@ -46,7 +46,7 @@ fn check_sig<R: Rt, E: UserEvent>(
     ctx: &mut ExecCtx<R, E>,
     top_id: ExprId,
     proxy: &mut FxHashMap<BindId, BindId>,
-    scope: &ModPath,
+    scope: &Scope,
     sig: &Sig,
     nodes: &[Node<R, E>],
 ) -> Result<()> {
@@ -54,7 +54,7 @@ fn check_sig<R: Rt, E: UserEvent>(
     let mut has_mod: FxHashSet<ArcStr> = FxHashSet::default();
     let mut has_def: FxHashSet<ArcStr> = FxHashSet::default();
     for n in nodes {
-        if let Some(binds) = ctx.env.binds.get(scope)
+        if let Some(binds) = ctx.env.binds.get(&scope.lexical)
             && let Some(bind) = (&**n as &dyn Any).downcast_ref::<Bind<R, E>>()
             && let Expr { kind: ExprKind::Bind(bexp), .. } = &bind.spec
             && let StructurePattern::Bind(name) = &bexp.pattern
@@ -77,8 +77,8 @@ fn check_sig<R: Rt, E: UserEvent>(
         }
         if let Expr { kind: ExprKind::Module { name, .. }, .. } = n.spec()
             && let Some(block) = (&**n as &dyn Any).downcast_ref::<Block<R, E>>()
-            && let scope = ModPath(scope.append(name.as_str()))
-            && ctx.env.modules.contains(&scope)
+            && let scope = scope.append(name.as_str())
+            && ctx.env.modules.contains(&scope.lexical)
             && let Some(sig) = sig.find_module(name)
         {
             check_sig(ctx, top_id, proxy, &scope, sig, &block.children)?;
@@ -98,7 +98,7 @@ fn check_sig<R: Rt, E: UserEvent>(
             has_mod.insert(name.clone());
         }
         if let Expr { kind: ExprKind::TypeDef(td), .. } = n.spec()
-            && let Some(defs) = ctx.env.typedefs.get(scope)
+            && let Some(defs) = ctx.env.typedefs.get(&scope.lexical)
             && let Some(sig_td) = defs.get(&CompactString::from(td.name.as_str()))
         {
             let sig_td = TypeDef {
@@ -143,7 +143,7 @@ pub(super) struct DynamicModule<R: Rt, E: UserEvent> {
     source: Node<R, E>,
     env: Env<R, E>,
     sig: Sig,
-    scope: ModPath,
+    scope: Scope,
     proxy: FxHashMap<BindId, BindId>,
     nodes: Box<[Node<R, E>]>,
     top_id: ExprId,
@@ -153,7 +153,7 @@ impl<R: Rt, E: UserEvent> DynamicModule<R, E> {
     pub(super) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         sandbox: Sandbox,
         sig: Sig,
         source: Arc<Expr>,

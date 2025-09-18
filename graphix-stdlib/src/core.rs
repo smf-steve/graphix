@@ -3,10 +3,11 @@ use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
 use graphix_compiler::{
     err, errf,
-    expr::{Expr, ExprId, ModPath},
+    expr::{Expr, ExprId},
     node::genn,
     typ::{TVal, Type},
-    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Refs, Rt, UserEvent,
+    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Refs, Rt, Scope,
+    UserEvent,
 };
 use netidx::subscriber::Value;
 use netidx_value::FromValue;
@@ -353,14 +354,14 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Filter<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {
             [_, _] => {
                 let (x, xn) =
-                    genn::bind(ctx, scope, "x", typ.args[0].typ.clone(), top_id);
+                    genn::bind(ctx, &scope.lexical, "x", typ.args[0].typ.clone(), top_id);
                 let fid = BindId::new();
                 let ptyp = match &typ.args[1].typ {
                     Type::Fn(ft) => ft.clone(),
                     t => bail!("expected a function not {t}"),
                 };
                 let fnode = genn::reference(ctx, fid, Type::Fn(ptyp.clone()), top_id);
-                let pred = genn::apply(fnode, vec![xn], &ptyp, top_id);
+                let pred = genn::apply(fnode, scope.clone(), vec![xn], &ptyp, top_id);
                 let queue = VecDeque::new();
                 let out = BindId::new();
                 ctx.rt.ref_var(out, top_id);
@@ -902,7 +903,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Dbg {
 
 #[derive(Debug)]
 struct Log {
-    scope: ModPath,
+    scope: Scope,
     dest: LogDest,
 }
 
@@ -932,14 +933,14 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Log {
         if let Some(v) = from[1].update(ctx, event) {
             let tv = TVal { env: &ctx.env, typ: from[1].typ(), v: &v };
             match self.dest {
-                LogDest::Stdout => println!("{}: {}", self.scope, tv),
-                LogDest::Stderr => eprintln!("{}: {}", self.scope, tv),
+                LogDest::Stdout => println!("{}: {}", self.scope.lexical, tv),
+                LogDest::Stderr => eprintln!("{}: {}", self.scope.lexical, tv),
                 LogDest::Log(lvl) => match lvl {
-                    Level::Trace => log::trace!("{}: {}", self.scope, tv),
-                    Level::Debug => log::debug!("{}: {}", self.scope, tv),
-                    Level::Info => log::info!("{}: {}", self.scope, tv),
-                    Level::Warn => log::warn!("{}: {}", self.scope, tv),
-                    Level::Error => log::error!("{}: {}", self.scope, tv),
+                    Level::Trace => log::trace!("{}: {}", self.scope.lexical, tv),
+                    Level::Debug => log::debug!("{}: {}", self.scope.lexical, tv),
+                    Level::Info => log::info!("{}: {}", self.scope.lexical, tv),
+                    Level::Warn => log::warn!("{}: {}", self.scope.lexical, tv),
+                    Level::Error => log::error!("{}: {}", self.scope.lexical, tv),
                 },
             }
         }

@@ -2,7 +2,7 @@ use super::{callsite::CallSite, Constant, Nop, Ref, NOP};
 use crate::{
     expr::{ExprId, ModPath},
     typ::{FnType, Type},
-    BindId, ExecCtx, Node, Rt, UserEvent, KNOWN,
+    BindId, ExecCtx, Node, Rt, Scope, UserEvent, KNOWN,
 };
 use netidx::publisher::{Typ, Value};
 use std::collections::HashMap;
@@ -47,6 +47,7 @@ pub fn constant<R: Rt, E: UserEvent>(v: Value) -> Node<R, E> {
 /// generate and return an apply node for the given lambda
 pub fn apply<R: Rt, E: UserEvent>(
     fnode: Node<R, E>,
+    scope: Scope,
     args: Vec<Node<R, E>>,
     typ: &FnType,
     top_id: ExprId,
@@ -60,6 +61,7 @@ pub fn apply<R: Rt, E: UserEvent>(
         spec: NOP.clone(),
         ftype,
         args,
+        scope,
         arg_spec: HashMap::default(),
         fnode,
         function: None,

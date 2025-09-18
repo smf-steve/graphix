@@ -1,9 +1,10 @@
 use super::{compiler::compile, Cached};
 use crate::{
     deref_typ,
-    expr::{Expr, ExprId, ExprKind, ModPath},
+    expr::{Expr, ExprId, ExprKind},
     typ::Type,
-    update_args, wrap, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Update, UserEvent,
+    update_args, wrap, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update,
+    UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -24,7 +25,7 @@ impl<R: Rt, E: UserEvent> Struct<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         args: &[(ArcStr, Expr)],
     ) -> Result<Node<R, E>> {
@@ -121,7 +122,7 @@ impl<R: Rt, E: UserEvent> StructWith<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         replace: &[(ArcStr, Expr)],
@@ -274,7 +275,7 @@ impl<R: Rt, E: UserEvent> StructRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         field_name: &ArcStr,
@@ -384,7 +385,7 @@ impl<R: Rt, E: UserEvent> Tuple<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         args: &[Expr],
     ) -> Result<Node<R, E>> {
@@ -462,7 +463,7 @@ impl<R: Rt, E: UserEvent> Variant<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         tag: &ArcStr,
         args: &[Expr],
@@ -552,7 +553,7 @@ impl<R: Rt, E: UserEvent> TupleRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
         spec: Expr,
-        scope: &ModPath,
+        scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         field: &usize,
