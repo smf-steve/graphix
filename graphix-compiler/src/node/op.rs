@@ -2,8 +2,9 @@ use super::{compiler::compile, wrap_error, Cached};
 use crate::{
     defetyp,
     expr::{Expr, ExprId},
+    format_with_flags,
     typ::Type,
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
+    wrap, BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::{literal, ArcStr};
@@ -398,7 +399,12 @@ macro_rules! arith_op {
                 wrap!(self, self.typ.check_contains(&ctx.env, &ut))?;
                 if let Some(id) = self.id {
                     let bind = ctx.env.by_id.get(&id).ok_or_else(|| anyhow!("BUG: arith"))?;
-                    wrap!(self, bind.typ.check_contains(&ctx.env, &ARITH_ERR))?
+                    let bind_type = bind.typ.union(&ctx.env, &ARITH_ERR)?;
+                    format_with_flags(PrintFlag::DerefTVars, || {
+                        eprintln!("bind typ: {}", bind.typ);
+                        eprintln!("new typ: {bind_type}")
+                    });
+                    ctx.env.by_id[&id].typ = bind_type;
                 }
                 Ok(())
             }

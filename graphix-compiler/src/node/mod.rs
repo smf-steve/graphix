@@ -1132,7 +1132,14 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
             let etyp = self.n.typ().diff(&ctx.env, &rtyp)?;
             let etyp = wrap!(self, fix_echain_typ(&ctx, &etyp))?;
             let bind = ctx.env.by_id.get(&id).ok_or_else(|| anyhow!("BUG: catch"))?;
+            format_with_flags(PrintFlag::DerefTVars, || {
+                eprintln!("bind typ: {}", bind.typ);
+                eprintln!("etyp: {etyp}")
+            });
             let bind_type = bind.typ.union(&ctx.env, &etyp)?;
+            format_with_flags(PrintFlag::DerefTVars, || {
+                eprintln!("new typ: {}", bind_type)
+            });
             ctx.env.by_id[&id].typ = bind_type;
         }
         Ok(())

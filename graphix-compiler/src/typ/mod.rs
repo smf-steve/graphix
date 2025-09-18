@@ -11,6 +11,7 @@ use netidx::{
 };
 use netidx_value::ValArray;
 use parking_lot::RwLock;
+use poolshark::local::LPooled;
 use smallvec::{smallvec, SmallVec};
 use std::{
     cell::RefCell,
@@ -486,9 +487,17 @@ impl Type {
     ) -> Result<Self> {
         match (self, t) {
             (
-                Type::Ref { name: n0, scope: s0, .. },
-                Type::Ref { scope: s1, name: n1, .. },
-            ) if n0 == n1 && s0 == s1 => Ok(self.clone()),
+                Type::Ref { scope: s0, name: n0, params: p0 },
+                Type::Ref { scope: s1, name: n1, params: p1 },
+            ) if n0 == n1 && s0 == s1 && p0.len() == p1.len() => {
+                let mut params = p0
+                    .iter()
+                    .zip(p1.iter())
+                    .map(|(p0, p1)| p0.union_int(env, hist, p1))
+                    .collect::<Result<LPooled<Vec<_>>>>()?;
+                let params = Arc::from_iter(params.drain(..));
+                Ok(Self::Ref { scope: s0.clone(), name: n0.clone(), params })
+            }
             (tr @ Type::Ref { .. }, t) => {
                 let t0 = tr.lookup_ref(env)?;
                 let t0_addr = (t0 as *const Type).addr();
