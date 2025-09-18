@@ -1573,7 +1573,7 @@ parser! {
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
     {
         (
-            position().skip(string("try")),
+            position().skip(string("try")).skip(space()),
             sep_by1(expr(), attempt(sptoken(';'))),
             spstring("catch").with(
                 between(
