@@ -446,7 +446,7 @@ impl ExprKind {
                 writeln!(buf, ")")
             }
             ExprKind::Lambda(l) => {
-                let Lambda { args, vargs, rtype, constraints, body } = &**l;
+                let Lambda { args, vargs, rtype, constraints, throws, body } = &**l;
                 try_single_line!(true);
                 for (i, (tvar, typ)) in constraints.iter().enumerate() {
                     write!(buf, "{tvar}: {typ}")?;
@@ -479,6 +479,9 @@ impl ExprKind {
                 write!(buf, "| ")?;
                 if let Some(t) = rtype {
                     write!(buf, "-> {t} ")?
+                }
+                if let Some(t) = throws {
+                    write!(buf, "throws {t} ")?
                 }
                 match body {
                     Either::Right(builtin) => {
@@ -702,7 +705,7 @@ impl fmt::Display for ExprKind {
             ExprKind::TypeDef(td) => write!(f, "{td}"),
             ExprKind::Do { exprs } => print_exprs(f, &**exprs, "{", "}", "; "),
             ExprKind::Lambda(l) => {
-                let Lambda { args, vargs, rtype, constraints, body } = &**l;
+                let Lambda { args, vargs, rtype, constraints, throws, body } = &**l;
                 for (i, (tvar, typ)) in constraints.iter().enumerate() {
                     write!(f, "{tvar}: {typ}")?;
                     if i < constraints.len() - 1 {
@@ -734,6 +737,9 @@ impl fmt::Display for ExprKind {
                 write!(f, "| ")?;
                 if let Some(t) = rtype {
                     write!(f, "-> {t} ")?
+                }
+                if let Some(t) = throws {
+                    write!(f, "throws {t} ")?
                 }
                 match body {
                     Either::Right(builtin) => write!(f, "'{builtin}"),

@@ -3,7 +3,8 @@ use crate::{env::Env, typ::format_with_flags, Rt, UserEvent};
 use fxhash::FxHashSet;
 use netidx::publisher::Value;
 use netidx_value::NakedValue;
-use std::{cell::RefCell, collections::HashSet, fmt};
+use poolshark::local::LPooled;
+use std::fmt;
 
 /// A value with it's type, used for formatting
 pub struct TVal<'a, R: Rt, E: UserEvent> {
@@ -117,12 +118,6 @@ impl<'a, R: Rt, E: UserEvent> TVal<'a, R, E> {
 
 impl<'a, R: Rt, E: UserEvent> fmt::Display for TVal<'a, R, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        thread_local! {
-            static HIST: RefCell<FxHashSet<(usize, usize)>> = RefCell::new(HashSet::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            self.fmt_int(f, hist)
-        })
+        self.fmt_int(f, &mut LPooled::take())
     }
 }

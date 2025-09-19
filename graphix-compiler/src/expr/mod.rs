@@ -129,6 +129,7 @@ pub struct Lambda {
     pub vargs: Option<Option<Type>>,
     pub rtype: Option<Type>,
     pub constraints: Arc<[(TVar, Type)]>,
+    pub throws: Option<Type>,
     pub body: Either<Expr, ArcStr>,
 }
 

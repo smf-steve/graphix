@@ -746,12 +746,14 @@ parser! {
                     ),
                 ),
                 spstring("->").with(typexp()),
+                optional(attempt(space().with(spstring("throws")).with(space()).with(typexp())))
             ))
             .then(
-                |(constraints, mut args, rtype): (
+                |(constraints, mut args, rtype, throws): (
                     Arc<RwLock<Vec<(TVar, Type)>>>,
                     Vec<Either<FnArgType, Type>>,
                     Type,
+                    Option<Type>
                 )| {
                     let vargs = match args.pop() {
                         None => None,
@@ -781,7 +783,8 @@ parser! {
                         }
                         anon |= a.label.is_none();
                     }
-                    value(FnType { args, vargs, rtype, constraints }).right()
+                    let throws = throws.unwrap_or(Type::Bottom);
+                    value(FnType { args, vargs, rtype, constraints, throws }).right()
                 },
             )
     }
@@ -950,16 +953,17 @@ parser! {
             attempt(sep_by((tvar().skip(sptoken(':')), typexp()), csep()))
                 .map(|tvs: SmallVec<[(TVar, Type); 4]>| Arc::from_iter(tvs)),
             between(sptoken('|'), sptoken('|'), lambda_args()),
-            optional(attempt(spstring("->").with(typexp()).skip(space()))),
-            choice((
+            optional(attempt(spstring("->").with(typexp()))),
+            optional(attempt(space().with(spstring("throws").with(space()).with(typexp())))),
+            space().with(choice((
                 attempt(sptoken('\'').with(fname()).skip(not_followed_by(sptoken(':'))))
                     .map(Either::Right),
                 expr().map(|e| Either::Left(e)),
-            )),
+            ))),
         )
-            .map(|(pos, constraints, (args, vargs), rtype, body)| {
+            .map(|(pos, constraints, (args, vargs), rtype, throws, body)| {
                 let args = Arc::from_iter(args);
-                ExprKind::Lambda(Arc::new(Lambda { args, vargs, rtype, constraints, body }))
+                ExprKind::Lambda(Arc::new(Lambda { args, vargs, rtype, throws, constraints, body }))
                     .to_expr(pos)
             })
     }

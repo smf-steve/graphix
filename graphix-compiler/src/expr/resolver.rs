@@ -395,7 +395,7 @@ impl Expr {
                 })
             }),
             ExprKind::Lambda(l) => Box::pin(async move {
-                let Lambda { args, vargs, rtype, constraints, body } = &*l;
+                let Lambda { args, vargs, rtype, constraints, throws, body } = &*l;
                 let body = match body {
                     Either::Right(s) => Either::Right(s.clone()),
                     Either::Left(e) => Either::Left(
@@ -406,6 +406,7 @@ impl Expr {
                     args: args.clone(),
                     vargs: vargs.clone(),
                     rtype: rtype.clone(),
+                    throws: throws.clone(),
                     constraints: constraints.clone(),
                     body,
                 };

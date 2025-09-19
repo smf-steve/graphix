@@ -860,6 +860,7 @@ fn lambda() {
         rtype: None,
         vargs: None,
         constraints: Arc::from_iter([]),
+        throws: None,
         body: Either::Left(
             ExprKind::Add {
                 lhs: Arc::new(
@@ -901,12 +902,14 @@ fn nested_lambda() {
         rtype: None,
         vargs: None,
         constraints: Arc::from_iter([]),
+        throws: None,
         body: Either::Left(
             ExprKind::Lambda(Arc::new(Lambda {
                 args: Arc::from_iter([]),
                 rtype: None,
                 vargs: None,
                 constraints: Arc::from_iter([]),
+                throws: None,
                 body: Either::Left(e),
             }))
             .to_expr_nopos(),
@@ -931,6 +934,7 @@ fn apply_lambda() {
                 vargs: Some(None),
                 rtype: None,
                 constraints: Arc::from_iter([]),
+                throws: None,
                 body: Either::Right("a".into()),
             }))
             .to_expr_nopos(),
@@ -971,6 +975,7 @@ fn apply_typed_lambda() {
                 vargs: Some(Some(Type::Primitive(Typ::String.into()))),
                 rtype: Some(Type::Bottom),
                 constraints: Arc::from_iter([]),
+                throws: None,
                 body: Either::Right("a".into()),
             }))
             .to_expr_nopos(),
@@ -1020,6 +1025,7 @@ fn typed_array() {
             }]),
             vargs: None,
             constraints: Arc::from_iter([]),
+            throws: None,
             rtype: Some(Type::TVar(TVar::empty_named("a".into()))),
             body: Either::Left(ExprKind::Ref { name: ["a"].into() }.to_expr_nopos()),
         }))
@@ -1057,6 +1063,7 @@ fn labeled_argument_lambda() {
             ]),
             vargs: None,
             rtype: Type::Primitive(Typ::String.into()),
+            throws: Type::Bottom,
             constraints: Arc::new(RwLock::new(vec![])),
         }))),
         value: ExprKind::Lambda(Arc::new(Lambda {
@@ -1092,6 +1099,7 @@ fn labeled_argument_lambda() {
             ]),
             vargs: None,
             rtype: None,
+            throws: None,
             constraints: Arc::from_iter([]),
             body: Either::Right("foo".into()),
         }))

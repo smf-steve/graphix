@@ -247,9 +247,10 @@ fn typexp() -> impl Strategy<Value = Type> {
                 ),
                 option::of(inner.clone()),
                 inner.clone(),
-                collection::vec((random_fname(), inner.clone()), (0, 4))
+                collection::vec((random_fname(), inner.clone()), (0, 4)),
+                inner.clone()
             )
-                .prop_map(|(mut args, vargs, rtype, constraints)| {
+                .prop_map(|(mut args, vargs, rtype, constraints, throws)| {
                     args.sort_by(|(k0, _, _), (k1, _, _)| k1.cmp(k0));
                     let args = args.into_iter().map(|(name, optional, typ)| FnArgType {
                         label: name.map(|n| (n, optional)),
@@ -265,6 +266,7 @@ fn typexp() -> impl Strategy<Value = Type> {
                                 .map(|(a, t)| (TVar::empty_named(a), t))
                                 .collect(),
                         )),
+                        throws,
                     }))
                 })
         ]
@@ -491,33 +493,46 @@ macro_rules! lambda {
             option::of(option::of(typexp())),
             option::of(typexp()),
             collection::vec((random_fname(), typexp()), (0, 4)),
+            option::of(typexp()),
             option::of(random_fname()),
             $inner,
         )
-            .prop_map(|(mut args, vargs, rtype, constraints, builtin, body)| {
-                args.sort_unstable_by(|(k0, _, _, _, _), (k1, _, _, _, _)| k1.cmp(k0));
-                let args = args.into_iter().map(
-                    |(labeled, name, pattern, constraint, default)| {
-                        let pattern =
-                            if labeled { StructurePattern::Bind(name) } else { pattern };
-                        Arg { labeled: labeled.then_some(default), pattern, constraint }
-                    },
-                );
-                let constraints = Arc::from_iter(
-                    constraints.into_iter().map(|(a, t)| (TVar::empty_named(a), t)),
-                );
-                ExprKind::Lambda(Arc::new(Lambda {
-                    args: Arc::from_iter(args),
-                    vargs,
-                    rtype,
-                    constraints,
-                    body: match builtin {
-                        None => Either::Left(body),
-                        Some(name) => Either::Right(name),
-                    },
-                }))
-                .to_expr_nopos()
-            })
+            .prop_map(
+                |(mut args, vargs, rtype, constraints, throws, builtin, body)| {
+                    args.sort_unstable_by(|(k0, _, _, _, _), (k1, _, _, _, _)| {
+                        k1.cmp(k0)
+                    });
+                    let args = args.into_iter().map(
+                        |(labeled, name, pattern, constraint, default)| {
+                            let pattern = if labeled {
+                                StructurePattern::Bind(name)
+                            } else {
+                                pattern
+                            };
+                            Arg {
+                                labeled: labeled.then_some(default),
+                                pattern,
+                                constraint,
+                            }
+                        },
+                    );
+                    let constraints = Arc::from_iter(
+                        constraints.into_iter().map(|(a, t)| (TVar::empty_named(a), t)),
+                    );
+                    ExprKind::Lambda(Arc::new(Lambda {
+                        args: Arc::from_iter(args),
+                        vargs,
+                        rtype,
+                        constraints,
+                        throws,
+                        body: match builtin {
+                            None => Either::Left(body),
+                            Some(name) => Either::Right(name),
+                        },
+                    }))
+                    .to_expr_nopos()
+                },
+            )
     };
 }
 
@@ -1203,6 +1218,7 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
                     vargs: vargs0,
                     rtype: rtype0,
                     constraints: constraints0,
+                    throws: throws0,
                     body: Either::Left(body0),
                 },
                 Lambda {
@@ -1210,6 +1226,7 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
                     vargs: vargs1,
                     rtype: rtype1,
                     constraints: constraints1,
+                    throws: throws1,
                     body: Either::Left(body1),
                 },
             ) => dbg!(
@@ -1225,6 +1242,7 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
                         .zip(constraints1.iter())
                         .all(|((tv0, tc0), (tv1, tc1))| tv0.name == tv1.name
                             && check_type(&tc0, &tc1)))
+                    && dbg!(check_type_opt(throws0, throws1))
                     && dbg!(check(body0, body1))
             ),
             (
@@ -1233,6 +1251,7 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
                     vargs: vargs0,
                     rtype: rtype0,
                     constraints: constraints0,
+                    throws: throws0,
                     body: Either::Right(b0),
                 },
                 Lambda {
@@ -1240,6 +1259,7 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
                     vargs: vargs1,
                     rtype: rtype1,
                     constraints: constraints1,
+                    throws: throws1,
                     body: Either::Right(b1),
                 },
             ) => dbg!(
@@ -1255,6 +1275,7 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
                         .zip(constraints1.iter())
                         .all(|((tv0, tc0), (tv1, tc1))| tv0.name == tv1.name
                             && check_type(&tc0, &tc1)))
+                    && dbg!(check_type_opt(throws0, throws1))
                     && dbg!(b0 == b1)
             ),
             (_, _) => false,

@@ -10,13 +10,11 @@ use netidx::{
     utils::Either,
 };
 use netidx_value::ValArray;
-use parking_lot::RwLock;
 use poolshark::local::LPooled;
 use smallvec::{smallvec, SmallVec};
 use std::{
-    cell::RefCell,
     cmp::{Eq, PartialEq},
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::hash_map::Entry,
     fmt::{self, Debug},
     iter,
 };
@@ -388,13 +386,7 @@ impl Type {
         env: &Env<R, E>,
         t: &Self,
     ) -> Result<bool> {
-        thread_local! {
-            static HIST: RefCell<FxHashMap<(usize, usize), bool>> = RefCell::new(HashMap::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            self.contains_int(env, hist, t)
-        })
+        self.contains_int(env, &mut LPooled::take(), t)
     }
 
     fn could_match_int<R: Rt, E: UserEvent>(
@@ -470,13 +462,7 @@ impl Type {
         env: &Env<R, E>,
         t: &Self,
     ) -> Result<bool> {
-        thread_local! {
-            static HIST: RefCell<FxHashMap<(usize, usize), bool>> = RefCell::new(HashMap::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            self.could_match_int(env, hist, t)
-        })
+        self.could_match_int(env, &mut LPooled::take(), t)
     }
 
     fn union_int<R: Rt, E: UserEvent>(
@@ -646,13 +632,7 @@ impl Type {
     }
 
     pub fn union<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, t: &Self) -> Result<Self> {
-        thread_local! {
-            static HIST: RefCell<FxHashMap<(usize, usize), Type>> = RefCell::new(HashMap::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            Ok(self.union_int(env, hist, t)?.normalize())
-        })
+        Ok(self.union_int(env, &mut LPooled::take(), t)?.normalize())
     }
 
     fn diff_int<R: Rt, E: UserEvent>(
@@ -836,13 +816,7 @@ impl Type {
     }
 
     pub fn diff<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, t: &Self) -> Result<Self> {
-        thread_local! {
-            static HIST: RefCell<FxHashMap<(usize, usize), Type>> = RefCell::new(HashMap::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            Ok(self.diff_int(env, hist, t)?.normalize())
-        })
+        Ok(self.diff_int(env, &mut LPooled::take(), t)?.normalize())
     }
 
     pub fn any() -> Self {
@@ -1158,13 +1132,7 @@ impl Type {
     /// remove the outer error type and return the inner payload, fail if self
     /// isn't an error or contains non error types
     pub fn strip_error<R: Rt, E: UserEvent>(&self, env: &Env<R, E>) -> Option<Self> {
-        thread_local! {
-            static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            self.strip_error_int(env, hist)
-        })
+        self.strip_error_int(env, &mut LPooled::take())
     }
 
     /// Unbind any bound tvars, but do not unalias them.
@@ -1231,13 +1199,7 @@ impl Type {
     }
 
     pub fn check_cast<R: Rt, E: UserEvent>(&self, env: &Env<R, E>) -> Result<()> {
-        thread_local! {
-            static HIST: RefCell<FxHashSet<usize>> = RefCell::new(FxHashSet::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            self.check_cast_int(env, hist)
-        })
+        self.check_cast_int(env, &mut LPooled::take())
     }
 
     fn cast_value_int<R: Rt, E: UserEvent>(
@@ -1405,16 +1367,10 @@ impl Type {
     }
 
     pub fn cast_value<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, v: Value) -> Value {
-        thread_local! {
-            static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
+        match self.cast_value_int(env, &mut LPooled::take(), v) {
+            Ok(v) => v,
+            Err(e) => Value::error(e.to_string()),
         }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            match self.cast_value_int(env, hist, v) {
-                Ok(v) => v,
-                Err(e) => Value::error(e.to_string()),
-            }
-        })
     }
 
     fn is_a_int<R: Rt, E: UserEvent>(
@@ -1503,13 +1459,7 @@ impl Type {
 
     /// return true if v is structurally compatible with the type
     pub fn is_a<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, v: &Value) -> bool {
-        thread_local! {
-            static HIST: RefCell<FxHashSet<usize>> = RefCell::new(HashSet::default());
-        }
-        HIST.with_borrow_mut(|hist| {
-            hist.clear();
-            self.is_a_int(env, hist, v)
-        })
+        self.is_a_int(env, &mut LPooled::take(), v)
     }
 
     pub fn is_bot(&self) -> bool {
@@ -1789,26 +1739,7 @@ impl Type {
             Type::Set(ts) => {
                 Type::Set(Arc::from_iter(ts.iter().map(|t| t.scope_refs(scope))))
             }
-            Type::Fn(f) => {
-                let vargs = f.vargs.as_ref().map(|t| t.scope_refs(scope));
-                let rtype = f.rtype.scope_refs(scope);
-                let args = Arc::from_iter(f.args.iter().map(|a| FnArgType {
-                    label: a.label.clone(),
-                    typ: a.typ.scope_refs(scope),
-                }));
-                let mut cres: SmallVec<[(TVar, Type); 4]> = smallvec![];
-                for (tv, tc) in f.constraints.read().iter() {
-                    let tv = tv.scope_refs(scope);
-                    let tc = tc.scope_refs(scope);
-                    cres.push((tv, tc));
-                }
-                Type::Fn(Arc::new(FnType {
-                    args,
-                    rtype,
-                    constraints: Arc::new(RwLock::new(cres.into_iter().collect())),
-                    vargs,
-                }))
-            }
+            Type::Fn(f) => Type::Fn(Arc::new(f.scope_refs(scope))),
         }
     }
 }

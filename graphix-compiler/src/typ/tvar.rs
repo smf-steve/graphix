@@ -33,17 +33,18 @@ pub(super) fn would_cycle_inner(addr: usize, t: &Type) -> bool {
         Type::Struct(ts) => ts.iter().any(|(_, t)| would_cycle_inner(addr, t)),
         Type::Set(s) => s.iter().any(|t| would_cycle_inner(addr, t)),
         Type::Fn(f) => {
-            let FnType { args, vargs, rtype, constraints } = &**f;
+            let FnType { args, vargs, rtype, constraints, throws } = &**f;
             args.iter().any(|t| would_cycle_inner(addr, &t.typ))
                 || match vargs {
                     None => false,
                     Some(t) => would_cycle_inner(addr, t),
                 }
-                || would_cycle_inner(addr, &rtype)
+                || would_cycle_inner(addr, rtype)
                 || constraints.read().iter().any(|a| {
                     Arc::as_ptr(&a.0.read().typ).addr() == addr
                         || would_cycle_inner(addr, &a.1)
                 })
+                || would_cycle_inner(addr, throws)
         }
     }
 }
