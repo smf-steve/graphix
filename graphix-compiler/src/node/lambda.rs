@@ -1,10 +1,10 @@
 use super::{compiler::compile, Nop};
 use crate::{
-    env::LambdaDef,
+    env::{Bind, LambdaDef},
     expr::{self, Arg, Expr, ExprId},
     node::pattern::StructPatternNode,
     typ::{FnArgType, FnType, Type},
-    wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Scope, Update,
+    wrap, Apply, BindId, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Scope, Update,
     UserEvent,
 };
 use anyhow::{bail, Result};
@@ -326,11 +326,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
         _ctx: &mut ExecCtx<R, E>,
         event: &mut Event<E>,
     ) -> Option<Value> {
-        if event.init {
-            Some(Value::U64(self.def.id.0))
-        } else {
-            None
-        }
+        event.init.then(|| Value::U64(self.def.id.0))
     }
 
     fn spec(&self) -> &Expr {
@@ -365,14 +361,39 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
                 }
             })
             .collect::<Result<_>>()?;
-        let mut f = wrap!(
-            self,
-            (self.def.init)(&self.def.scope, ctx, &faux_args, ExprId::new())
-        )?;
-        let res = wrap!(self, f.typecheck(ctx, &mut faux_args));
-        f.typ().constrain_known();
+        let faux_id = BindId::new();
+        ctx.env.by_id.insert_cow(
+            faux_id,
+            Bind {
+                doc: None,
+                export: false,
+                id: faux_id,
+                name: "faux".into(),
+                scope: self.def.scope.lexical.clone(),
+                typ: Type::empty_tvar(),
+            },
+        );
+        let prev_catch =
+            ctx.env.catch.insert_cow(self.def.scope.dynamic.clone(), faux_id);
+        let res =
+            wrap!(self, (self.def.init)(&self.def.scope, ctx, &faux_args, ExprId::new()));
+        let res = res.and_then(|mut f| {
+            wrap!(self, f.typecheck(ctx, &mut faux_args))?;
+            let inferred_throws = ctx.env.by_id[&faux_id]
+                .typ
+                .with_deref(|t| t.cloned())
+                .unwrap_or(Type::Bottom);
+            wrap!(self, f.typ().throws.check_contains(&ctx.env, &inferred_throws))?;
+            f.typ().constrain_known();
+            f.delete(ctx);
+            Ok(())
+        });
+        ctx.env.by_id.remove_cow(&faux_id);
+        match prev_catch {
+            Some(id) => ctx.env.catch.insert_cow(self.def.scope.dynamic.clone(), id),
+            None => ctx.env.catch.remove_cow(&self.def.scope.dynamic),
+        };
         self.typ.unbind_tvars();
-        f.delete(ctx);
         res
     }
 }
