@@ -8,13 +8,14 @@ use crate::{
     },
     node::{Bind, Block},
     typ::Type,
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent, KNOWN,
+    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::CompactString;
 use fxhash::{FxHashMap, FxHashSet};
 use netidx_value::{Typ, Value};
+use poolshark::local::LPooled;
 use std::{any::Any, mem, sync::LazyLock};
 use triomphe::Arc;
 
@@ -27,7 +28,7 @@ fn bind_sig<R: Rt, E: UserEvent>(
     for si in sig.iter() {
         match si {
             SigItem::Bind(name, typ) => {
-                KNOWN.with_borrow_mut(|known| typ.alias_tvars(known));
+                typ.alias_tvars(&mut LPooled::take());
                 env.bind_variable(&scope.lexical, name, typ.clone());
             }
             SigItem::TypeDef(td) => {

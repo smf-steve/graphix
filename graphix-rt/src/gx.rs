@@ -10,7 +10,7 @@ use graphix_compiler::{
     },
     node::genn,
     typ::Type,
-    BindId, Event, ExecCtx, LambdaId, Node, Scope, REFS,
+    BindId, Event, ExecCtx, LambdaId, Node, Refs, Scope,
 };
 use indexmap::IndexMap;
 use log::{debug, error, info};
@@ -220,17 +220,15 @@ impl<X: GXExt> GX<X> {
                 let mut clear: SmallVec<[BindId; 16]> = smallvec![];
                 self.event.init = *init;
                 if self.event.init {
-                    REFS.with_borrow_mut(|refs| {
-                        refs.clear();
-                        n.refs(refs);
-                        refs.with_external_refs(|id| {
-                            if let Some(v) = self.ctx.cached.get(&id) {
-                                if let Entry::Vacant(e) = self.event.variables.entry(id) {
-                                    e.insert(v.clone());
-                                    clear.push(id);
-                                }
+                    let mut refs = Refs::default();
+                    n.refs(&mut refs);
+                    refs.with_external_refs(|id| {
+                        if let Some(v) = self.ctx.cached.get(&id) {
+                            if let Entry::Vacant(e) = self.event.variables.entry(id) {
+                                e.insert(v.clone());
+                                clear.push(id);
                             }
-                        });
+                        }
                     });
                 }
                 if let Some(v) = n.update(&mut self.ctx, &mut self.event) {

@@ -13,7 +13,7 @@ pub mod typ;
 use crate::{
     env::Env,
     expr::{ExprId, ModPath},
-    typ::{FnType, TVar, Type},
+    typ::{FnType, Type},
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
@@ -29,9 +29,10 @@ use netidx::{
 use netidx_protocols::rpc::server::{ArgSpec, RpcCall};
 use node::compiler;
 use parking_lot::RwLock;
+use poolshark::local::LPooled;
 use std::{
     any::Any,
-    cell::{Cell, RefCell},
+    cell::Cell,
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
     mem,
@@ -127,12 +128,6 @@ macro_rules! defetyp {
                     .scope_refs(&scope)
             });
     };
-}
-
-thread_local! {
-    /// thread local shared refs structure
-    pub static REFS: RefCell<Refs> = RefCell::new(Refs::new());
-    static KNOWN: RefCell<FxHashMap<ArcStr, TVar>> = RefCell::new(HashMap::default());
 }
 
 atomic_id!(LambdaId);
@@ -244,24 +239,20 @@ impl<E: UserEvent> Event<E> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Refs {
-    refed: FxHashSet<BindId>,
-    bound: FxHashSet<BindId>,
+    refed: LPooled<FxHashSet<BindId>>,
+    bound: LPooled<FxHashSet<BindId>>,
 }
 
 impl Refs {
-    pub fn new() -> Self {
-        Self { refed: FxHashSet::default(), bound: FxHashSet::default() }
-    }
-
     pub fn clear(&mut self) {
         self.refed.clear();
         self.bound.clear();
     }
 
     pub fn with_external_refs(&self, mut f: impl FnMut(BindId)) {
-        for id in &self.refed {
+        for id in &*self.refed {
             if !self.bound.contains(id) {
                 f(*id);
             }
@@ -327,11 +318,12 @@ pub trait Apply<R: Rt, E: UserEvent>: Debug + Send + Sync + Any {
     /// return the lambdas type, builtins do not need to implement
     /// this, it is implemented by the BuiltIn wrapper
     fn typ(&self) -> Arc<FnType> {
-        const EMPTY: LazyLock<Arc<FnType>> = LazyLock::new(|| {
+        static EMPTY: LazyLock<Arc<FnType>> = LazyLock::new(|| {
             Arc::new(FnType {
                 args: Arc::from_iter([]),
                 constraints: Arc::new(RwLock::new(vec![])),
                 rtype: Type::Bottom,
+                throws: Type::Bottom,
                 vargs: None,
             })
         });

@@ -2,9 +2,10 @@ use super::{callsite::CallSite, Constant, Nop, Ref, NOP};
 use crate::{
     expr::{ExprId, ModPath},
     typ::{FnType, Type},
-    BindId, ExecCtx, Node, Rt, Scope, UserEvent, KNOWN,
+    BindId, ExecCtx, Node, Rt, Scope, UserEvent,
 };
 use netidx::publisher::{Typ, Value};
+use poolshark::local::LPooled;
 use std::collections::HashMap;
 
 /// generate a no op with the specific type
@@ -53,10 +54,7 @@ pub fn apply<R: Rt, E: UserEvent>(
     top_id: ExprId,
 ) -> Node<R, E> {
     let ftype = typ.reset_tvars();
-    KNOWN.with_borrow_mut(|known| {
-        known.clear();
-        ftype.alias_tvars(known);
-    });
+    ftype.alias_tvars(&mut LPooled::take());
     Box::new(CallSite {
         spec: NOP.clone(),
         ftype,

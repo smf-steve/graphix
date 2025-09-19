@@ -5,13 +5,14 @@ use crate::{
     node::pattern::StructPatternNode,
     typ::{FnArgType, FnType, Type},
     wrap, Apply, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Scope, Update,
-    UserEvent, KNOWN,
+    UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
 use compact_str::format_compact;
 use netidx::{subscriber::Value, utils::Either};
 use parking_lot::RwLock;
+use poolshark::local::LPooled;
 use smallvec::{smallvec, SmallVec};
 use std::sync::Arc as SArc;
 use triomphe::Arc;
@@ -214,6 +215,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
             Some(Some(typ)) => Some(Some(typ.scope_refs(&scope.lexical))),
         };
         let rtype = l.rtype.as_ref().map(|t| t.scope_refs(&scope.lexical));
+        let throws = l.throws.as_ref().map(|t| t.scope_refs(&scope.lexical));
         let argspec = l
             .args
             .iter()
@@ -258,7 +260,8 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                     None => None,
                 };
                 let rtype = rtype.clone().unwrap_or_else(|| Type::empty_tvar());
-                Arc::new(FnType { constraints, args, vargs, rtype })
+                let throws = throws.clone().unwrap_or_else(|| Type::empty_tvar());
+                Arc::new(FnType { constraints, args, vargs, rtype, throws })
             }
             Either::Right(builtin) => match ctx.builtins.get(builtin.as_str()) {
                 None => bail!("unknown builtin function {builtin}"),
@@ -270,10 +273,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                 }
             },
         };
-        KNOWN.with_borrow_mut(|known| {
-            known.clear();
-            typ.alias_tvars(known);
-        });
+        typ.alias_tvars(&mut LPooled::take());
         let _typ = typ.clone();
         let _argspec = argspec.clone();
         let body = l.body.clone();

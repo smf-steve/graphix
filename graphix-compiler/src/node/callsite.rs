@@ -4,13 +4,14 @@ use crate::{
     expr::{Expr, ExprId},
     typ::{FnArgType, FnType, TVar, Type},
     wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope, Update,
-    UserEvent, KNOWN, REFS,
+    UserEvent,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
 use compact_str::CompactString;
 use fxhash::FxHashMap;
 use netidx::subscriber::Value;
+use poolshark::local::LPooled;
 use std::{collections::hash_map::Entry, mem, sync::Arc};
 use triomphe::Arc as TArc;
 
@@ -107,10 +108,7 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
         let ftype = match fnode.typ().with_deref(|t| t.cloned()) {
             Some(Type::Fn(ftype)) => {
                 let ft = ftype.reset_tvars();
-                KNOWN.with_borrow_mut(|known| {
-                    known.clear();
-                    ft.alias_tvars(known);
-                });
+                ft.alias_tvars(&mut LPooled::take());
                 ft
             }
             _ => {
@@ -152,17 +150,15 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
                             lexical: $f.scope.lexical.clone(),
                         };
                         let n = compile(ctx, expr.clone(), &scope, self.top_id)?;
-                        REFS.with_borrow_mut(|refs| {
-                            refs.clear();
-                            n.refs(refs);
-                            refs.with_external_refs(|id| {
-                                if let Some(v) = ctx.cached.get(&id) {
-                                    if let Entry::Vacant(e) = event.variables.entry(id) {
-                                        e.insert(v.clone());
-                                        set.push(id);
-                                    }
+                        let mut refs = Refs::default();
+                        n.refs(&mut refs);
+                        refs.with_external_refs(|id| {
+                            if let Some(v) = ctx.cached.get(&id) {
+                                if let Entry::Vacant(e) = event.variables.entry(id) {
+                                    e.insert(v.clone());
+                                    set.push(id);
                                 }
-                            })
+                            }
                         });
                         Ok::<_, anyhow::Error>(n)
                     })?,
@@ -240,17 +236,15 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
             Some((_, f)) if !bound => f.update(ctx, &mut self.args, event),
             Some((_, f)) => {
                 let init = mem::replace(&mut event.init, true);
-                REFS.with_borrow_mut(|refs| {
-                    refs.clear();
-                    f.refs(refs);
-                    refs.with_external_refs(|id| {
-                        if let Entry::Vacant(e) = event.variables.entry(id) {
-                            if let Some(v) = ctx.cached.get(&id) {
-                                e.insert(v.clone());
-                                set.push(id);
-                            }
+                let mut refs = Refs::default();
+                f.refs(&mut refs);
+                refs.with_external_refs(|id| {
+                    if let Entry::Vacant(e) = event.variables.entry(id) {
+                        if let Some(v) = ctx.cached.get(&id) {
+                            e.insert(v.clone());
+                            set.push(id);
                         }
-                    })
+                    }
                 });
                 let res = f.update(ctx, &mut self.args, event);
                 event.init = init;
@@ -321,10 +315,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
                     .iter()
                     .map(|(tv, tc)| (TVar::empty_named(tv.name.clone()), tc.clone()))
                     .collect();
-                KNOWN.with_borrow_mut(|known| {
-                    known.clear();
-                    self.ftype.alias_tvars(known);
-                });
+                self.ftype.alias_tvars(&mut LPooled::take());
             }
             _ => bail!("expected a function type saw {}", self.fnode.typ()),
         }
