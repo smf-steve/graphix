@@ -378,14 +378,16 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
         let res =
             wrap!(self, (self.def.init)(&self.def.scope, ctx, &faux_args, ExprId::new()));
         let res = res.and_then(|mut f| {
-            wrap!(self, f.typecheck(ctx, &mut faux_args))?;
+            let res = wrap!(self, f.typecheck(ctx, &mut faux_args));
+            let ftyp = f.typ().clone();
+            f.delete(ctx);
+            res?;
             let inferred_throws = ctx.env.by_id[&faux_id]
                 .typ
                 .with_deref(|t| t.cloned())
                 .unwrap_or(Type::Bottom);
-            wrap!(self, f.typ().throws.check_contains(&ctx.env, &inferred_throws))?;
-            f.typ().constrain_known();
-            f.delete(ctx);
+            wrap!(self, ftyp.throws.check_contains(&ctx.env, &inferred_throws))?;
+            ftyp.constrain_known();
             Ok(())
         });
         ctx.env.by_id.remove_cow(&faux_id);
