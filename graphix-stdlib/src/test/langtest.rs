@@ -1918,3 +1918,20 @@ run!(catch4, CATCH4, |v: Result<&Value>| match v
     Ok([Value::Error(_), Value::Error(_)]) => true,
     _ => false,
 });
+
+const CATCH5: &str = r#"
+{
+    let f = |x| x / x;
+    let res = never();
+    try any(f(0), res)
+    catch(e) => select (e.0).error {
+        `ArithError(s) => res <- s,
+        `ArrayIndexError(s) => res <- s
+    }
+}
+"#;
+
+run!(catch5, CATCH5, |v: Result<&Value>| match v {
+    Err(_) => true,
+    _ => false,
+});
