@@ -1,5 +1,6 @@
-use crate::expr::{
-    parser, Bind, Expr, ExprKind, Lambda, ModuleKind, Sandbox, SigItem, TypeDef,
+use crate::{
+    expr::{parser, Bind, Expr, ExprKind, Lambda, ModuleKind, Sandbox, SigItem, TypeDef},
+    typ::Type,
 };
 use compact_str::{format_compact, CompactString};
 use netidx::{path::Path, utils::Either};
@@ -478,7 +479,14 @@ impl ExprKind {
                 }
                 write!(buf, "| ")?;
                 if let Some(t) = rtype {
-                    write!(buf, "-> {t} ")?
+                    match t {
+                        Type::Fn(ft) => write!(buf, "-> ({ft}) ")?,
+                        Type::ByRef(t) => match &**t {
+                            Type::Fn(ft) => write!(buf, "-> &({ft}) ")?,
+                            t => write!(buf, "-> &{t} ")?,
+                        },
+                        t => write!(buf, "-> {t} ")?,
+                    }
                 }
                 if let Some(t) = throws {
                     write!(buf, "throws {t} ")?
@@ -736,7 +744,14 @@ impl fmt::Display for ExprKind {
                 }
                 write!(f, "| ")?;
                 if let Some(t) = rtype {
-                    write!(f, "-> {t} ")?
+                    match t {
+                        Type::Fn(ft) => write!(f, "-> ({ft}) ")?,
+                        Type::ByRef(t) => match &**t {
+                            Type::Fn(ft) => write!(f, "-> &({ft}) ")?,
+                            t => write!(f, "-> &{t} ")?,
+                        },
+                        t => write!(f, "-> {t} ")?,
+                    }
                 }
                 if let Some(t) = throws {
                     write!(f, "throws {t} ")?

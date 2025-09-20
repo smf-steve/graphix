@@ -810,12 +810,12 @@ parser! {
                 between(sptoken('['), sptoken(']'), sep_by(typexp(), csep()))
                     .map(|ts: SmallVec<[Type; 16]>| Type::flatten_set(ts)),
             ),
-            attempt(between(sptoken('('), sptoken(')'), sep_by1(typexp(), csep())).then(
-                |exps: SmallVec<[Type; 16]>| {
-                    if exps.len() < 2 {
-                        unexpected_any("tuples must have at least 2 elements").left()
+            attempt(between(sptoken('('), sptoken(')'), sep_by1(typexp(), csep())).map(
+                |mut exps: LPooled<Vec<Type>>| {
+                    if exps.len() == 1 {
+                        exps.pop().unwrap()
                     } else {
-                        value(Type::Tuple(Arc::from_iter(exps))).right()
+                        Type::Tuple(Arc::from_iter(exps.drain(..)))
                     }
                 },
             )),

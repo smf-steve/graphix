@@ -1378,6 +1378,7 @@ impl<R: Rt, E: UserEvent> TryCatch<R, E> {
             Type::TVar(tv) => {
                 let mut tv = tv.write();
                 tv.frozen = true;
+                *tv.typ.write() = Some(Type::Bottom)
             }
             _ => unreachable!(),
         }

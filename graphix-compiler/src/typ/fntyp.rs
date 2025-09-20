@@ -520,11 +520,14 @@ impl fmt::Display for FnType {
         if let Some(vargs) = &self.vargs {
             write!(f, "@args: {}", vargs)?;
         }
-        write!(f, ") -> {}", self.rtype)?;
-        self.throws.with_deref(|t| match t {
-            Some(Type::Bottom) => Ok(()),
-            Some(t) => write!(f, " throws {t}"),
-            None => write!(f, " throws {}", self.throws),
-        })
+        match &self.rtype {
+            Type::Fn(ft) => write!(f, ") -> ({})", ft)?,
+            t => write!(f, ") -> {}", t)?,
+        }
+        match &self.throws {
+            Type::Bottom => Ok(()),
+            Type::TVar(tv) if *tv.read().typ.read() == Some(Type::Bottom) => Ok(()),
+            t => write!(f, " throws {t}"),
+        }
     }
 }
