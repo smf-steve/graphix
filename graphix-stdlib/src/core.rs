@@ -348,7 +348,7 @@ struct Filter<R: Rt, E: UserEvent> {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Filter<R, E> {
     const NAME: &str = "filter";
-    deftype!("core", "fn('a, fn('a) -> bool) -> 'a");
+    deftype!("core", "fn('a, fn('a) -> bool throws 'e) -> 'a throws 'e");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {

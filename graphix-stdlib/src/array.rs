@@ -215,7 +215,10 @@ pub(super) struct MapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for MapImpl {
     const NAME: &str = "array_map";
-    deftype!("core::array", "fn(Array<'a>, fn('a) -> 'b) -> Array<'b>");
+    deftype!(
+        "core::array",
+        "fn(Array<'a>, fn('a) -> 'b throws 'e) -> Array<'b> throws 'e"
+    );
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter_exact(
@@ -231,7 +234,10 @@ pub(super) struct FilterImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterImpl {
     const NAME: &str = "array_filter";
-    deftype!("core::array", "fn(Array<'a>, fn('a) -> bool) -> Array<'a>");
+    deftype!(
+        "core::array",
+        "fn(Array<'a>, fn('a) -> bool throws 'e) -> Array<'a> throws 'e"
+    );
 
     fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().zip(a.iter()).filter_map(
@@ -250,7 +256,10 @@ pub(super) struct FlatMapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FlatMapImpl {
     const NAME: &str = "array_flat_map";
-    deftype!("core::array", "fn(Array<'a>, fn('a) -> ['b, Array<'b>]) -> Array<'b>");
+    deftype!(
+        "core::array",
+        "fn(Array<'a>, fn('a) -> ['b, Array<'b>] throws 'e) -> Array<'b> throws 'e"
+    );
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().flat_map(|s| {
@@ -269,7 +278,10 @@ pub(super) struct FilterMapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterMapImpl {
     const NAME: &str = "array_filter_map";
-    deftype!("core::array", "fn(Array<'a>, fn('a) -> Option<'b>) -> Array<'b>");
+    deftype!(
+        "core::array",
+        "fn(Array<'a>, fn('a) -> Option<'b> throws 'e) -> Array<'b> throws 'e"
+    );
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().filter_map(|s| {
@@ -288,7 +300,10 @@ pub(super) struct FindImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FindImpl {
     const NAME: &str = "array_find";
-    deftype!("core::array", "fn(Array<'a>, fn('a) -> bool) -> Option<'a>");
+    deftype!(
+        "core::array",
+        "fn(Array<'a>, fn('a) -> bool throws 'e) -> Option<'a> throws 'e"
+    );
 
     fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value> {
         let r = slots
@@ -311,7 +326,10 @@ pub(super) struct FindMapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FindMapImpl {
     const NAME: &str = "array_find_map";
-    deftype!("core::array", "fn(Array<'a>, fn('a) -> Option<'b>) -> Option<'b>");
+    deftype!(
+        "core::array",
+        "fn(Array<'a>, fn('a) -> Option<'b> throws 'e) -> Option<'b> throws 'e"
+    );
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         let r = slots
@@ -345,7 +363,10 @@ pub(super) struct Fold<R: Rt, E: UserEvent> {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Fold<R, E> {
     const NAME: &str = "array_fold";
-    deftype!("core::array", "fn(Array<'a>, 'b, fn('b, 'a) -> 'b) -> 'b");
+    deftype!(
+        "core::array",
+        "fn(Array<'a>, 'b, fn('b, 'a) -> 'b throws 'e) -> 'b throws 'e"
+    );
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|_ctx, typ, scope, from, top_id| match from {
@@ -864,7 +885,10 @@ pub(super) struct Group<R: Rt, E: UserEvent> {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
     const NAME: &str = "group";
-    deftype!("core::array", "fn('a, fn(i64, 'a) -> bool) -> Array<'a>");
+    deftype!(
+        "core::array",
+        "fn('a, fn(i64, 'a) -> bool throws 'e) -> Array<'a> throws 'e"
+    );
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, typ, scope, from, top_id| match from {

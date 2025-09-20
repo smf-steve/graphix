@@ -408,7 +408,7 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Publish<R, E> {
     const NAME: &str = "publish";
     deftype!(
         "net",
-        "fn(?#on_write:fn(Any) -> _, string, Any) -> Result<_, `PublishError(string)>"
+        "fn(?#on_write:fn(Any) -> _ throws 'e, string, Any) -> Result<_, `PublishError(string)> throws 'e"
     );
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
@@ -552,8 +552,8 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for PublishRpc<R, E> {
             #path:string,
             #doc:string,
             #spec:Array<ArgSpec>,
-            #f:fn(Array<(string, Any)>) -> Any
-        ) -> Result<_, `PublishRpcError(string)>"#
+            #f:fn(Array<(string, Any)>) -> Any throws 'e
+        ) -> Result<_, `PublishRpcError(string)> throws 'e"#
     );
 
     fn init(_ctx: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {

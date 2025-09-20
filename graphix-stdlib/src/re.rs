@@ -81,7 +81,7 @@ struct CapturesEv {
 
 impl EvalCached for CapturesEv {
     const NAME: &str = "re_captures";
-    deftype!("re", "fn(#pat:string, string) -> Result<Array<Array<[null, string]>>, `ReError(string)>");
+    deftype!("re", "fn(#pat:string, string) -> Result<Array<Array<Option<string>>>, `ReError(string)>");
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         if let Some(Value::String(s)) = &from.0[0] {
