@@ -521,8 +521,12 @@ impl fmt::Display for FnType {
             write!(f, "@args: {}", vargs)?;
         }
         match &self.rtype {
-            Type::Fn(ft) => write!(f, ") -> ({})", ft)?,
-            t => write!(f, ") -> {}", t)?,
+            Type::Fn(ft) => write!(f, ") -> ({ft})")?,
+            Type::ByRef(t) => match &**t {
+                Type::Fn(ft) => write!(f, ") -> &({ft})")?,
+                t => write!(f, ") -> &{t}")?,
+            },
+            t => write!(f, ") -> {t}")?,
         }
         match &self.throws {
             Type::Bottom => Ok(()),

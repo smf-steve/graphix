@@ -1,3 +1,4 @@
+use super::Sig;
 use crate::{
     expr::{parser, Bind, Expr, ExprKind, Lambda, ModuleKind, Sandbox, SigItem, TypeDef},
     typ::Type,
@@ -6,8 +7,6 @@ use compact_str::{format_compact, CompactString};
 use netidx::{path::Path, utils::Either};
 use netidx_value::{parser::VAL_ESC, Value};
 use std::fmt::{self, Formatter, Write};
-
-use super::Sig;
 
 impl fmt::Display for TypeDef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
