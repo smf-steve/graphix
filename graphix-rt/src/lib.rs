@@ -390,7 +390,8 @@ pub struct GXConfig<X: GXExt> {
     resolvers: Vec<ModuleResolver>,
     /// The channel that will receive events from the runtime
     sub: tmpsc::Sender<GPooled<Vec<GXEvent<X>>>>,
-    /// The set of compiler flags
+    /// The set of compiler flags. Default empty.
+    #[builder(default)]
     flags: BitFlags<CFlag>,
 }
 
