@@ -3,6 +3,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
+use enumflags2::bitflags;
 use enumflags2::BitFlags;
 use fxhash::{FxHashMap, FxHashSet};
 use netidx::{
@@ -28,6 +29,14 @@ pub use fntyp::{FnArgType, FnType};
 pub use tval::TVal;
 use tvar::would_cycle_inner;
 pub use tvar::TVar;
+
+#[derive(Debug, Clone, Copy)]
+#[bitflags]
+#[repr(u8)]
+pub enum ContainsFlags {
+    AliasTVars,
+    InitTVars,
+}
 
 struct AndAc(bool);
 
@@ -135,6 +144,7 @@ impl Type {
 
     fn contains_int<R: Rt, E: UserEvent>(
         &self,
+        flags: BitFlags<ContainsFlags>,
         env: &Env<R, E>,
         hist: &mut FxHashMap<(usize, usize), bool>,
         t: &Self,
@@ -150,7 +160,7 @@ impl Type {
                 && p0
                     .iter()
                     .zip(p1.iter())
-                    .map(|(t0, t1)| t0.contains_int(env, hist, t1))
+                    .map(|(t0, t1)| t0.contains_int(flags, env, hist, t1))
                     .collect::<Result<AndAc>>()?
                     .0),
             (t0 @ Self::Ref { .. }, t1) | (t0, t1 @ Self::Ref { .. }) => {
@@ -162,7 +172,7 @@ impl Type {
                     Some(r) => Ok(*r),
                     None => {
                         hist.insert((t0_addr, t1_addr), true);
-                        match t0.contains_int(env, hist, t1) {
+                        match t0.contains_int(flags, env, hist, t1) {
                             Ok(r) => {
                                 hist.insert((t0_addr, t1_addr), r);
                                 Ok(r)
@@ -179,14 +189,18 @@ impl Type {
                 if let Some(_) = &*t0.read().typ.read() {
                     return Ok(true);
                 }
-                *t0.read().typ.write() = Some(Self::Bottom);
+                if flags.contains(ContainsFlags::InitTVars) {
+                    *t0.read().typ.write() = Some(Self::Bottom);
+                }
                 Ok(true)
             }
             (Self::TVar(t0), Self::Any) => {
                 if let Some(t0) = &*t0.read().typ.read() {
-                    return t0.contains_int(env, hist, t);
+                    return t0.contains_int(flags, env, hist, t);
                 }
-                *t0.read().typ.write() = Some(Self::Any);
+                if flags.contains(ContainsFlags::InitTVars) {
+                    *t0.read().typ.write() = Some(Self::Any);
+                }
                 Ok(true)
             }
             (Self::Any, _) => Ok(true),
@@ -196,15 +210,15 @@ impl Type {
                 Self::Primitive(p),
                 Self::Array(_) | Self::Tuple(_) | Self::Struct(_) | Self::Variant(_, _),
             ) => Ok(p.contains(Typ::Array)),
-            (Self::Array(t0), Self::Array(t1)) => t0.contains_int(env, hist, t1),
+            (Self::Array(t0), Self::Array(t1)) => t0.contains_int(flags, env, hist, t1),
             (Self::Array(t0), Self::Primitive(p)) if *p == BitFlags::from(Typ::Array) => {
-                t0.contains_int(env, hist, &Type::Any)
+                t0.contains_int(flags, env, hist, &Type::Any)
             }
             (Self::Primitive(p0), Self::Error(_)) => Ok(p0.contains(Typ::Error)),
             (Self::Error(e), Self::Primitive(p)) if *p == BitFlags::from(Typ::Error) => {
-                e.contains_int(env, hist, &Type::Any)
+                e.contains_int(flags, env, hist, &Type::Any)
             }
-            (Self::Error(e0), Self::Error(e1)) => e0.contains_int(env, hist, e1),
+            (Self::Error(e0), Self::Error(e1)) => e0.contains_int(flags, env, hist, e1),
             (Self::Tuple(t0), Self::Tuple(t1))
                 if t0.as_ptr().addr() == t1.as_ptr().addr() =>
             {
@@ -214,7 +228,7 @@ impl Type {
                 && t0
                     .iter()
                     .zip(t1.iter())
-                    .map(|(t0, t1)| t0.contains_int(env, hist, t1))
+                    .map(|(t0, t1)| t0.contains_int(flags, env, hist, t1))
                     .collect::<Result<AndAc>>()?
                     .0),
             (Self::Struct(t0), Self::Struct(t1))
@@ -228,7 +242,7 @@ impl Type {
                     t0.iter()
                         .zip(t1.iter())
                         .map(|((n0, t0), (n1, t1))| {
-                            Ok(n0 == n1 && t0.contains_int(env, hist, t1)?)
+                            Ok(n0 == n1 && t0.contains_int(flags, env, hist, t1)?)
                         })
                         .collect::<Result<AndAc>>()?
                         .0
@@ -245,10 +259,10 @@ impl Type {
                 && t0
                     .iter()
                     .zip(t1.iter())
-                    .map(|(t0, t1)| t0.contains_int(env, hist, t1))
+                    .map(|(t0, t1)| t0.contains_int(flags, env, hist, t1))
                     .collect::<Result<AndAc>>()?
                     .0),
-            (Self::ByRef(t0), Self::ByRef(t1)) => t0.contains_int(env, hist, t1),
+            (Self::ByRef(t0), Self::ByRef(t1)) => t0.contains_int(flags, env, hist, t1),
             (Self::TVar(t0), Self::TVar(t1))
                 if t0.addr() == t1.addr() || t0.read().id == t1.read().id =>
             {
@@ -272,7 +286,9 @@ impl Type {
                     let t0i = t0.typ.read();
                     let t1i = t1.typ.read();
                     match (&*t0i, &*t1i) {
-                        (Some(t0), Some(t1)) => return t0.contains_int(env, hist, &*t1),
+                        (Some(t0), Some(t1)) => {
+                            return t0.contains_int(flags, env, hist, &*t1)
+                        }
                         (None, None) => {
                             if would_cycle_inner(addr, tt1) {
                                 return Ok(true);
@@ -301,25 +317,40 @@ impl Type {
                     }
                 };
                 match act {
-                    Act::RightCopy => t1.copy(t0),
-                    Act::RightAlias => t1.alias(t0),
-                    Act::LeftAlias => t0.alias(t1),
-                    Act::LeftCopy => t0.copy(t1),
+                    Act::RightCopy if flags.contains(ContainsFlags::InitTVars) => {
+                        t1.copy(t0)
+                    }
+                    Act::RightAlias if flags.contains(ContainsFlags::AliasTVars) => {
+                        t1.alias(t0)
+                    }
+                    Act::LeftAlias if flags.contains(ContainsFlags::AliasTVars) => {
+                        t0.alias(t1)
+                    }
+                    Act::LeftCopy if flags.contains(ContainsFlags::InitTVars) => {
+                        t0.copy(t1)
+                    }
+                    Act::RightCopy | Act::RightAlias | Act::LeftAlias | Act::LeftCopy => {
+                        ()
+                    }
                 }
                 Ok(true)
             }
             (Self::TVar(t0), t1) if !t0.would_cycle(t1) => {
                 if let Some(t0) = &*t0.read().typ.read() {
-                    return t0.contains_int(env, hist, t1);
+                    return t0.contains_int(flags, env, hist, t1);
                 }
-                *t0.read().typ.write() = Some(t1.clone());
+                if flags.contains(ContainsFlags::InitTVars) {
+                    *t0.read().typ.write() = Some(t1.clone());
+                }
                 Ok(true)
             }
             (t0, Self::TVar(t1)) if !t1.would_cycle(t0) => {
                 if let Some(t1) = &*t1.read().typ.read() {
-                    return t0.contains_int(env, hist, t1);
+                    return t0.contains_int(flags, env, hist, t1);
                 }
-                *t1.read().typ.write() = Some(t0.clone());
+                if flags.contains(ContainsFlags::InitTVars) {
+                    *t1.read().typ.write() = Some(t0.clone());
+                }
                 Ok(true)
             }
             (Self::Set(s0), Self::Set(s1))
@@ -329,22 +360,22 @@ impl Type {
             }
             (t0, Self::Set(s)) => Ok(s
                 .iter()
-                .map(|t1| t0.contains_int(env, hist, t1))
+                .map(|t1| t0.contains_int(flags, env, hist, t1))
                 .collect::<Result<AndAc>>()?
                 .0),
             (Self::Set(s), t) => Ok(s
                 .iter()
                 .fold(Ok::<_, anyhow::Error>(false), |acc, t0| {
-                    Ok(acc? || t0.contains_int(env, hist, t)?)
+                    Ok(acc? || t0.contains_int(flags, env, hist, t)?)
                 })?
                 || t.iter_prims().fold(Ok::<_, anyhow::Error>(true), |acc, t1| {
                     Ok(acc?
                         && s.iter().fold(Ok::<_, anyhow::Error>(false), |acc, t0| {
-                            Ok(acc? || t0.contains_int(env, hist, &t1)?)
+                            Ok(acc? || t0.contains_int(flags, env, hist, &t1)?)
                         })?)
                 })?),
             (Self::Fn(f0), Self::Fn(f1)) => {
-                Ok(f0.as_ptr() == f1.as_ptr() || f0.contains_int(env, hist, f1)?)
+                Ok(f0.as_ptr() == f1.as_ptr() || f0.contains_int(flags, env, hist, f1)?)
             }
             (_, Self::Any)
             | (_, Self::TVar(_))
@@ -386,7 +417,21 @@ impl Type {
         env: &Env<R, E>,
         t: &Self,
     ) -> Result<bool> {
-        self.contains_int(env, &mut LPooled::take(), t)
+        self.contains_int(
+            ContainsFlags::AliasTVars | ContainsFlags::InitTVars,
+            env,
+            &mut LPooled::take(),
+            t,
+        )
+    }
+
+    pub fn contains_with_flags<R: Rt, E: UserEvent>(
+        &self,
+        flags: BitFlags<ContainsFlags>,
+        env: &Env<R, E>,
+        t: &Self,
+    ) -> Result<bool> {
+        self.contains_int(flags, env, &mut LPooled::take(), t)
     }
 
     fn could_match_int<R: Rt, E: UserEvent>(
@@ -395,6 +440,7 @@ impl Type {
         hist: &mut FxHashMap<(usize, usize), bool>,
         t: &Self,
     ) -> Result<bool> {
+        let fl = BitFlags::empty();
         match (self, t) {
             (
                 Self::Ref { scope: s0, name: n0, params: p0 },
@@ -430,15 +476,53 @@ impl Type {
             }
             (t0, Self::Primitive(s)) => {
                 for t1 in s.iter() {
-                    if t0.contains_int(env, hist, &Type::Primitive(t1.into()))? {
+                    if t0.contains_int(fl, env, hist, &Type::Primitive(t1.into()))? {
                         return Ok(true);
                     }
                 }
                 Ok(false)
             }
+            (Type::Primitive(p), Type::Error(_)) => Ok(p.contains(Typ::Error)),
+            (Type::Error(t0), Type::Error(t1)) => t0.could_match_int(env, hist, t1),
+            (Type::Array(t0), Type::Array(t1)) => t0.could_match_int(env, hist, t1),
+            (Type::Primitive(p), Type::Array(_)) => Ok(p.contains(Typ::Array)),
+            (Type::Tuple(ts0), Type::Tuple(ts1)) => Ok(ts0.len() == ts1.len()
+                && ts0
+                    .iter()
+                    .zip(ts1.iter())
+                    .map(|(t0, t1)| t0.could_match_int(env, hist, t1))
+                    .collect::<Result<AndAc>>()?
+                    .0),
+            (Type::Struct(ts0), Type::Struct(ts1)) => Ok(ts0.len() == ts1.len()
+                && ts0
+                    .iter()
+                    .zip(ts1.iter())
+                    .map(|((n0, t0), (n1, t1))| {
+                        Ok(n0 == n1 && t0.could_match_int(env, hist, t1)?)
+                    })
+                    .collect::<Result<AndAc>>()?
+                    .0),
+            (Type::Variant(n0, ts0), Type::Variant(n1, ts1)) => Ok(ts0.len()
+                == ts1.len()
+                && n0 == n1
+                && ts0
+                    .iter()
+                    .zip(ts1.iter())
+                    .map(|(t0, t1)| t0.could_match_int(env, hist, t1))
+                    .collect::<Result<AndAc>>()?
+                    .0),
+            (Type::ByRef(t0), Type::ByRef(t1)) => t0.could_match_int(env, hist, t1),
             (t0, Self::Set(ts)) => {
                 for t1 in ts.iter() {
-                    if t0.contains_int(env, hist, t1)? {
+                    if t0.could_match_int(env, hist, t1)? {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            (Type::Set(ts), t1) => {
+                for t0 in ts.iter() {
+                    if t0.could_match_int(env, hist, t1)? {
                         return Ok(true);
                     }
                 }
@@ -452,8 +536,21 @@ impl Type {
                 Some(t1) => t0.could_match_int(env, hist, t1),
                 None => Ok(true),
             },
-            (Type::Any, _) | (_, Type::Any) => Ok(true),
-            (t0, t1) => t0.contains_int(env, hist, t1),
+            (Type::Any, _) | (_, Type::Any) | (Type::Bottom, _) | (_, Type::Bottom) => {
+                Ok(true)
+            }
+            (Type::Fn(_), _)
+            | (_, Type::Fn(_))
+            | (Type::Tuple(_), _)
+            | (_, Type::Tuple(_))
+            | (Type::Struct(_), _)
+            | (_, Type::Struct(_))
+            | (Type::Variant(_, _), _)
+            | (_, Type::Variant(_, _))
+            | (Type::ByRef(_), _)
+            | (_, Type::ByRef(_))
+            | (Type::Array(_), _)
+            | (_, Type::Array(_)) => Ok(false),
         }
     }
 

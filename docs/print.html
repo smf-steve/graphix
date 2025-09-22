@@ -446,6 +446,10 @@ Consider</p>
 x.0
 </code></pre>
 <p>Will print 1.</p>
+<h2 id="error"><a class="header" href="#error">Error</a></h2>
+<p>Error is the built in error type. It carries a string describing the error. It
+can be constructed with the <code>error</code> function, and it's type name <code>error</code> can be
+used in pattern matching.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="let-binds"><a class="header" href="#let-binds">Let Binds</a></h1>
 <p>Let bindings introduce names that are visible in their scope after they are
 defined.</p>
@@ -902,6 +906,10 @@ select a {
 how we would do something with every element of an array (see <code>array::map</code> and
 <code>array::fold</code>), however it illustrates the power of select and connect together.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h1>
+<p>Errors in Graphix are represented by the <code>Error&lt;'a&gt;</code> type. A new instance of
+which can be created with the <code>error</code> function. e.g.</p>
+<pre><code>
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="functions"><a class="header" href="#functions">Functions</a></h1>
 <p>Functions are first class values. They can be stored in variables, in data
 structures, and they can be passed around to other functions. Etc. They are

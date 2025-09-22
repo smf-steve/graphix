@@ -27,7 +27,7 @@ pub let browser = |
             viewport <- p ~ { x: 0, y: 0 }
         }
     };
-    let (mode, structure) = select net::list_table(path) {
+    let (mode, structure) = select net::list_table(path)? {
         { columns, rows } => {
             let mode = uniq(select columns {
                 [] => `List,
@@ -62,10 +62,7 @@ pub let browser = |
         }
     };
     let content_widths: Array<i64> = [];
-    let get_width = |i| {
-        let errors = never();
-        any(content_widths[i]?, i ~ 0)
-    };
+    let get_width = |i| try any(content_widths[i]?, i ~ 0) catch(e) => never(e);
     let { total: _, cols: visible_columns, widths }:
         { total: i64, cols: Array<string>, widths: Array<Constraint> } = {
         let name_width = max(4, get_width(0));

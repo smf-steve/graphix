@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use derive_builder::Builder;
 use enumflags2::BitFlags;
@@ -272,12 +272,6 @@ impl<X: GXExt> Shell<X> {
         let mut newenv = None;
         let mut exprs = vec![];
         let mut env = self.load_env(&gx, &mut newenv, &mut output, &mut exprs).await?;
-        let unhandled = env
-            .lookup_bind(&ModPath::root(), &["errors"].into())
-            .ok_or_else(|| anyhow!("no toplevel errors bind found"))?
-            .1
-            .id;
-        let unhandled = gx.compile_ref(unhandled).await?;
         if !script {
             println!("Welcome to the graphix shell");
             println!("Press ctrl-c to cancel, ctrl-d to exit, and tab for help")
@@ -290,9 +284,6 @@ impl<X: GXExt> Shell<X> {
                         for e in batch.drain(..) {
                             match e {
                                 GXEvent::Updated(id, v) => {
-                                    if unhandled.id == id {
-                                        eprintln!("unhandled error: {v}")
-                                    }
                                     output.process_update(&env, id, v).await
                                 },
                                 GXEvent::Env(e) => {

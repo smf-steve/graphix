@@ -1018,7 +1018,16 @@ impl<R: Rt, E: UserEvent> Qop<R, E> {
         e: &Expr,
     ) -> Result<Node<R, E>> {
         let n = compile(ctx, e.clone(), scope, top_id)?;
-        let id = ctx.env.lookup_catch(&scope.dynamic).ok();
+        let id = match ctx.env.lookup_catch(&scope.dynamic).ok() {
+            None => {
+                eprintln!(
+                    "WARNING: in {} at {} error raised by ? will not be caught",
+                    spec.ori, spec.pos
+                );
+                None
+            }
+            o => o,
+        };
         let typ = Type::empty_tvar();
         Ok(Box::new(Self { spec, typ, id, n }))
     }
@@ -1120,7 +1129,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         }
         wrap!(self.n, self.n.typecheck(ctx))?;
         let err = Type::Error(Arc::new(Type::empty_tvar()));
-        if !self.n.typ().contains(&ctx.env, &err)? {
+        if !self.n.typ().contains_with_flags(BitFlags::empty(), &ctx.env, &err)? {
             format_with_flags(PrintFlag::DerefTVars, || {
                 bail!("cannot use the ? operator on non error type {}", self.n.typ())
             })?

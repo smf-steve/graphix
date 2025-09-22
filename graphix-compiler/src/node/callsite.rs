@@ -2,10 +2,9 @@ use super::{compiler::compile, Nop};
 use crate::{
     env::LambdaDef,
     expr::{Expr, ExprId},
-    format_with_flags,
     typ::{FnArgType, FnType, TVar, Type},
-    wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, PrintFlag, Refs, Rt, Scope,
-    Update, UserEvent,
+    wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope, Update,
+    UserEvent,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
@@ -335,9 +334,6 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
             && let Some(bind) = ctx.env.by_id.get(&id)
             && let Type::TVar(tv) = &bind.typ
         {
-            format_with_flags(PrintFlag::DerefTVars, || {
-                eprintln!("inferred throws: {t}")
-            });
             let tv = tv.read();
             let mut ty = tv.typ.write();
             *ty = match &*ty {

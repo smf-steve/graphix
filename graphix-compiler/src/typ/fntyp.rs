@@ -2,11 +2,12 @@ use super::AndAc;
 use crate::{
     env::Env,
     expr::ModPath,
-    typ::{TVar, Type},
+    typ::{ContainsFlags, TVar, Type},
     Rt, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
+use enumflags2::BitFlags;
 use fxhash::FxHashMap;
 use parking_lot::RwLock;
 use poolshark::local::LPooled;
@@ -290,11 +291,17 @@ impl FnType {
         env: &Env<R, E>,
         t: &Self,
     ) -> Result<bool> {
-        self.contains_int(env, &mut LPooled::take(), t)
+        self.contains_int(
+            ContainsFlags::AliasTVars | ContainsFlags::InitTVars,
+            env,
+            &mut LPooled::take(),
+            t,
+        )
     }
 
     pub(super) fn contains_int<R: Rt, E: UserEvent>(
         &self,
+        flags: BitFlags<ContainsFlags>,
         env: &Env<R, E>,
         hist: &mut FxHashMap<(usize, usize), bool>,
         t: &Self,
@@ -314,7 +321,7 @@ impl FnType {
                 {
                     None => return Ok(false),
                     Some(o) => {
-                        if !o.typ.contains_int(env, hist, &a.typ)? {
+                        if !o.typ.contains_int(flags, env, hist, &a.typ)? {
                             return Ok(false);
                         }
                     }
@@ -347,29 +354,33 @@ impl FnType {
             && t.args[tul..]
                 .iter()
                 .zip(self.args[sul..].iter())
-                .map(|(t, s)| t.typ.contains_int(env, hist, &s.typ))
+                .map(|(t, s)| t.typ.contains_int(flags, env, hist, &s.typ))
                 .collect::<Result<AndAc>>()?
                 .0
             && match (&t.vargs, &self.vargs) {
-                (Some(tv), Some(sv)) => tv.contains_int(env, hist, sv)?,
+                (Some(tv), Some(sv)) => tv.contains_int(flags, env, hist, sv)?,
                 (None, None) => true,
                 (_, _) => false,
             }
-            && self.rtype.contains_int(env, hist, &t.rtype)?
+            && self.rtype.contains_int(flags, env, hist, &t.rtype)?
             && self
                 .constraints
                 .read()
                 .iter()
-                .map(|(tv, tc)| tc.contains_int(env, hist, &Type::TVar(tv.clone())))
+                .map(|(tv, tc)| {
+                    tc.contains_int(flags, env, hist, &Type::TVar(tv.clone()))
+                })
                 .collect::<Result<AndAc>>()?
                 .0
             && t.constraints
                 .read()
                 .iter()
-                .map(|(tv, tc)| tc.contains_int(env, hist, &Type::TVar(tv.clone())))
+                .map(|(tv, tc)| {
+                    tc.contains_int(flags, env, hist, &Type::TVar(tv.clone()))
+                })
                 .collect::<Result<AndAc>>()?
                 .0
-            && self.throws.contains(env, &t.throws)?)
+            && self.throws.contains_int(flags, env, hist, &t.throws)?)
     }
 
     pub fn check_contains<R: Rt, E: UserEvent>(
