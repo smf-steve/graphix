@@ -46,6 +46,15 @@ use std::{
 use tokio::time::Instant;
 use triomphe::Arc;
 
+#[derive(Debug, Clone, Copy)]
+#[bitflags]
+#[repr(u64)]
+pub enum CFlag {
+    WarnUnhandled,
+    WarnUnused,
+    WarningsAreErrors,
+}
+
 #[allow(dead_code)]
 static TRACE: AtomicBool = AtomicBool::new(false);
 
@@ -578,13 +587,14 @@ impl Scope {
 /// and scope, return the root node or an error if compilation failed.
 pub fn compile<R: Rt, E: UserEvent>(
     ctx: &mut ExecCtx<R, E>,
+    flags: BitFlags<CFlag>,
     scope: &Scope,
     spec: Expr,
 ) -> Result<Node<R, E>> {
     let top_id = spec.id;
     let env = ctx.env.clone();
     let st = Instant::now();
-    let mut node = match compiler::compile(ctx, spec, scope, top_id) {
+    let mut node = match compiler::compile(ctx, flags, spec, scope, top_id) {
         Ok(n) => n,
         Err(e) => {
             ctx.env = env;

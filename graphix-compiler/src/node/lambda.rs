@@ -4,12 +4,13 @@ use crate::{
     expr::{self, Arg, Expr, ExprId},
     node::pattern::StructPatternNode,
     typ::{FnArgType, FnType, Type},
-    wrap, Apply, BindId, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Scope, Update,
-    UserEvent,
+    wrap, Apply, BindId, CFlag, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Scope,
+    Update, UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
 use compact_str::format_compact;
+use enumflags2::BitFlags;
 use netidx::{subscriber::Value, utils::Either};
 use parking_lot::RwLock;
 use poolshark::local::LPooled;
@@ -87,6 +88,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for GXLambda<R, E> {
 impl<R: Rt, E: UserEvent> GXLambda<R, E> {
     pub(super) fn new(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         typ: Arc<FnType>,
         argspec: Arc<[Arg]>,
         args: &[Node<R, E>],
@@ -108,7 +110,7 @@ impl<R: Rt, E: UserEvent> GXLambda<R, E> {
             }
             argpats.push(pattern);
         }
-        let body = compile(ctx, body, &scope, tid)?;
+        let body = compile(ctx, flags, body, &scope, tid)?;
         Ok(Self { args: Box::from(argpats), typ, body })
     }
 }
@@ -183,12 +185,14 @@ pub(crate) struct Lambda<R: Rt, E: UserEvent> {
     top_id: ExprId,
     spec: Expr,
     def: SArc<LambdaDef<R, E>>,
+    flags: BitFlags<CFlag>,
     typ: Type,
 }
 
 impl<R: Rt, E: UserEvent> Lambda<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         l: &expr::Lambda,
@@ -288,6 +292,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                     };
                     let apply = GXLambda::new(
                         ctx,
+                        flags,
                         _typ.clone(),
                         _argspec.clone(),
                         args,
@@ -316,7 +321,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
         let def =
             SArc::new(LambdaDef { id, typ: typ.clone(), env, argspec, init, scope });
         ctx.env.lambdas.insert_cow(id, SArc::downgrade(&def));
-        Ok(Box::new(Self { spec, def, typ: Type::Fn(typ), top_id }))
+        Ok(Box::new(Self { spec, def, typ: Type::Fn(typ), top_id, flags }))
     }
 }
 
@@ -353,7 +358,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
             .zip(self.def.typ.args.iter())
             .map(|(a, at)| match &a.labeled {
                 Some(Some(e)) => ctx.with_restored(self.def.env.clone(), |ctx| {
-                    compile(ctx, e.clone(), &self.def.scope, self.top_id)
+                    compile(ctx, self.flags, e.clone(), &self.def.scope, self.top_id)
                 }),
                 Some(None) | None => {
                     let n: Node<R, E> = Box::new(Nop { typ: at.typ.clone() });

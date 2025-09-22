@@ -3,10 +3,11 @@ use crate::{
     defetyp, err, errf,
     expr::{Expr, ExprId},
     typ::Type,
-    update_args, wrap, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
+    update_args, wrap, CFlag, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
+use enumflags2::BitFlags;
 use netidx_value::{Typ, ValArray, Value};
 use triomphe::Arc;
 
@@ -24,14 +25,15 @@ pub(crate) struct ArrayRef<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> ArrayRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         i: &Expr,
     ) -> Result<Node<R, E>> {
-        let source = Cached::new(compile(ctx, source.clone(), scope, top_id)?);
-        let i = Cached::new(compile(ctx, i.clone(), scope, top_id)?);
+        let source = Cached::new(compile(ctx, flags, source.clone(), scope, top_id)?);
+        let i = Cached::new(compile(ctx, flags, i.clone(), scope, top_id)?);
         let etyp = match &source.node.typ() {
             Type::Array(et) => (**et).clone(),
             _ => Type::empty_tvar(),
@@ -124,6 +126,7 @@ pub(crate) struct ArraySlice<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> ArraySlice<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -131,14 +134,14 @@ impl<R: Rt, E: UserEvent> ArraySlice<R, E> {
         start: &Option<Arc<Expr>>,
         end: &Option<Arc<Expr>>,
     ) -> Result<Node<R, E>> {
-        let source = Cached::new(compile(ctx, source.clone(), scope, top_id)?);
+        let source = Cached::new(compile(ctx, flags, source.clone(), scope, top_id)?);
         let start = start
             .as_ref()
-            .map(|e| compile(ctx, (**e).clone(), scope, top_id).map(Cached::new))
+            .map(|e| compile(ctx, flags, (**e).clone(), scope, top_id).map(Cached::new))
             .transpose()?;
         let end = end
             .as_ref()
-            .map(|e| compile(ctx, (**e).clone(), scope, top_id).map(Cached::new))
+            .map(|e| compile(ctx, flags, (**e).clone(), scope, top_id).map(Cached::new))
             .transpose()?;
         let typ = Type::Set(Arc::from_iter([source.node.typ().clone(), ERR.clone()]));
         Ok(Box::new(Self { spec, typ, source, start, end }))
@@ -264,6 +267,7 @@ pub(crate) struct Array<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Array<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -271,7 +275,7 @@ impl<R: Rt, E: UserEvent> Array<R, E> {
     ) -> Result<Node<R, E>> {
         let n = args
             .iter()
-            .map(|e| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
+            .map(|e| Ok(Cached::new(compile(ctx, flags, e.clone(), scope, top_id)?)))
             .collect::<Result<_>>()?;
         let typ = Type::Array(Arc::new(Type::empty_tvar()));
         Ok(Box::new(Self { spec, typ, n }))

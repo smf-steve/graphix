@@ -3,11 +3,12 @@ use crate::{
     deref_typ,
     expr::{Expr, ExprId, ExprKind},
     typ::Type,
-    update_args, wrap, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update,
+    update_args, wrap, CFlag, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update,
     UserEvent,
 };
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
+use enumflags2::BitFlags;
 use netidx_value::{ValArray, Value};
 use smallvec::SmallVec;
 use std::iter;
@@ -24,6 +25,7 @@ pub(crate) struct Struct<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Struct<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -32,7 +34,7 @@ impl<R: Rt, E: UserEvent> Struct<R, E> {
         let names: Box<[ArcStr]> = args.iter().map(|(n, _)| ctx.tag(n)).collect();
         let n = args
             .iter()
-            .map(|(_, e)| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
+            .map(|(_, e)| Ok(Cached::new(compile(ctx, flags, e.clone(), scope, top_id)?)))
             .collect::<Result<Box<[_]>>>()?;
         let typs =
             names.iter().zip(n.iter()).map(|(n, a)| (n.clone(), a.node.typ().clone()));
@@ -121,20 +123,21 @@ pub(crate) struct StructWith<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> StructWith<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         replace: &[(ArcStr, Expr)],
     ) -> Result<Node<R, E>> {
-        let source = compile(ctx, source.clone(), scope, top_id)?;
+        let source = compile(ctx, flags, source.clone(), scope, top_id)?;
         let replace = replace
             .iter()
             .map(|(name, e)| {
                 Ok(Replace {
                     index: None,
                     name: Value::String(name.clone()),
-                    n: Cached::new(compile(ctx, e.clone(), scope, top_id)?),
+                    n: Cached::new(compile(ctx, flags, e.clone(), scope, top_id)?),
                 })
             })
             .collect::<Result<Box<[_]>>>()?;
@@ -274,13 +277,14 @@ pub(crate) struct StructRef<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> StructRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         field_name: &ArcStr,
     ) -> Result<Node<R, E>> {
-        let source = compile(ctx, source.clone(), scope, top_id)?;
+        let source = compile(ctx, flags, source.clone(), scope, top_id)?;
         let (typ, field) = match &source.typ() {
             Type::Struct(flds) => {
                 flds.iter()
@@ -384,6 +388,7 @@ pub(crate) struct Tuple<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Tuple<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -391,7 +396,7 @@ impl<R: Rt, E: UserEvent> Tuple<R, E> {
     ) -> Result<Node<R, E>> {
         let n = args
             .iter()
-            .map(|e| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
+            .map(|e| Ok(Cached::new(compile(ctx, flags, e.clone(), scope, top_id)?)))
             .collect::<Result<Box<[_]>>>()?;
         let typ = Type::Tuple(Arc::from_iter(n.iter().map(|n| n.node.typ().clone())));
         Ok(Box::new(Self { spec, typ, n }))
@@ -462,6 +467,7 @@ pub(crate) struct Variant<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Variant<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -470,7 +476,7 @@ impl<R: Rt, E: UserEvent> Variant<R, E> {
     ) -> Result<Node<R, E>> {
         let n = args
             .iter()
-            .map(|e| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
+            .map(|e| Ok(Cached::new(compile(ctx, flags, e.clone(), scope, top_id)?)))
             .collect::<Result<Box<[_]>>>()?;
         let typs = Arc::from_iter(n.iter().map(|n| n.node.typ().clone()));
         let typ = Type::Variant(tag.clone(), typs);
@@ -552,13 +558,14 @@ pub(crate) struct TupleRef<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> TupleRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         source: &Expr,
         field: &usize,
     ) -> Result<Node<R, E>> {
-        let source = compile(ctx, source.clone(), scope, top_id)?;
+        let source = compile(ctx, flags, source.clone(), scope, top_id)?;
         let field = *field;
         let typ = match &source.typ() {
             Type::Tuple(ts) => {

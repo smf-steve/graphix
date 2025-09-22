@@ -1,4 +1,4 @@
-use super::{compiler::compile, wrap_error, Cached};
+use super::{compiler::compile, wrap_error, CFlag, Cached};
 use crate::{
     defetyp,
     expr::{Expr, ExprId},
@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::{literal, ArcStr};
+use enumflags2::BitFlags;
 use netidx_value::{Typ, Value};
 use std::{collections::hash_map::Entry, fmt};
 use triomphe::Arc;
@@ -24,14 +25,15 @@ macro_rules! compare_op {
         impl<R: Rt, E: UserEvent> $name<R, E> {
             pub(crate) fn compile(
                 ctx: &mut ExecCtx<R, E>,
+                flags: BitFlags<CFlag>,
                 spec: Expr,
                 scope: &Scope,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
             ) -> Result<Node<R, E>> {
-                let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
-                let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
+                let lhs = Cached::new(compile(ctx, flags, lhs.clone(), scope, top_id)?);
+                let rhs = Cached::new(compile(ctx, flags, rhs.clone(), scope, top_id)?);
                 let typ = Type::Primitive(Typ::Bool.into());
                 Ok(Box::new(Self { spec, typ, lhs, rhs }))
             }
@@ -109,14 +111,15 @@ macro_rules! bool_op {
         impl<R: Rt, E: UserEvent> $name<R, E> {
             pub(crate) fn compile(
                 ctx: &mut ExecCtx<R, E>,
+                flags: BitFlags<CFlag>,
                 spec: Expr,
                 scope: &Scope,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
             ) -> Result<Node<R, E>> {
-                let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
-                let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
+                let lhs = Cached::new(compile(ctx, flags, lhs.clone(), scope, top_id)?);
+                let rhs = Cached::new(compile(ctx, flags, rhs.clone(), scope, top_id)?);
                 let typ = Type::Primitive(Typ::Bool.into());
                 Ok(Box::new(Self { spec, typ, lhs, rhs }))
             }
@@ -187,12 +190,13 @@ pub(crate) struct Not<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Not<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         n: &Expr,
     ) -> Result<Node<R, E>> {
-        let n = compile(ctx, n.clone(), scope, top_id)?;
+        let n = compile(ctx, flags, n.clone(), scope, top_id)?;
         let typ = Type::Primitive(Typ::Bool.into());
         Ok(Box::new(Self { spec, typ, n }))
     }
@@ -271,16 +275,34 @@ macro_rules! arith_op {
         impl<R: Rt, E: UserEvent> $name<R, E> {
             pub(crate) fn compile(
                 ctx: &mut ExecCtx<R, E>,
+                flags: BitFlags<CFlag>,
                 spec: Expr,
                 scope: &Scope,
                 top_id: ExprId,
                 lhs: &Expr,
                 rhs: &Expr
             ) -> Result<Node<R, E>> {
-                let lhs = Cached::new(compile(ctx, lhs.clone(), scope, top_id)?);
-                let rhs = Cached::new(compile(ctx, rhs.clone(), scope, top_id)?);
+                let lhs = Cached::new(compile(ctx, flags, lhs.clone(), scope, top_id)?);
+                let rhs = Cached::new(compile(ctx, flags, rhs.clone(), scope, top_id)?);
                 let typ = Type::empty_tvar();
-                let id = ctx.env.lookup_catch(&scope.dynamic).ok();
+                let id = match ctx.env.lookup_catch(&scope.dynamic).ok() {
+                    None => {
+                        if flags.contains(CFlag::WarnUnhandled | CFlag::WarningsAreErrors) {
+                            bail!(
+                                "ERROR: in {} at {} error raised by arith op will not be caught",
+                                spec.ori, spec.pos
+                            )
+                        }
+                        if flags.contains(CFlag::WarnUnhandled) {
+                            eprintln!(
+                                "WARNING: in {} at {} error raised by arith op will not be caught",
+                                spec.ori, spec.pos
+                            );
+                        }
+                        None
+                    }
+                    o => o,
+                };
                 Ok(Box::new(Self { spec, id, typ, lhs, rhs }))
             }
         }

@@ -3,10 +3,11 @@ use crate::{
     expr::{ExprId, Pattern, StructurePattern},
     node::{compiler, Cached},
     typ::Type,
-    BindId, Event, ExecCtx, Rt, Scope, UserEvent,
+    BindId, CFlag, Event, ExecCtx, Rt, Scope, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
+use enumflags2::BitFlags;
 use netidx::{publisher::Typ, subscriber::Value};
 use smallvec::SmallVec;
 use std::fmt::Debug;
@@ -589,6 +590,7 @@ pub(crate) struct PatternNode<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> PatternNode<R, E> {
     pub(super) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         arg_type: &Type,
         spec: &Pattern,
         scope: &Scope,
@@ -633,7 +635,7 @@ impl<R: Rt, E: UserEvent> PatternNode<R, E> {
         let guard = spec
             .guard
             .as_ref()
-            .map(|g| compiler::compile(ctx, g.clone(), &scope, top_id))
+            .map(|g| compiler::compile(ctx, flags, g.clone(), &scope, top_id))
             .transpose()?
             .map(Cached::new);
         Ok(PatternNode {

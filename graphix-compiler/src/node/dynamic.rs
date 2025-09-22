@@ -8,11 +8,12 @@ use crate::{
     },
     node::{Bind, Block},
     typ::Type,
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
+    wrap, BindId, CFlag, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use compact_str::CompactString;
+use enumflags2::BitFlags;
 use fxhash::{FxHashMap, FxHashSet};
 use netidx_value::{Typ, Value};
 use poolshark::local::LPooled;
@@ -141,6 +142,7 @@ static TYP: LazyLock<Type> = LazyLock::new(|| {
 #[derive(Debug)]
 pub(super) struct DynamicModule<R: Rt, E: UserEvent> {
     spec: Expr,
+    flags: BitFlags<CFlag>,
     source: Node<R, E>,
     env: Env<R, E>,
     sig: Sig,
@@ -153,6 +155,7 @@ pub(super) struct DynamicModule<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> DynamicModule<R, E> {
     pub(super) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         sandbox: Sandbox,
@@ -160,11 +163,12 @@ impl<R: Rt, E: UserEvent> DynamicModule<R, E> {
         source: Arc<Expr>,
         top_id: ExprId,
     ) -> Result<Node<R, E>> {
-        let source = compile(ctx, (*source).clone(), scope, top_id)?;
+        let source = compile(ctx, flags, (*source).clone(), scope, top_id)?;
         let env = ctx.env.apply_sandbox(&sandbox).context("applying sandbox")?;
         bind_sig(&mut ctx.env, &scope, &sig).context("binding module signature")?;
         Ok(Box::new(Self {
             spec,
+            flags,
             env,
             sig,
             source,
@@ -182,7 +186,7 @@ impl<R: Rt, E: UserEvent> DynamicModule<R, E> {
         let nodes = ctx.with_restored(self.env.clone(), |ctx| -> Result<_> {
             let mut nodes = exprs
                 .iter()
-                .map(|e| compile(ctx, e.clone(), &self.scope, self.top_id))
+                .map(|e| compile(ctx, self.flags, e.clone(), &self.scope, self.top_id))
                 .collect::<Result<Vec<_>>>()?;
             for n in &mut nodes {
                 n.typecheck(ctx)?

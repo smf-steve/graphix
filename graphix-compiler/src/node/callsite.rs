@@ -3,12 +3,13 @@ use crate::{
     env::LambdaDef,
     expr::{Expr, ExprId},
     typ::{FnArgType, FnType, TVar, Type},
-    wrap, Apply, BindId, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope, Update,
+    wrap, Apply, BindId, CFlag, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope, Update,
     UserEvent,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
 use compact_str::CompactString;
+use enumflags2::BitFlags;
 use fxhash::FxHashMap;
 use netidx::subscriber::Value;
 use poolshark::local::LPooled;
@@ -46,6 +47,7 @@ fn check_extra_named(named: &FxHashMap<ArcStr, Expr>) -> Result<()> {
 
 fn compile_apply_args<R: Rt, E: UserEvent>(
     ctx: &mut ExecCtx<R, E>,
+    flags: BitFlags<CFlag>,
     scope: &Scope,
     top_id: ExprId,
     typ: &FnType,
@@ -60,7 +62,7 @@ fn compile_apply_args<R: Rt, E: UserEvent>(
             None => break,
             Some((n, optional)) => match named.remove(n) {
                 Some(e) => {
-                    nodes.push(compile(ctx, e, scope, top_id)?);
+                    nodes.push(compile(ctx, flags, e, scope, top_id)?);
                     arg_spec.insert(n.clone(), false);
                 }
                 None if !optional => bail!("missing required argument {n}"),
@@ -74,7 +76,7 @@ fn compile_apply_args<R: Rt, E: UserEvent>(
     check_extra_named(&named)?;
     for (name, e) in args.iter() {
         if name.is_none() {
-            nodes.push(compile(ctx, e.clone(), scope, top_id)?);
+            nodes.push(compile(ctx, flags, e.clone(), scope, top_id)?);
         }
     }
     if nodes.len() < typ.args.len() {
@@ -98,13 +100,14 @@ pub(crate) struct CallSite<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> CallSite<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         args: &TArc<[(Option<ArcStr>, Expr)]>,
         f: &TArc<Expr>,
     ) -> Result<Node<R, E>> {
-        let fnode = compile(ctx, (**f).clone(), scope, top_id)?;
+        let fnode = compile(ctx, flags, (**f).clone(), scope, top_id)?;
         let ftype = match fnode.typ().with_deref(|t| t.cloned()) {
             Some(Type::Fn(ftype)) => {
                 let ft = ftype.reset_tvars();
@@ -116,8 +119,9 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
             }
         };
         ftype.unbind_tvars(); // make sure patterns compile properly
-        let (args, arg_spec) = compile_apply_args(ctx, scope, top_id, &ftype, &args)
-            .with_context(|| format!("in apply at {}", spec.pos))?;
+        let (args, arg_spec) =
+            compile_apply_args(ctx, flags, scope, top_id, &ftype, &args)
+                .with_context(|| format!("in apply at {}", spec.pos))?;
         let spec = TArc::new(spec);
         let site = Self {
             spec,
@@ -149,7 +153,13 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
                             dynamic: scope.dynamic.clone(),
                             lexical: $f.scope.lexical.clone(),
                         };
-                        let n = compile(ctx, expr.clone(), &scope, self.top_id)?;
+                        let n = compile(
+                            ctx,
+                            BitFlags::empty(),
+                            expr.clone(),
+                            &scope,
+                            self.top_id,
+                        )?;
                         let mut refs = Refs::default();
                         n.refs(&mut refs);
                         refs.with_external_refs(|id| {

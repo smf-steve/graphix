@@ -4,7 +4,7 @@ use crate::{
     format_with_flags,
     node::pattern::PatternNode,
     typ::Type,
-    BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update, UserEvent,
+    BindId, CFlag, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use compact_str::format_compact;
@@ -28,24 +28,25 @@ pub(crate) struct Select<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Select<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         arg: &Expr,
         arms: &[(Pattern, Expr)],
     ) -> Result<Node<R, E>> {
-        let arg = Cached::new(compile(ctx, arg.clone(), scope, top_id)?);
+        let arg = Cached::new(compile(ctx, flags, arg.clone(), scope, top_id)?);
         let mut atype = arg.node.typ().clone();
         let arms = arms
             .iter()
             .map(|(pat, spec)| {
                 let scope = scope.append(&format_compact!("sel{}", SelectId::new().0));
-                let pat = PatternNode::compile(ctx, &atype, pat, &scope, top_id)
+                let pat = PatternNode::compile(ctx, flags, &atype, pat, &scope, top_id)
                     .with_context(|| format!("in select at {}", spec.pos))?;
                 if !pat.guard.is_some() && !pat.structure_predicate.is_refutable() {
                     atype = atype.diff(&ctx.env, &pat.type_predicate)?;
                 }
-                let n = Cached::new(compile(ctx, spec.clone(), &scope, top_id)?);
+                let n = Cached::new(compile(ctx, flags, spec.clone(), &scope, top_id)?);
                 Ok((pat, n))
             })
             .collect::<Result<SmallVec<_>>>()

@@ -3,7 +3,8 @@ use crate::{
     expr::{self, Expr, ExprId, ExprKind, ModPath},
     format_with_flags,
     typ::{TVal, TVar, Type},
-    wrap, BindId, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update, UserEvent,
+    wrap, BindId, CFlag, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update,
+    UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::{literal, ArcStr};
@@ -337,6 +338,7 @@ pub(crate) struct Block<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Block<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -345,7 +347,7 @@ impl<R: Rt, E: UserEvent> Block<R, E> {
     ) -> Result<Node<R, E>> {
         let children = exprs
             .iter()
-            .map(|e| compile(ctx, e.clone(), scope, top_id))
+            .map(|e| compile(ctx, flags, e.clone(), scope, top_id))
             .collect::<Result<Box<[Node<R, E>]>>>()?;
         Ok(Box::new(Self { module, spec, children }))
     }
@@ -406,6 +408,7 @@ pub(crate) struct Bind<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Bind<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -426,7 +429,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
             };
             let pattern = StructPatternNode::compile(ctx, &typ, pattern, scope)
                 .with_context(|| format!("at {}", spec.pos))?;
-            let node = compile(ctx, value.clone(), &scope, top_id)?;
+            let node = compile(ctx, flags, value.clone(), &scope, top_id)?;
             let ntyp = node.typ();
             if !typ.contains(&ctx.env, ntyp)? {
                 format_with_flags(PrintFlag::DerefTVars, || {
@@ -435,7 +438,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
             }
             (node, pattern, typ)
         } else {
-            let node = compile(ctx, value.clone(), &scope, top_id)?;
+            let node = compile(ctx, flags, value.clone(), &scope, top_id)?;
             let typ = match typ {
                 Some(typ) => typ.scope_refs(&scope.lexical),
                 None => {
@@ -603,6 +606,7 @@ pub(crate) struct StringInterpolate<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> StringInterpolate<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -610,7 +614,7 @@ impl<R: Rt, E: UserEvent> StringInterpolate<R, E> {
     ) -> Result<Node<R, E>> {
         let args: Box<[Cached<R, E>]> = args
             .iter()
-            .map(|e| Ok(Cached::new(compile(ctx, e.clone(), scope, top_id)?)))
+            .map(|e| Ok(Cached::new(compile(ctx, flags, e.clone(), scope, top_id)?)))
             .collect::<Result<_>>()?;
         let typs = args.iter().map(|c| c.node.typ().clone()).collect();
         let typ = Type::Primitive(Typ::String.into());
@@ -690,6 +694,7 @@ pub(crate) struct Connect<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Connect<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -700,7 +705,7 @@ impl<R: Rt, E: UserEvent> Connect<R, E> {
             None => bail!("at {} {name} is undefined", spec.pos),
             Some((_, env::Bind { id, .. })) => *id,
         };
-        let node = compile(ctx, value.clone(), scope, top_id)?;
+        let node = compile(ctx, flags, value.clone(), scope, top_id)?;
         Ok(Box::new(Self { spec, node, id }))
     }
 }
@@ -755,6 +760,7 @@ pub(crate) struct ConnectDeref<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> ConnectDeref<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -766,7 +772,7 @@ impl<R: Rt, E: UserEvent> ConnectDeref<R, E> {
             Some((_, env::Bind { id, .. })) => *id,
         };
         ctx.rt.ref_var(src_id, top_id);
-        let rhs = Cached::new(compile(ctx, value.clone(), scope, top_id)?);
+        let rhs = Cached::new(compile(ctx, flags, value.clone(), scope, top_id)?);
         Ok(Box::new(Self { spec, rhs, src_id, target_id: None, top_id }))
     }
 }
@@ -834,12 +840,13 @@ pub(crate) struct ByRef<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> ByRef<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         expr: &Expr,
     ) -> Result<Node<R, E>> {
-        let child = compile(ctx, expr.clone(), scope, top_id)?;
+        let child = compile(ctx, flags, expr.clone(), scope, top_id)?;
         let id = BindId::new();
         if let Some(c) = (&*child as &dyn std::any::Any).downcast_ref::<Ref>() {
             ctx.env.byref_chain.insert_cow(id, c.id);
@@ -901,12 +908,13 @@ pub(crate) struct Deref<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Deref<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         expr: &Expr,
     ) -> Result<Node<R, E>> {
-        let child = compile(ctx, expr.clone(), scope, top_id)?;
+        let child = compile(ctx, flags, expr.clone(), scope, top_id)?;
         let typ = Type::empty_tvar();
         Ok(Box::new(Self { spec, typ, child, id: None, top_id }))
     }
@@ -1012,18 +1020,28 @@ pub(crate) struct Qop<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Qop<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         e: &Expr,
     ) -> Result<Node<R, E>> {
-        let n = compile(ctx, e.clone(), scope, top_id)?;
+        let n = compile(ctx, flags, e.clone(), scope, top_id)?;
         let id = match ctx.env.lookup_catch(&scope.dynamic).ok() {
             None => {
-                eprintln!(
-                    "WARNING: in {} at {} error raised by ? will not be caught",
-                    spec.ori, spec.pos
-                );
+                if flags.contains(CFlag::WarnUnhandled | CFlag::WarningsAreErrors) {
+                    bail!(
+                        "ERROR: in {} at {} error raised by ? will not be caught",
+                        spec.ori,
+                        spec.pos
+                    )
+                }
+                if flags.contains(CFlag::WarnUnhandled) {
+                    eprintln!(
+                        "WARNING: in {} at {} error raised by ? will not be caught",
+                        spec.ori, spec.pos
+                    );
+                }
                 None
             }
             o => o,
@@ -1168,13 +1186,14 @@ pub(crate) struct TypeCast<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> TypeCast<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
         expr: &Expr,
         typ: &Type,
     ) -> Result<Node<R, E>> {
-        let n = compile(ctx, expr.clone(), scope, top_id)?;
+        let n = compile(ctx, flags, expr.clone(), scope, top_id)?;
         let target = typ.scope_refs(&scope.lexical);
         if let Err(e) = target.check_cast(&ctx.env) {
             bail!("in cast at {} {e}", spec.pos);
@@ -1224,6 +1243,7 @@ pub(crate) struct Any<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Any<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -1231,7 +1251,7 @@ impl<R: Rt, E: UserEvent> Any<R, E> {
     ) -> Result<Node<R, E>> {
         let n = args
             .iter()
-            .map(|e| compile(ctx, e.clone(), scope, top_id))
+            .map(|e| compile(ctx, flags, e.clone(), scope, top_id))
             .collect::<Result<Box<[_]>>>()?;
         let typ =
             Type::Set(Arc::from_iter(n.iter().map(|n| n.typ().clone()))).normalize();
@@ -1294,6 +1314,7 @@ struct Sample<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> Sample<R, E> {
     pub(crate) fn compile(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -1302,8 +1323,8 @@ impl<R: Rt, E: UserEvent> Sample<R, E> {
     ) -> Result<Node<R, E>> {
         let id = BindId::new();
         ctx.rt.ref_var(id, top_id);
-        let trigger = compile(ctx, (**lhs).clone(), scope, top_id)?;
-        let arg = Cached::new(compile(ctx, (**rhs).clone(), scope, top_id)?);
+        let trigger = compile(ctx, flags, (**lhs).clone(), scope, top_id)?;
+        let arg = Cached::new(compile(ctx, flags, (**rhs).clone(), scope, top_id)?);
         let typ = arg.node.typ().clone();
         Ok(Box::new(Self { triggered: 0, id, top_id, spec, typ, trigger, arg }))
     }
@@ -1373,6 +1394,7 @@ pub(crate) struct TryCatch<R: Rt, E: UserEvent> {
 impl<R: Rt, E: UserEvent> TryCatch<R, E> {
     pub(crate) fn new(
         ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
         spec: Expr,
         scope: &Scope,
         top_id: ExprId,
@@ -1392,12 +1414,12 @@ impl<R: Rt, E: UserEvent> TryCatch<R, E> {
             _ => unreachable!(),
         }
         let id = ctx.env.bind_variable(&catch_scope.lexical, &tc.bind, typ).id;
-        let handler = compile(ctx, (*tc.handler).clone(), &catch_scope, top_id)?;
+        let handler = compile(ctx, flags, (*tc.handler).clone(), &catch_scope, top_id)?;
         ctx.env.catch.insert_cow(inner_scope.dynamic.clone(), id);
         let nodes = tc
             .exprs
             .iter()
-            .map(|e| compile(ctx, e.clone(), &inner_scope, top_id))
+            .map(|e| compile(ctx, flags, e.clone(), &inner_scope, top_id))
             .collect::<Result<LPooled<Vec<_>>>>()?;
         let typ =
             nodes.last().ok_or_else(|| anyhow!("empty try catch block"))?.typ().clone();

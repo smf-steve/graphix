@@ -9,11 +9,12 @@ use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
 use core::fmt;
 use derive_builder::Builder;
+use enumflags2::BitFlags;
 use graphix_compiler::{
     env::Env,
     expr::{ExprId, ModuleResolver},
     typ::{FnType, Type},
-    BindId, Event, ExecCtx, NoUserEvent, UserEvent,
+    BindId, CFlag, Event, ExecCtx, NoUserEvent, UserEvent,
 };
 use log::error;
 use netidx::{
@@ -389,6 +390,8 @@ pub struct GXConfig<X: GXExt> {
     resolvers: Vec<ModuleResolver>,
     /// The channel that will receive events from the runtime
     sub: tmpsc::Sender<GPooled<Vec<GXEvent<X>>>>,
+    /// The set of compiler flags
+    flags: BitFlags<CFlag>,
 }
 
 impl<X: GXExt> GXConfig<X> {

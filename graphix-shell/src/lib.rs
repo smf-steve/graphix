@@ -6,7 +6,7 @@ use graphix_compiler::{
     expr::{ExprId, ModPath, ModuleResolver},
     format_with_flags,
     typ::{TVal, Type},
-    ExecCtx, PrintFlag,
+    CFlag, ExecCtx, PrintFlag,
 };
 use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXEvent, GXExt, GXHandle, GXRt};
 use graphix_stdlib::Module;
@@ -201,6 +201,9 @@ impl<X: GXExt> Shell<X> {
         }
         if let Some(s) = self.resolve_timeout {
             gx = gx.resolve_timeout(s);
+        }
+        if let Mode::File(_) = &self.mode {
+            gx = gx.flags(CFlag::WarnUnhandled.into());
         }
         Ok(gx
             .root(root)

@@ -1,6 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::{literal, ArcStr};
 use combine::stream::position::SourcePosition;
+use enumflags2::BitFlags;
 use futures::{channel::mpsc, future::try_join_all, StreamExt};
 use fxhash::{FxBuildHasher, FxHashMap};
 use graphix_compiler::{
@@ -10,7 +11,7 @@ use graphix_compiler::{
     },
     node::genn,
     typ::Type,
-    BindId, Event, ExecCtx, LambdaId, Node, Refs, Scope,
+    BindId, CFlag, Event, ExecCtx, LambdaId, Node, Refs, Scope,
 };
 use indexmap::IndexMap;
 use log::{debug, error, info};
@@ -107,6 +108,7 @@ pub(super) struct GX<X: GXExt> {
     publish_timeout: Option<Duration>,
     last_rpc_gc: Instant,
     batch_pool: Pool<Vec<GXEvent<X>>>,
+    flags: BitFlags<CFlag>,
 }
 
 impl<X: GXExt> GX<X> {
@@ -143,10 +145,11 @@ impl<X: GXExt> GX<X> {
             publish_timeout: cfg.publish_timeout,
             last_rpc_gc: Instant::now(),
             batch_pool: Pool::new(10, 1000000),
+            flags: cfg.flags,
         };
         let st = Instant::now();
         if let Some(root) = cfg.root {
-            t.compile_root(root).await?;
+            t.compile_root(cfg.flags, root).await?;
         }
         info!("root init time: {:?}", st.elapsed());
         Ok(t)
@@ -318,7 +321,7 @@ impl<X: GXExt> GX<X> {
             || self.ctx.rt.ext.is_ready()
     }
 
-    async fn compile_root(&mut self, text: ArcStr) -> Result<()> {
+    async fn compile_root(&mut self, flags: BitFlags<CFlag>, text: ArcStr) -> Result<()> {
         let scope = Scope::root();
         let ori = Origin { parent: None, source: Source::Unspecified, text };
         let exprs =
@@ -330,7 +333,7 @@ impl<X: GXExt> GX<X> {
         let nodes = exprs
             .iter()
             .map(|e| {
-                compile(&mut self.ctx, &scope, e.clone())
+                compile(&mut self.ctx, flags, &scope, e.clone())
                     .with_context(|| format!("compiling root expression {e}"))
             })
             .collect::<Result<SmallVec<[_; 4]>>>()
@@ -352,7 +355,7 @@ impl<X: GXExt> GX<X> {
                 .context(CouldNotResolve)?;
         let nodes = exprs
             .iter()
-            .map(|e| compile(&mut self.ctx, &scope, e.clone()))
+            .map(|e| compile(&mut self.ctx, self.flags, &scope, e.clone()))
             .collect::<Result<SmallVec<[_; 4]>>>()
             .with_context(|| ori.clone())?;
         let exprs = exprs
@@ -443,8 +446,8 @@ impl<X: GXExt> GX<X> {
         let mut res = smallvec![];
         for e in exprs.iter() {
             let top_id = e.id;
-            let n =
-                compile(&mut self.ctx, &scope, e.clone()).with_context(|| ori.clone())?;
+            let n = compile(&mut self.ctx, self.flags, &scope, e.clone())
+                .with_context(|| ori.clone())?;
             let has_out = is_output(&n);
             let typ = n.typ().clone();
             self.nodes.insert(top_id, n);
