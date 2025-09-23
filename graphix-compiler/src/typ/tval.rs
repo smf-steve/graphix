@@ -63,6 +63,19 @@ impl<'a, R: Rt, E: UserEvent> TVal<'a, R, E> {
                 write!(f, "]")
             }
             (Type::Array(_), v) => write!(f, "{}", NakedValue(v)),
+            (Type::Map { key, value }, Value::Map(m)) => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in m.into_iter().enumerate() {
+                    Self { typ: key, env: self.env, v: k }.fmt_int(f, hist)?;
+                    write!(f, " => ")?;
+                    Self { typ: value, env: self.env, v: v }.fmt_int(f, hist)?;
+                    if i < m.len() - 1 {
+                        write!(f, ", ")?
+                    }
+                }
+                write!(f, "}}")
+            }
+            (Type::Map { .. }, v) => write!(f, "{}", NakedValue(v)),
             (Type::ByRef(_), v) => write!(f, "{}", NakedValue(v)),
             (Type::Struct(flds), Value::Array(a)) => {
                 write!(f, "{{")?;

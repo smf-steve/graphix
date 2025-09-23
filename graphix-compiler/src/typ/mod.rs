@@ -6,6 +6,7 @@ use arcstr::ArcStr;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 use fxhash::{FxHashMap, FxHashSet};
+use immutable_chunkmap::map::Map;
 use netidx::{
     publisher::{Typ, Value},
     utils::Either,
@@ -61,6 +62,7 @@ pub enum Type {
     Tuple(Arc<[Type]>),
     Struct(Arc<[(ArcStr, Type)]>),
     Variant(ArcStr, Arc<[Type]>),
+    Map { key: Arc<Type>, value: Arc<Type> },
 }
 
 impl Default for Type {
@@ -95,9 +97,10 @@ impl Type {
             | Self::ByRef(_)
             | Self::Tuple(_)
             | Self::Struct(_)
-            | Self::Variant(_, _) => true,
+            | Self::Variant(_, _)
+            | Self::Ref { .. }
+            | Self::Map { .. } => true,
             Self::TVar(tv) => tv.read().typ.read().is_some(),
-            Self::Ref { .. } => true,
         }
     }
 
@@ -213,6 +216,17 @@ impl Type {
             (Self::Array(t0), Self::Array(t1)) => t0.contains_int(flags, env, hist, t1),
             (Self::Array(t0), Self::Primitive(p)) if *p == BitFlags::from(Typ::Array) => {
                 t0.contains_int(flags, env, hist, &Type::Any)
+            }
+            (Self::Map { key: k0, value: v0 }, Self::Map { key: k1, value: v1 }) => {
+                Ok(k0.contains_int(flags, env, hist, k1)?
+                    && v0.contains_int(flags, env, hist, v1)?)
+            }
+            (Self::Primitive(p), Self::Map { .. }) => Ok(p.contains(Typ::Map)),
+            (Self::Map { key, value }, Self::Primitive(p))
+                if *p == BitFlags::from(Typ::Map) =>
+            {
+                Ok(key.contains_int(flags, env, hist, &Type::Any)?
+                    && value.contains_int(flags, env, hist, &Type::Any)?)
             }
             (Self::Primitive(p0), Self::Error(_)) => Ok(p0.contains(Typ::Error)),
             (Self::Error(e), Self::Primitive(p)) if *p == BitFlags::from(Typ::Error) => {
@@ -389,26 +403,37 @@ impl Type {
             | (Self::Tuple(_), Self::Struct(_))
             | (Self::Tuple(_), Self::Variant(_, _))
             | (Self::Tuple(_), Self::Error(_))
+            | (Self::Tuple(_), Self::Map { .. })
             | (Self::Array(_), Self::Primitive(_))
             | (Self::Array(_), Self::Tuple(_))
             | (Self::Array(_), Self::Struct(_))
             | (Self::Array(_), Self::Variant(_, _))
             | (Self::Array(_), Self::Error(_))
+            | (Self::Array(_), Self::Map { .. })
             | (Self::Struct(_), Self::Array(_))
             | (Self::Struct(_), Self::Primitive(_))
             | (Self::Struct(_), Self::Tuple(_))
             | (Self::Struct(_), Self::Variant(_, _))
             | (Self::Struct(_), Self::Error(_))
+            | (Self::Struct(_), Self::Map { .. })
             | (Self::Variant(_, _), Self::Array(_))
             | (Self::Variant(_, _), Self::Struct(_))
             | (Self::Variant(_, _), Self::Primitive(_))
             | (Self::Variant(_, _), Self::Tuple(_))
             | (Self::Variant(_, _), Self::Error(_))
+            | (Self::Variant(_, _), Self::Map { .. })
             | (Self::Error(_), Self::Array(_))
             | (Self::Error(_), Self::Primitive(_))
             | (Self::Error(_), Self::Struct(_))
             | (Self::Error(_), Self::Variant(_, _))
-            | (Self::Error(_), Self::Tuple(_)) => Ok(false),
+            | (Self::Error(_), Self::Tuple(_))
+            | (Self::Error(_), Self::Map { .. })
+            | (Self::Map { .. }, Self::Array(_))
+            | (Self::Map { .. }, Self::Primitive(_))
+            | (Self::Map { .. }, Self::Struct(_))
+            | (Self::Map { .. }, Self::Variant(_, _))
+            | (Self::Map { .. }, Self::Tuple(_))
+            | (Self::Map { .. }, Self::Error(_)) => Ok(false),
         }
     }
 
@@ -486,6 +511,11 @@ impl Type {
             (Type::Error(t0), Type::Error(t1)) => t0.could_match_int(env, hist, t1),
             (Type::Array(t0), Type::Array(t1)) => t0.could_match_int(env, hist, t1),
             (Type::Primitive(p), Type::Array(_)) => Ok(p.contains(Typ::Array)),
+            (Type::Map { key: k0, value: v0 }, Type::Map { key: k1, value: v1 }) => {
+                Ok(k0.could_match_int(env, hist, k1)?
+                    && v0.could_match_int(env, hist, v1)?)
+            }
+            (Type::Primitive(p), Type::Map { .. }) => Ok(p.contains(Typ::Map)),
             (Type::Tuple(ts0), Type::Tuple(ts1)) => Ok(ts0.len() == ts1.len()
                 && ts0
                     .iter()
@@ -550,7 +580,9 @@ impl Type {
             | (Type::ByRef(_), _)
             | (_, Type::ByRef(_))
             | (Type::Array(_), _)
-            | (_, Type::Array(_)) => Ok(false),
+            | (_, Type::Array(_))
+            | (_, Type::Map { .. })
+            | (Type::Map { .. }, _) => Ok(false),
         }
     }
 
@@ -636,8 +668,34 @@ impl Type {
                 if t0 == t1 {
                     Ok(Type::Array(t0.clone()))
                 } else {
-                    Ok(Type::Set(Arc::from_iter([u.clone(), t.clone()])))
+                    Ok(Type::Set(Arc::from_iter([t.clone(), u.clone()])))
                 }
+            }
+            (Type::Primitive(p), Type::Map { .. })
+            | (Type::Map { .. }, Type::Primitive(p))
+                if p.contains(Typ::Map) =>
+            {
+                Ok(Type::Primitive(*p))
+            }
+            (Type::Primitive(p), Type::Map { key, value })
+            | (Type::Map { key, value }, Type::Primitive(p)) => {
+                Ok(Type::Set(Arc::from_iter([
+                    Type::Primitive(*p),
+                    Type::Map { key: key.clone(), value: value.clone() },
+                ])))
+            }
+            (
+                t @ Type::Map { key: k0, value: v0 },
+                u @ Type::Map { key: k1, value: v1 },
+            ) => {
+                if k0 == k1 && v0 == v1 {
+                    Ok(Type::Map { key: k0.clone(), value: v0.clone() })
+                } else {
+                    Ok(Type::Set(Arc::from_iter([t.clone(), u.clone()])))
+                }
+            }
+            (t @ Type::Map { .. }, u) | (u, t @ Type::Map { .. }) => {
+                Ok(Type::Set(Arc::from_iter([t.clone(), u.clone()])))
             }
             (Type::Primitive(p), Type::Error(_))
             | (Type::Error(_), Type::Primitive(p))
@@ -782,6 +840,29 @@ impl Type {
                     Ok(self.clone())
                 }
             }
+            (Type::Map { key: k0, value: v0 }, Type::Map { key: k1, value: v1 }) => {
+                if k0 == k1 && v0 == v1 {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(self.clone())
+                }
+            }
+            (Type::Map { .. }, Type::Primitive(p)) => {
+                if p.contains(Typ::Map) {
+                    Ok(Type::Primitive(BitFlags::empty()))
+                } else {
+                    Ok(self.clone())
+                }
+            }
+            (Type::Primitive(p), Type::Map { key, value }) => {
+                if **key == Type::Any && **value == Type::Any {
+                    let mut p = *p;
+                    p.remove(Typ::Map);
+                    Ok(Type::Primitive(p))
+                } else {
+                    Ok(Type::Primitive(*p))
+                }
+            }
             (Type::Fn(f0), Type::Fn(f1)) => {
                 if f0 == f1 {
                     Ok(Type::Primitive(BitFlags::empty()))
@@ -908,7 +989,8 @@ impl Type {
             | (_, Type::Error(_))
             | (Type::Primitive(_), _)
             | (_, Type::Primitive(_))
-            | (Type::Bottom, _) => Ok(self.clone()),
+            | (Type::Bottom, _)
+            | (Type::Map { .. }, _) => Ok(self.clone()),
         }
     }
 
@@ -947,6 +1029,10 @@ impl Type {
             }
             Type::Error(t) => t.alias_tvars(known),
             Type::Array(t) => t.alias_tvars(known),
+            Type::Map { key, value } => {
+                key.alias_tvars(known);
+                value.alias_tvars(known);
+            }
             Type::ByRef(t) => t.alias_tvars(known),
             Type::Tuple(ts) => {
                 for t in ts.iter() {
@@ -993,6 +1079,10 @@ impl Type {
             }
             Type::Error(t) => t.collect_tvars(known),
             Type::Array(t) => t.collect_tvars(known),
+            Type::Map { key, value } => {
+                key.collect_tvars(known);
+                value.collect_tvars(known);
+            }
             Type::ByRef(t) => t.collect_tvars(known),
             Type::Tuple(ts) => {
                 for t in ts.iter() {
@@ -1033,6 +1123,10 @@ impl Type {
             }
             Type::Error(t) => t.check_tvars_declared(declared),
             Type::Array(t) => t.check_tvars_declared(declared),
+            Type::Map { key, value } => {
+                key.check_tvars_declared(declared);
+                value.check_tvars_declared(declared)
+            }
             Type::ByRef(t) => t.check_tvars_declared(declared),
             Type::Tuple(ts) => {
                 ts.iter().try_for_each(|t| t.check_tvars_declared(declared))
@@ -1061,6 +1155,7 @@ impl Type {
             Type::Ref { .. } => false,
             Type::Error(e) => e.has_unbound(),
             Type::Array(t0) => t0.has_unbound(),
+            Type::Map { key, value } => key.has_unbound() || value.has_unbound(),
             Type::ByRef(t0) => t0.has_unbound(),
             Type::Tuple(ts) => ts.iter().any(|t| t.has_unbound()),
             Type::Struct(ts) => ts.iter().any(|(_, t)| t.has_unbound()),
@@ -1078,6 +1173,10 @@ impl Type {
             Type::Ref { .. } => (),
             Type::Error(t0) => t0.bind_as(t),
             Type::Array(t0) => t0.bind_as(t),
+            Type::Map { key, value } => {
+                key.bind_as(t);
+                value.bind_as(t);
+            }
             Type::ByRef(t0) => t0.bind_as(t),
             Type::Tuple(ts) => {
                 for elt in ts.iter() {
@@ -1124,6 +1223,11 @@ impl Type {
             },
             Type::Error(t0) => Type::Error(Arc::new(t0.reset_tvars())),
             Type::Array(t0) => Type::Array(Arc::new(t0.reset_tvars())),
+            Type::Map { key, value } => {
+                let key = Arc::new(key.reset_tvars());
+                let value = Arc::new(value.reset_tvars());
+                Type::Map { key, value }
+            }
             Type::ByRef(t0) => Type::ByRef(Arc::new(t0.reset_tvars())),
             Type::Tuple(ts) => {
                 Type::Tuple(Arc::from_iter(ts.iter().map(|t| t.reset_tvars())))
@@ -1159,6 +1263,11 @@ impl Type {
             },
             Type::Error(t0) => Type::Error(Arc::new(t0.replace_tvars(known))),
             Type::Array(t0) => Type::Array(Arc::new(t0.replace_tvars(known))),
+            Type::Map { key, value } => {
+                let key = Arc::new(key.replace_tvars(known));
+                let value = Arc::new(value.replace_tvars(known));
+                Type::Map { key, value }
+            }
             Type::ByRef(t0) => Type::ByRef(Arc::new(t0.replace_tvars(known))),
             Type::Tuple(ts) => {
                 Type::Tuple(Arc::from_iter(ts.iter().map(|t| t.replace_tvars(known))))
@@ -1216,6 +1325,7 @@ impl Type {
                 }
             }
             Type::Array(_)
+            | Type::Map { .. }
             | Type::ByRef(_)
             | Type::Tuple(_)
             | Type::Struct(_)
@@ -1238,6 +1348,10 @@ impl Type {
             Type::Bottom | Type::Any | Type::Primitive(_) | Type::Ref { .. } => (),
             Type::Error(t0) => t0.unbind_tvars(),
             Type::Array(t0) => t0.unbind_tvars(),
+            Type::Map { key, value } => {
+                key.unbind_tvars();
+                value.unbind_tvars();
+            }
             Type::ByRef(t0) => t0.unbind_tvars(),
             Type::Tuple(ts) | Type::Variant(_, ts) | Type::Set(ts) => {
                 for t in ts.iter() {
@@ -1272,6 +1386,10 @@ impl Type {
             },
             Type::Error(e) => e.check_cast_int(env, hist),
             Type::Array(et) => et.check_cast_int(env, hist),
+            Type::Map { key, value } => {
+                key.check_cast_int(env, hist)?;
+                value.check_cast_int(env, hist)
+            }
             Type::ByRef(_) => bail!("can't cast a reference"),
             Type::Tuple(ts) => Ok(for t in ts.iter() {
                 t.check_cast_int(env, hist)?
@@ -1326,13 +1444,41 @@ impl Type {
             }
             Type::Array(et) => match v {
                 Value::Array(elts) => {
-                    let va = elts
+                    let mut va = elts
                         .iter()
                         .map(|el| et.cast_value_int(env, hist, el.clone()))
-                        .collect::<Result<SmallVec<[Value; 8]>>>()?;
-                    Ok(Value::Array(ValArray::from_iter_exact(va.into_iter())))
+                        .collect::<Result<LPooled<Vec<Value>>>>()?;
+                    Ok(Value::Array(ValArray::from_iter_exact(va.drain(..))))
                 }
                 v => Ok(Value::Array([et.cast_value_int(env, hist, v)?].into())),
+            },
+            Type::Map { key, value } => match v {
+                Value::Map(m) => {
+                    let mut m = m
+                        .into_iter()
+                        .map(|(k, v)| {
+                            Ok((
+                                key.cast_value_int(env, hist, k.clone())?,
+                                value.cast_value_int(env, hist, v.clone())?,
+                            ))
+                        })
+                        .collect::<Result<LPooled<Vec<(Value, Value)>>>>()?;
+                    Ok(Value::Map(Map::from_iter(m.drain(..))))
+                }
+                Value::Array(a) => {
+                    let mut m = a
+                        .iter()
+                        .map(|a| match a {
+                            Value::Array(a) if a.len() == 2 => Ok((
+                                key.cast_value_int(env, hist, a[0].clone())?,
+                                value.cast_value_int(env, hist, a[1].clone())?,
+                            )),
+                            _ => bail!("expected an array of pairs"),
+                        })
+                        .collect::<Result<LPooled<Vec<(Value, Value)>>>>()?;
+                    Ok(Value::Map(Map::from_iter(m.drain(..))))
+                }
+                _ => bail!("can't cast {v} to {self}"),
             },
             Type::Tuple(ts) => match v {
                 Value::Array(elts) => {
@@ -1493,6 +1639,12 @@ impl Type {
                 Value::Array(a) => a.iter().all(|v| et.is_a_int(env, hist, v)),
                 _ => false,
             },
+            Type::Map { key, value } => match v {
+                Value::Map(m) => m.into_iter().all(|(k, v)| {
+                    key.is_a_int(env, hist, k) && value.is_a_int(env, hist, v)
+                }),
+                _ => false,
+            },
             Type::Error(e) => match v {
                 Value::Error(v) => e.is_a_int(env, hist, v),
                 _ => false,
@@ -1573,7 +1725,8 @@ impl Type {
             | Type::Tuple(_)
             | Type::Struct(_)
             | Type::Variant(_, _)
-            | Type::Set(_) => false,
+            | Type::Set(_)
+            | Type::Map { .. } => false,
         }
     }
 
@@ -1590,7 +1743,8 @@ impl Type {
             | Self::Tuple(_)
             | Self::Struct(_)
             | Self::Variant(_, _)
-            | Self::Ref { .. } => f(Some(self)),
+            | Self::Ref { .. }
+            | Self::Map { .. } => f(Some(self)),
             Self::TVar(tv) => f(tv.read().typ.read().as_ref()),
         }
     }
@@ -1651,6 +1805,11 @@ impl Type {
             Type::Set(s) => Self::flatten_set(s.iter().map(|t| t.normalize())),
             Type::Error(t) => Type::Error(Arc::new(t.normalize())),
             Type::Array(t) => Type::Array(Arc::new(t.normalize())),
+            Type::Map { key, value } => {
+                let key = Arc::new(key.normalize());
+                let value = Arc::new(value.normalize());
+                Type::Map { key, value }
+            }
             Type::ByRef(t) => Type::ByRef(Arc::new(t.normalize())),
             Type::Tuple(t) => {
                 Type::Tuple(Arc::from_iter(t.iter().map(|t| t.normalize())))
@@ -1697,9 +1856,7 @@ impl Type {
                 Some(t.clone())
             }
             (Type::Primitive(s0), Type::Primitive(s1)) => {
-                let mut s = *s0;
-                s.insert(*s1);
-                Some(Type::Primitive(s))
+                Some(Type::Primitive(*s0 | *s1))
             }
             (Type::Fn(f0), Type::Fn(f1)) => {
                 if f0 == f1 {
@@ -1715,9 +1872,26 @@ impl Type {
                     None
                 }
             }
+            (Type::Primitive(p), Type::Array(_))
+            | (Type::Array(_), Type::Primitive(p)) => {
+                if p.contains(Typ::Array) {
+                    Some(Type::Primitive(*p))
+                } else {
+                    None
+                }
+            }
+            (Type::Map { key: k0, value: v0 }, Type::Map { key: k1, value: v1 }) => {
+                if flatten!(&**k0) == flatten!(&**k1)
+                    && flatten!(&**v0) == flatten!(&**v1)
+                {
+                    Some(Type::Map { key: k0.clone(), value: v0.clone() })
+                } else {
+                    None
+                }
+            }
             (Type::Error(t0), Type::Error(t1)) => {
                 if flatten!(&**t0) == flatten!(&**t1) {
-                    Some(Type::Array(t0.clone()))
+                    Some(Type::Error(t0.clone()))
                 } else {
                     None
                 }
@@ -1725,8 +1899,6 @@ impl Type {
             (Type::ByRef(t0), Type::ByRef(t1)) => {
                 t0.merge(t1).map(|t| Type::ByRef(Arc::new(t)))
             }
-            (Type::ByRef(_), _) | (_, Type::ByRef(_)) => None,
-            (Type::Array(_), _) | (_, Type::Array(_)) => None,
             (Type::Set(s0), Type::Set(s1)) => {
                 Some(Self::flatten_set(s0.iter().cloned().chain(s1.iter().cloned())))
             }
@@ -1789,7 +1961,13 @@ impl Type {
             (t, Type::TVar(tv)) => {
                 tv.read().typ.read().as_ref().and_then(|tv| t.merge(tv))
             }
-            (Type::Tuple(_), _)
+            (Type::ByRef(_), _)
+            | (_, Type::ByRef(_))
+            | (Type::Array(_), _)
+            | (_, Type::Array(_))
+            | (_, Type::Map { .. })
+            | (Type::Map { .. }, _)
+            | (Type::Tuple(_), _)
             | (_, Type::Tuple(_))
             | (Type::Struct(_), _)
             | (_, Type::Struct(_))
@@ -1809,6 +1987,11 @@ impl Type {
             Type::Primitive(s) => Type::Primitive(*s),
             Type::Error(t0) => Type::Error(Arc::new(t0.scope_refs(scope))),
             Type::Array(t0) => Type::Array(Arc::new(t0.scope_refs(scope))),
+            Type::Map { key, value } => {
+                let key = Arc::new(key.scope_refs(scope));
+                let value = Arc::new(value.scope_refs(scope));
+                Type::Map { key, value }
+            }
             Type::ByRef(t) => Type::ByRef(Arc::new(t.scope_refs(scope))),
             Type::Tuple(ts) => {
                 let i = ts.iter().map(|t| t.scope_refs(scope));
@@ -1864,6 +2047,7 @@ impl fmt::Display for Type {
             Self::Fn(t) => write!(f, "{t}"),
             Self::Error(t) => write!(f, "Error<{t}>"),
             Self::Array(t) => write!(f, "Array<{t}>"),
+            Self::Map { key, value } => write!(f, "Map<{key}, {value}>"),
             Self::ByRef(t) => write!(f, "&{t}"),
             Self::Tuple(ts) => {
                 write!(f, "(")?;
