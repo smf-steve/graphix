@@ -1124,7 +1124,7 @@ impl Type {
             Type::Error(t) => t.check_tvars_declared(declared),
             Type::Array(t) => t.check_tvars_declared(declared),
             Type::Map { key, value } => {
-                key.check_tvars_declared(declared);
+                key.check_tvars_declared(declared)?;
                 value.check_tvars_declared(declared)
             }
             Type::ByRef(t) => t.check_tvars_declared(declared),
