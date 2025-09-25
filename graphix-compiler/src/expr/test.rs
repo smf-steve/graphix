@@ -11,6 +11,7 @@ use netidx::protocol::value::Typ;
 use netidx_value::PBytes;
 use parking_lot::RwLock;
 use parser::RESERVED;
+use poolshark::local::LPooled;
 use prop::option;
 use proptest::{collection, prelude::*};
 use rust_decimal::Decimal;
@@ -578,6 +579,15 @@ macro_rules! arrayref {
     };
 }
 
+macro_rules! mapref {
+    ($inner:expr) => {
+        ($inner, $inner).prop_map(|(source, key)| {
+            ExprKind::MapRef { source: Arc::new(source), key: Arc::new(key) }
+                .to_expr_nopos()
+        })
+    };
+}
+
 macro_rules! typecast {
     ($inner:expr) => {
         ($inner, typexp()).prop_map(|(expr, typ)| {
@@ -590,6 +600,13 @@ macro_rules! array {
     ($inner:expr) => {
         collection::vec($inner, (0, 10))
             .prop_map(|a| { ExprKind::Array { args: Arc::from_iter(a) } }.to_expr_nopos())
+    };
+}
+
+macro_rules! map {
+    ($inner:expr) => {
+        collection::vec(($inner, $inner), (0, 10))
+            .prop_map(|a| { ExprKind::Map { args: Arc::from_iter(a) } }.to_expr_nopos())
     };
 }
 
@@ -716,6 +733,7 @@ fn arithexpr() -> impl Strategy<Value = Expr> {
             arrayslice!(inner.clone()),
             structref!(inner.clone()),
             tupleref!(inner.clone()),
+            mapref!(inner.clone()),
             tuple!(inner.clone()),
             structure!(inner.clone()),
             structwith!(inner.clone()),
@@ -751,6 +769,7 @@ fn expr() -> impl Strategy<Value = Expr> {
             dynamic_module!(inner.clone()),
             arrayref!(inner.clone()),
             arrayslice!(inner.clone()),
+            mapref!(inner.clone()),
             qop!(inner.clone()),
             arithexpr(),
             byref!(inner.clone()),
@@ -767,6 +786,7 @@ fn expr() -> impl Strategy<Value = Expr> {
             connect!(inner.clone()),
             select!(inner.clone()),
             array!(inner.clone()),
+            map!(inner.clone()),
             tuple!(inner.clone()),
             variant!(inner.clone()),
             structure!(inner.clone()),
@@ -776,7 +796,7 @@ fn expr() -> impl Strategy<Value = Expr> {
 }
 
 fn acc_strings<'a>(args: impl IntoIterator<Item = &'a Expr> + 'a) -> Arc<[Expr]> {
-    let mut v: Vec<Expr> = Vec::new();
+    let mut v: LPooled<Vec<Expr>> = LPooled::take();
     for s in args {
         let s = s.clone();
         match s.kind {
@@ -797,7 +817,7 @@ fn acc_strings<'a>(args: impl IntoIterator<Item = &'a Expr> + 'a) -> Arc<[Expr]>
             _ => v.push(s),
         }
     }
-    Arc::from(v)
+    Arc::from_iter(v.drain(..))
 }
 
 fn check_type(t0: &Type, t1: &Type) -> bool {
@@ -992,6 +1012,17 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
                 && a0.len() == a1.len()
                 && a0.iter().zip(a1.iter()).all(|(e0, e1)| check(e0, e1))
         }
+        (ExprKind::Map { args: a0 }, ExprKind::Map { args: a1 }) => {
+            a0.len() == a1.len()
+                && a0
+                    .iter()
+                    .zip(a1.iter())
+                    .all(|((k0, v0), (k1, v1))| check(k0, k1) && check(v0, v1))
+        }
+        (
+            ExprKind::MapRef { source: s0, key: k0 },
+            ExprKind::MapRef { source: s1, key: k1 },
+        ) => check(s0, s1) && check(k0, k1),
         (ExprKind::Struct { args: a0 }, ExprKind::Struct { args: a1 }) => {
             a0.len() == a1.len()
                 && a0

@@ -147,6 +147,8 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         ExprKind::TypeDef(expr::TypeDef { name, params, typ }) => {
             TypeDef::compile(ctx, spec.clone(), scope, name, params, typ)
         }
+        ExprKind::Map { args: _ } => todo!(),
+        ExprKind::MapRef { source: _, key: _ } => todo!(),
         ExprKind::Not { expr } => {
             Not::compile(ctx, flags, spec.clone(), scope, top_id, expr)
         }

@@ -36,7 +36,6 @@ use netidx_value::parser::{
 };
 use parking_lot::RwLock;
 use poolshark::local::LPooled;
-use smallvec::{smallvec, SmallVec};
 use std::sync::LazyLock;
 use triomphe::Arc;
 
@@ -93,7 +92,7 @@ where
                 .skip(combine::parser::char::spaces()),
         ))
         .map(
-            |lines: SmallVec<[String; 8]>| {
+            |lines: LPooled<Vec<String>>| {
                 if lines.len() == 0 {
                     None
                 } else {
@@ -180,7 +179,7 @@ where
     I::Range: Range,
 {
     sep_by1(fname(), string("::"))
-        .map(|v: SmallVec<[ArcStr; 4]>| ModPath(Path::from_iter(v)))
+        .map(|mut v: LPooled<Vec<ArcStr>>| ModPath(Path::from_iter(v.drain(..))))
 }
 
 fn spmodpath<I>() -> impl Parser<I, Output = ModPath>
@@ -199,7 +198,7 @@ where
     I::Range: Range,
 {
     sep_by1(choice((attempt(spfname()), sptypname())), string("::")).then(
-        |parts: SmallVec<[ArcStr; 8]>| {
+        |mut parts: LPooled<Vec<ArcStr>>| {
             if parts.len() == 0 {
                 unexpected_any("empty type path").left()
             } else {
@@ -208,7 +207,7 @@ where
                     Some(c) if c.is_lowercase() => {
                         unexpected_any("type names must be capitalized").left()
                     }
-                    Some(_) => value(ModPath::from(parts)).right(),
+                    Some(_) => value(ModPath::from(parts.drain(..))).right(),
                 }
             }
         },
@@ -282,9 +281,9 @@ parser! {
                 ))),
             ),
         )
-            .map(|(pos, toks): (_, SmallVec<[Intp; 8]>)| {
+            .map(|(pos, mut toks): (_, LPooled<Vec<Intp>>)| {
                 let mut argvec = vec![];
-                toks.into_iter()
+                toks.drain(..)
                     .fold(None, |src, tok| -> Option<Expr> {
                         match (src, tok) {
                             (None, t @ Intp::Lit(_, _)) => Some(t.to_expr()),
@@ -324,6 +323,8 @@ parser! {
                             (Some(Expr { kind: ExprKind::Bind { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::StructWith { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Array { .. }, .. }), _)
+                                | (Some(Expr { kind: ExprKind::Map { .. }, .. }), _)
+                                | (Some(Expr { kind: ExprKind::MapRef { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Any { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::StructRef { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::TupleRef { .. }, .. }), _)
@@ -387,8 +388,8 @@ parser! {
                 spfname().skip(sptoken(':')).skip(spstring("sig")),
                 between(sptoken('{'), sptoken('}'),
                     sep_by1(sig_item(), attempt(sptoken(';'))))
-            ))).map(|(name, items): (ArcStr, SmallVec<[SigItem; 8]>)| {
-                SigItem::Module(name, Sig(Arc::from_iter(items)))
+            ))).map(|(name, mut items): (ArcStr, LPooled<Vec<SigItem>>)| {
+                SigItem::Module(name, Sig(Arc::from_iter(items.drain(..))))
             })
         ))
     }
@@ -499,8 +500,8 @@ parser! {
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
     {
         (position(), between(token('['), sptoken(']'), sep_by(expr(), csep()))).map(
-            |(pos, args): (_, SmallVec<[Expr; 4]>)| {
-                ExprKind::Array { args: Arc::from_iter(args.into_iter()) }.to_expr(pos)
+            |(pos, mut args): (_, LPooled<Vec<Expr>>)| {
+                ExprKind::Array { args: Arc::from_iter(args.drain(..)) }.to_expr(pos)
             },
         )
     }
@@ -602,6 +603,16 @@ parser! {
                     ExprKind::ArrayRef { source: Arc::new(a), i: Arc::new(i) }.to_expr(pos)
                 }
             })
+    }
+}
+
+parser! {
+    fn mapref[I]()(I) -> Expr
+    where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
+    {
+        (position(), ref_pexp(), between(sptoken('<'), sptoken('>'), expr())).map(|(pos, source, key)| {
+            ExprKind::MapRef { source: Arc::new(source), key: Arc::new(key) }.to_expr(pos)
+        })
     }
 }
 
@@ -708,9 +719,9 @@ parser! {
                     sptoken('>'),
                     sep_by1((tvar().skip(sptoken(':')), typexp()), csep()),
                 )))
-                    .map(|cs: Option<SmallVec<[(TVar, Type); 4]>>| match cs {
-                        Some(cs) => Arc::new(RwLock::new(cs.into_iter().collect())),
-                        None => Arc::new(RwLock::new(vec![])),
+                    .map(|cs: Option<LPooled<Vec<(TVar, Type)>>>| match cs {
+                        Some(cs) => Arc::new(RwLock::new(cs)),
+                        None => Arc::new(RwLock::new(LPooled::take())),
                     }),
                 between(
                     token('('),
@@ -750,7 +761,7 @@ parser! {
             ))
             .then(
                 |(constraints, mut args, rtype, throws): (
-                    Arc<RwLock<Vec<(TVar, Type)>>>,
+                    Arc<RwLock<LPooled<Vec<(TVar, Type)>>>>,
                     Vec<Either<FnArgType, Type>>,
                     Type,
                     Option<Type>
@@ -808,7 +819,7 @@ parser! {
             attempt(sptoken('_').map(|_| Type::Bottom)),
             attempt(
                 between(sptoken('['), sptoken(']'), sep_by(typexp(), csep()))
-                    .map(|ts: SmallVec<[Type; 16]>| Type::flatten_set(ts)),
+                    .map(|mut ts: LPooled<Vec<Type>>| Type::flatten_set(ts.drain(..))),
             ),
             attempt(between(sptoken('('), sptoken(')'), sep_by1(typexp(), csep())).map(
                 |mut exps: LPooled<Vec<Type>>| {
@@ -825,13 +836,14 @@ parser! {
                     sptoken('}'),
                     sep_by1((spfname().skip(sptoken(':')), typexp()), csep()),
                 )
-                    .then(|mut exps: SmallVec<[(ArcStr, Type); 16]>| {
-                        let s = exps.iter().map(|(n, _)| n).collect::<FxHashSet<_>>();
+                    .then(|mut exps: LPooled<Vec<(ArcStr, Type)>>| {
+                        let s = exps.iter().map(|(n, _)| n).collect::<LPooled<FxHashSet<_>>>();
                         if s.len() < exps.len() {
                             return unexpected_any("struct field names must be unique").left();
                         }
+                        drop(s);
                         exps.sort_by_key(|(n, _)| n.clone());
-                        value(Type::Struct(Arc::from_iter(exps))).right()
+                        value(Type::Struct(Arc::from_iter(exps.drain(..)))).right()
                     }),
             ),
             attempt(
@@ -843,12 +855,12 @@ parser! {
                         sep_by1(typexp(), csep()),
                     ))),
                 )
-                    .map(|(tag, typs): (ArcStr, Option<SmallVec<[Type; 5]>>)| {
-                        let t = match typs {
-                            None => smallvec![],
+                    .map(|(tag, typs): (ArcStr, Option<LPooled<Vec<Type>>>)| {
+                        let mut t = match typs {
+                            None => LPooled::take(),
                             Some(v) => v,
                         };
-                        Type::Variant(tag.clone(), Arc::from_iter(t))
+                        Type::Variant(tag.clone(), Arc::from_iter(t.drain(..)))
                     }),
             ),
             attempt(fntype().map(|f| Type::Fn(Arc::new(f)))),
@@ -864,9 +876,9 @@ parser! {
                     sep_by1(typexp(), csep()),
                 ))),
             ))
-                .map(|(n, params): (ModPath, Option<SmallVec<[Type; 8]>>)| {
+                .map(|(n, params): (ModPath, Option<LPooled<Vec<Type>>>)| {
                     let params = params
-                        .map(|a| Arc::from_iter(a.into_iter()))
+                        .map(|mut a| Arc::from_iter(a.drain(..)))
                         .unwrap_or_else(|| Arc::from_iter([]));
                     Type::Ref { scope: ModPath::root(), name: n, params }
                 }),
@@ -878,7 +890,7 @@ parser! {
 }
 
 parser! {
-    fn lambda_args[I]()(I) -> (Vec<Arg>, Option<Option<Type>>)
+    fn lambda_args[I]()(I) -> (LPooled<Vec<Arg>>, Option<Option<Type>>)
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
     {
         sep_by(
@@ -905,7 +917,7 @@ parser! {
                             Ok(Arg { labeled: labeled.then_some(default), pattern, constraint })
                         }
                     })
-                    .collect::<Result<Vec<_>>>();
+                    .collect::<Result<LPooled<Vec<_>>>>();
                 match args {
                     Ok(a) => value(a).right(),
                     Err(_) => {
@@ -914,7 +926,7 @@ parser! {
                 }
             })
         // @args must be last
-            .then(|mut v: Vec<Arg>| {
+            .then(|mut v: LPooled<Vec<Arg>>| {
                 match v.iter().enumerate().find(|(_, a)| match &a.pattern {
                     StructurePattern::Bind(n) if n == "@args" => true,
                     _ => false,
@@ -931,9 +943,9 @@ parser! {
                 }
             })
         // labeled before anonymous args
-            .then(|(v, vargs): (Vec<Arg>, Option<Option<Type>>)| {
+            .then(|(v, vargs): (LPooled<Vec<Arg>>, Option<Option<Type>>)| {
                 let mut anon = false;
-                for a in &v {
+                for a in v.iter() {
                     if a.labeled.is_some() && anon {
                         return unexpected_any("labeled args must come before anon args").right();
                     }
@@ -951,7 +963,7 @@ parser! {
         (
             position(),
             attempt(sep_by((tvar().skip(sptoken(':')), typexp()), csep()))
-                .map(|tvs: SmallVec<[(TVar, Type); 4]>| Arc::from_iter(tvs)),
+                .map(|mut tvs: LPooled<Vec<(TVar, Type)>>| Arc::from_iter(tvs.drain(..))),
             between(sptoken('|'), sptoken('|'), lambda_args()),
             optional(attempt(spstring("->").with(typexp()))),
             optional(attempt(space().with(spstring("throws").with(space()).with(typexp())))),
@@ -961,8 +973,8 @@ parser! {
                 expr().map(|e| Either::Left(e)),
             ))),
         )
-            .map(|(pos, constraints, (args, vargs), rtype, throws, body)| {
-                let args = Arc::from_iter(args);
+            .map(|(pos, constraints, (mut args, vargs), rtype, throws, body)| {
+                let args = Arc::from_iter(args.drain(..));
                 ExprKind::Lambda(Arc::new(Lambda { args, vargs, rtype, throws, constraints, body }))
                     .to_expr(pos)
             })
@@ -1063,12 +1075,14 @@ parser! {
             attempt(spaces().with(byref_arith())),
             attempt(spaces().with(tuple())),
             attempt(spaces().with(structure())),
+            attempt(spaces().with(map())),
             attempt(spaces().with(variant())),
             attempt(spaces().with(qop(apply()))),
             attempt(spaces().with(structwith())),
             attempt(spaces().with(qop(arrayref()))),
             attempt(spaces().with(qop(tupleref()))),
             attempt(spaces().with(qop(structref()))),
+            attempt(spaces().with(qop(mapref()))),
             attempt(spaces().with(qop(do_block()))),
             attempt(spaces().with(qop(select()))),
             attempt(spaces().with(qop(cast()))),
@@ -1185,7 +1199,7 @@ parser! {
             ($pats:expr) => {{
                 let mut err = false;
                 let pats: Arc<[StructurePattern]> =
-                    Arc::from_iter($pats.into_iter().map(|s| match s {
+                    Arc::from_iter($pats.drain(..).map(|s| match s {
                         Either::Left(s) => s,
                         Either::Right(_) => {
                             err = true;
@@ -1217,7 +1231,7 @@ parser! {
             .then(
                 |(all, mut pats): (
                     Option<ArcStr>,
-                    SmallVec<[Either<StructurePattern, Option<ArcStr>>; 8]>,
+                    LPooled<Vec<Either<StructurePattern, Option<ArcStr>>>>,
                 )| {
                     if pats.len() == 0 {
                         value(StructurePattern::Slice { all, binds: Arc::from_iter([]) })
@@ -1284,11 +1298,11 @@ parser! {
             optional(attempt(spfname().skip(sptoken('@')))),
             between(sptoken('('), sptoken(')'), sep_by1(structure_pattern(), csep())),
         )
-            .then(|(all, binds): (Option<ArcStr>, SmallVec<[StructurePattern; 8]>)| {
+            .then(|(all, mut binds): (Option<ArcStr>, LPooled<Vec<StructurePattern>>)| {
                 if binds.len() < 2 {
                     unexpected_any("tuples must have at least 2 elements").left()
                 } else {
-                    value(StructurePattern::Tuple { all, binds: Arc::from_iter(binds) })
+                    value(StructurePattern::Tuple { all, binds: Arc::from_iter(binds.drain(..)) })
                         .right()
                 }
             })
@@ -1312,13 +1326,13 @@ parser! {
                 |(all, tag, binds): (
                     Option<ArcStr>,
                     ArcStr,
-                    Option<SmallVec<[StructurePattern; 8]>>,
+                    Option<LPooled<Vec<StructurePattern>>>,
                 )| {
-                    let binds = match binds {
-                        None => smallvec![],
+                    let mut binds = match binds {
+                        None => LPooled::take(),
                         Some(a) => a,
                     };
-                    StructurePattern::Variant { all, tag, binds: Arc::from_iter(binds) }
+                    StructurePattern::Variant { all, tag, binds: Arc::from_iter(binds.drain(..)) }
                 },
             )
     }
@@ -1351,7 +1365,7 @@ parser! {
             .then(
                 |(all, mut binds): (
                     Option<ArcStr>,
-                    SmallVec<[(ArcStr, StructurePattern, bool); 8]>,
+                    LPooled<Vec<(ArcStr, StructurePattern, bool)>>,
                 )| {
                     let mut exhaustive = true;
                     binds.retain(|(_, _, ex)| {
@@ -1359,11 +1373,12 @@ parser! {
                         *ex
                     });
                     binds.sort_by_key(|(s, _, _)| s.clone());
-                    let s = binds.iter().map(|(s, _, _)| s).collect::<FxHashSet<_>>();
+                    let s = binds.iter().map(|(s, _, _)| s).collect::<LPooled<FxHashSet<_>>>();
                     if s.len() < binds.len() {
                         unexpected_any("struct fields must be unique").left()
                     } else {
-                        let binds = Arc::from_iter(binds.into_iter().map(|(s, p, _)| (s, p)));
+                        drop(s);
+                        let binds = Arc::from_iter(binds.drain(..).map(|(s, p, _)| (s, p)));
                         value(StructurePattern::Struct { all, exhaustive, binds }).right()
                     }
                 },
@@ -1457,8 +1472,8 @@ parser! {
         )
             .map(|(pos, name, params, typ)| {
                 let params = params
-                    .map(|ps: SmallVec<[(TVar, Option<Type>); 8]>| {
-                        Arc::from_iter(ps.into_iter())
+                    .map(|mut ps: LPooled<Vec<(TVar, Option<Type>)>>| {
+                        Arc::from_iter(ps.drain(..))
                     })
                     .unwrap_or_else(|| Arc::<[(TVar, Option<Type>)]>::from(Vec::new()));
                 ExprKind::TypeDef(TypeDef { name, params, typ }).to_expr(pos)
@@ -1471,11 +1486,11 @@ parser! {
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
     {
         (position(), between(token('('), sptoken(')'), sep_by1(expr(), csep()))).then(
-            |(pos, exprs): (_, SmallVec<[Expr; 8]>)| {
+            |(pos, mut exprs): (_, LPooled<Vec<Expr>>)| {
                 if exprs.len() < 2 {
                     unexpected_any("tuples must have at least 2 elements").left()
                 } else {
-                    value(ExprKind::Tuple { args: Arc::from_iter(exprs) }.to_expr(pos))
+                    value(ExprKind::Tuple { args: Arc::from_iter(exprs.drain(..)) }.to_expr(pos))
                         .right()
                 }
             },
@@ -1495,13 +1510,14 @@ parser! {
                 sep_by1((spfname(), optional(attempt(sptoken(':')).with(expr()))), csep()),
             ),
         )
-            .then(|(pos, mut exprs): (_, SmallVec<[(ArcStr, Option<Expr>); 8]>)| {
-                let s = exprs.iter().map(|(n, _)| n).collect::<FxHashSet<_>>();
+            .then(|(pos, mut exprs): (_, LPooled<Vec<(ArcStr, Option<Expr>)>>)| {
+                let s = exprs.iter().map(|(n, _)| n).collect::<LPooled<FxHashSet<_>>>();
                 if s.len() < exprs.len() {
                     return unexpected_any("struct fields must be unique").left();
                 }
+                drop(s);
                 exprs.sort_by_key(|(n, _)| n.clone());
-                let args = exprs.into_iter().map(|(n, e)| match e {
+                let args = exprs.drain(..).map(|(n, e)| match e {
                     Some(e) => (n, e),
                     None => {
                         let e = ExprKind::Ref { name: [n.clone()].into() }.to_expr(pos);
@@ -1509,6 +1525,24 @@ parser! {
                     }
                 });
                 value(ExprKind::Struct { args: Arc::from_iter(args) }.to_expr(pos)).right()
+            })
+    }
+}
+
+parser! {
+    fn map[I]()(I) -> Expr
+    where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
+    {
+        (
+            position(),
+            between(
+                token('{'),
+                sptoken('}'),
+                sep_by1((expr(), spstring("=>").with(expr())), csep()),
+            ),
+        )
+            .map(|(pos, mut args): (_, LPooled<Vec<(Expr, Expr)>>)| {
+                ExprKind::Map { args: Arc::from_iter(args.drain(..)) }.to_expr(pos)
             })
     }
 }
@@ -1522,12 +1556,12 @@ parser! {
             token('`').with(typname()),
             optional(attempt(between(token('('), sptoken(')'), sep_by1(expr(), csep())))),
         )
-            .map(|(pos, tag, args): (_, ArcStr, Option<SmallVec<[Expr; 5]>>)| {
-                let args = match args {
-                    None => smallvec![],
+            .map(|(pos, tag, args): (_, ArcStr, Option<LPooled<Vec<Expr>>>)| {
+                let mut args = match args {
+                    None => LPooled::take(),
                     Some(a) => a,
                 };
-                ExprKind::Variant { tag, args: Arc::from_iter(args.into_iter()) }.to_expr(pos)
+                ExprKind::Variant { tag, args: Arc::from_iter(args.drain(..)) }.to_expr(pos)
             })
     }
 }
@@ -1548,13 +1582,14 @@ parser! {
             ),
         )
             .then(
-                |(pos, (source, mut exprs)): (_, (Expr, SmallVec<[(ArcStr, Option<Expr>); 8]>))| {
-                    let s = exprs.iter().map(|(n, _)| n).collect::<FxHashSet<_>>();
+                |(pos, (source, mut exprs)): (_, (Expr, LPooled<Vec<(ArcStr, Option<Expr>)>>))| {
+                    let s = exprs.iter().map(|(n, _)| n).collect::<LPooled<FxHashSet<_>>>();
                     if s.len() < exprs.len() {
                         return unexpected_any("struct fields must be unique").left();
                     }
+                    drop(s);
                     exprs.sort_by_key(|(n, _)| n.clone());
-                    let exprs = exprs.into_iter().map(|(name, e)| match e {
+                    let exprs = exprs.drain(..).map(|(name, e)| match e {
                         Some(e) => (name, e),
                         None => {
                             let e = ExprKind::Ref { name: ModPath::from([name.clone()]) }.to_expr(pos);
@@ -1647,6 +1682,7 @@ parser! {
                 attempt(spaces().with(tuple())),
                 attempt(spaces().with(between(token('('), sptoken(')'), expr()))),
                 attempt(spaces().with(structure())),
+                attempt(spaces().with(map())),
                 attempt(spaces().with(variant())),
             ))),
             attempt(spaces().with(qop(apply()))),
@@ -1654,6 +1690,7 @@ parser! {
             attempt(spaces().with(qop(arrayref()))),
             attempt(spaces().with(qop(tupleref()))),
             attempt(spaces().with(qop(structref()))),
+            attempt(spaces().with(qop(mapref()))),
             attempt(spaces().with(qop(do_block()))),
             attempt(spaces().with(lambda())),
             attempt(spaces().with(letbind())),

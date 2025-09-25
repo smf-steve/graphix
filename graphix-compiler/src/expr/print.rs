@@ -232,6 +232,7 @@ impl ExprKind {
             | ExprKind::TupleRef { .. }
             | ExprKind::TypeDef { .. }
             | ExprKind::ArrayRef { .. }
+            | ExprKind::MapRef { .. }
             | ExprKind::ArraySlice { .. }
             | ExprKind::StringInterpolate { .. }
             | ExprKind::Module {
@@ -330,6 +331,20 @@ impl ExprKind {
             ExprKind::Array { args } => {
                 try_single_line!(true);
                 pretty_print_exprs(indent, limit, buf, args, "[", "]", ",")
+            }
+            ExprKind::Map { args } => {
+                try_single_line!(true);
+                writeln!(buf, "{{")?;
+                for (i, (k, v)) in args.iter().enumerate() {
+                    push_indent(indent + 2, buf);
+                    writeln!(buf, "{k} => {v}")?;
+                    if i < args.len() - 1 {
+                        kill_newline!(buf);
+                        writeln!(buf, ",")?
+                    }
+                }
+                push_indent(indent, buf);
+                writeln!(buf, "}}")
             }
             ExprKind::Any { args } => {
                 try_single_line!(true);
@@ -761,6 +776,19 @@ impl fmt::Display for ExprKind {
                 }
             }
             ExprKind::Array { args } => print_exprs(f, args, "[", "]", ", "),
+            ExprKind::Map { args } => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in args.iter().enumerate() {
+                    write!(f, "{k} => {v}")?;
+                    if i < args.len() - 1 {
+                        write!(f, ", ")?
+                    }
+                }
+                write!(f, "}}")
+            }
+            ExprKind::MapRef { source, key } => {
+                write!(f, "{source}<{key}>")
+            }
             ExprKind::Any { args } => {
                 write!(f, "any")?;
                 print_exprs(f, args, "(", ")", ", ")

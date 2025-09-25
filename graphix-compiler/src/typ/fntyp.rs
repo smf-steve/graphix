@@ -29,7 +29,7 @@ pub struct FnType {
     pub args: Arc<[FnArgType]>,
     pub vargs: Option<Type>,
     pub rtype: Type,
-    pub constraints: Arc<RwLock<Vec<(TVar, Type)>>>,
+    pub constraints: Arc<RwLock<LPooled<Vec<(TVar, Type)>>>>,
     pub throws: Type,
 }
 
@@ -106,7 +106,7 @@ impl Default for FnType {
             args: Arc::from_iter([]),
             vargs: None,
             rtype: Default::default(),
-            constraints: Arc::new(RwLock::new(vec![])),
+            constraints: Arc::new(RwLock::new(LPooled::take())),
             throws: Default::default(),
         }
     }
@@ -200,7 +200,7 @@ impl FnType {
     pub fn replace_auto_constrained(&self) -> Self {
         let mut known: LPooled<FxHashMap<ArcStr, Type>> = LPooled::take();
         let Self { args, vargs, rtype, constraints, throws } = self;
-        let constraints: Vec<(TVar, Type)> = constraints
+        let constraints: LPooled<Vec<(TVar, Type)>> = constraints
             .read()
             .iter()
             .filter_map(|(tv, ct)| {

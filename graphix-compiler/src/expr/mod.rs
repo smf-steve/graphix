@@ -155,6 +155,7 @@ pub enum ExprKind {
     TupleRef { source: Arc<Expr>, field: usize },
     ArrayRef { source: Arc<Expr>, i: Arc<Expr> },
     ArraySlice { source: Arc<Expr>, start: Option<Arc<Expr>>, end: Option<Arc<Expr>> },
+    MapRef { source: Arc<Expr>, key: Arc<Expr> },
     StructWith { source: Arc<Expr>, replace: Arc<[(ArcStr, Expr)]> },
     Lambda(Arc<Lambda>),
     TypeDef(TypeDef),
@@ -162,6 +163,7 @@ pub enum ExprKind {
     Apply { args: Arc<[(Option<ArcStr>, Expr)]>, function: Arc<Expr> },
     Any { args: Arc<[Expr]> },
     Array { args: Arc<[Expr]> },
+    Map { args: Arc<[(Expr, Expr)]> },
     Tuple { args: Arc<[Expr]> },
     Variant { tag: ArcStr, args: Arc<[Expr]> },
     Struct { args: Arc<[(ArcStr, Expr)]> },
@@ -406,9 +408,19 @@ impl Expr {
             ExprKind::Constant(_)
             | ExprKind::Use { .. }
             | ExprKind::Ref { .. }
-            | ExprKind::StructRef { .. }
-            | ExprKind::TupleRef { .. }
             | ExprKind::TypeDef { .. } => init,
+            ExprKind::StructRef { source, .. } | ExprKind::TupleRef { source, .. } => {
+                source.fold(init, f)
+            }
+
+            ExprKind::Map { args } => args.iter().fold(init, |init, (k, v)| {
+                let init = k.fold(init, f);
+                v.fold(init, f)
+            }),
+            ExprKind::MapRef { source, key } => {
+                let init = source.fold(init, f);
+                key.fold(init, f)
+            }
             ExprKind::Module { value: ModuleKind::Inline(e), .. } => {
                 e.iter().fold(init, |init, e| e.fold(init, f))
             }

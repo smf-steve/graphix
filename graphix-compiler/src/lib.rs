@@ -330,7 +330,7 @@ pub trait Apply<R: Rt, E: UserEvent>: Debug + Send + Sync + Any {
         static EMPTY: LazyLock<Arc<FnType>> = LazyLock::new(|| {
             Arc::new(FnType {
                 args: Arc::from_iter([]),
-                constraints: Arc::new(RwLock::new(vec![])),
+                constraints: Arc::new(RwLock::new(LPooled::take())),
                 rtype: Type::Bottom,
                 throws: Type::Bottom,
                 vargs: None,

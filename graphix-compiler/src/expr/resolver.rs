@@ -59,6 +59,97 @@ impl ModuleResolver {
     }
 }
 
+async fn resolve(
+    scope: ModPath,
+    prepend: Option<Arc<ModuleResolver>>,
+    resolvers: Arc<[ModuleResolver]>,
+    id: ExprId,
+    parent: Arc<Origin>,
+    pos: SourcePosition,
+    export: bool,
+    name: ArcStr,
+) -> Result<Expr> {
+    let jh = task::spawn(async move {
+        let ts = Instant::now();
+        let name_rel = name.trim_start_matches(Path::SEP);
+        let name_mod = Path::from(name.clone()).append("mod.gx");
+        let name_mod = name_mod.trim_start_matches(Path::SEP);
+        let mut errors = vec![];
+        for r in prepend.iter().map(|r| r.as_ref()).chain(resolvers.iter()) {
+            let ori = match r {
+                ModuleResolver::VFS(vfs) => {
+                    let scoped = scope.append(&*name);
+                    match vfs.get(&scoped) {
+                        Some(s) => Origin {
+                            parent: Some(parent.clone()),
+                            source: Source::Internal(name.clone()),
+                            text: s.clone(),
+                        },
+                        None => continue,
+                    }
+                }
+                ModuleResolver::Files(base) => {
+                    let full_path =
+                        base.join(name_rel).with_extension("gx").canonicalize()?;
+                    match tokio::fs::read_to_string(&full_path).await {
+                        Ok(s) => Origin {
+                            parent: Some(parent.clone()),
+                            source: Source::File(full_path),
+                            text: ArcStr::from(s),
+                        },
+                        Err(_) => {
+                            let full_path = base.join(name_mod).canonicalize()?;
+                            match tokio::fs::read_to_string(&full_path).await {
+                                Ok(s) => Origin {
+                                    parent: Some(parent.clone()),
+                                    source: Source::File(full_path),
+                                    text: ArcStr::from(s),
+                                },
+                                Err(e) => {
+                                    errors.push(anyhow::Error::from(e));
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+                ModuleResolver::Netidx { subscriber, base, timeout } => {
+                    let full_path = base.append(name_rel);
+                    let source = Source::Netidx(full_path.clone());
+                    let sub =
+                        subscriber.subscribe_nondurable_one(full_path, *timeout).await;
+                    match sub {
+                        Err(e) => {
+                            errors.push(e);
+                            continue;
+                        }
+                        Ok(v) => match v.last() {
+                            Event::Update(Value::String(text)) => {
+                                Origin { parent: Some(parent.clone()), source, text }
+                            }
+                            Event::Unsubscribed | Event::Update(_) => {
+                                errors.push(anyhow!("expected string"));
+                                continue;
+                            }
+                        },
+                    }
+                }
+            };
+            let value = ModuleKind::Resolved(
+                parser::parse(ori.clone())
+                    .with_context(|| format!("parsing file {ori:?}"))?,
+            );
+            let kind = ExprKind::Module { name, export, value };
+            format_with_flags(PrintFlag::NoSource | PrintFlag::NoParents, || {
+                info!("load and parse {ori} {:?}", ts.elapsed())
+            });
+            return Ok(Expr { id, ori: Arc::new(ori), pos, kind });
+        }
+        bail!("module {name} could not be found {errors:?}")
+    });
+    jh.await?
+}
+
 impl Expr {
     pub fn has_unresolved_modules(&self) -> bool {
         self.fold(false, &mut |acc, e| {
@@ -118,16 +209,21 @@ impl Expr {
                 .await?
             }};
         }
+        macro_rules! expr {
+            ($kind:expr) => {
+                Ok(Expr {
+                    id: self.id,
+                    ori: self.ori.clone(),
+                    pos: self.pos,
+                    kind: $kind,
+                })
+            };
+        }
         macro_rules! only_args {
             ($kind:ident, $args:expr) => {
                 Box::pin(async move {
                     let args = Arc::from(subexprs!($args));
-                    Ok(Expr {
-                        id: self.id,
-                        ori: self.ori.clone(),
-                        pos: self.pos,
-                        kind: ExprKind::$kind { args },
-                    })
+                    expr!(ExprKind::$kind { args })
                 })
             };
         }
@@ -138,112 +234,9 @@ impl Expr {
                         $lhs.resolve_modules_int(scope, prepend, resolvers),
                         $rhs.resolve_modules_int(scope, prepend, resolvers)
                     )?;
-                    Ok(Expr {
-                        id: self.id,
-                        ori: self.ori.clone(),
-                        pos: self.pos,
-                        kind: ExprKind::$kind {
-                            lhs: Arc::from(lhs),
-                            rhs: Arc::from(rhs),
-                        },
-                    })
+                    expr!(ExprKind::$kind { lhs: Arc::from(lhs), rhs: Arc::from(rhs) })
                 })
             };
-        }
-        async fn resolve(
-            scope: ModPath,
-            prepend: Option<Arc<ModuleResolver>>,
-            resolvers: Arc<[ModuleResolver]>,
-            id: ExprId,
-            parent: Arc<Origin>,
-            pos: SourcePosition,
-            export: bool,
-            name: ArcStr,
-        ) -> Result<Expr> {
-            let jh = task::spawn(async move {
-                let ts = Instant::now();
-                let name_rel = name.trim_start_matches(Path::SEP);
-                let name_mod = Path::from(name.clone()).append("mod.gx");
-                let name_mod = name_mod.trim_start_matches(Path::SEP);
-                let mut errors = vec![];
-                for r in prepend.iter().map(|r| r.as_ref()).chain(resolvers.iter()) {
-                    let ori = match r {
-                        ModuleResolver::VFS(vfs) => {
-                            let scoped = scope.append(&*name);
-                            match vfs.get(&scoped) {
-                                Some(s) => Origin {
-                                    parent: Some(parent.clone()),
-                                    source: Source::Internal(name.clone()),
-                                    text: s.clone(),
-                                },
-                                None => continue,
-                            }
-                        }
-                        ModuleResolver::Files(base) => {
-                            let full_path = base
-                                .join(name_rel)
-                                .with_extension("gx")
-                                .canonicalize()?;
-                            match tokio::fs::read_to_string(&full_path).await {
-                                Ok(s) => Origin {
-                                    parent: Some(parent.clone()),
-                                    source: Source::File(full_path),
-                                    text: ArcStr::from(s),
-                                },
-                                Err(_) => {
-                                    let full_path = base.join(name_mod).canonicalize()?;
-                                    match tokio::fs::read_to_string(&full_path).await {
-                                        Ok(s) => Origin {
-                                            parent: Some(parent.clone()),
-                                            source: Source::File(full_path),
-                                            text: ArcStr::from(s),
-                                        },
-                                        Err(e) => {
-                                            errors.push(anyhow::Error::from(e));
-                                            continue;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        ModuleResolver::Netidx { subscriber, base, timeout } => {
-                            let full_path = base.append(name_rel);
-                            let source = Source::Netidx(full_path.clone());
-                            let sub = subscriber
-                                .subscribe_nondurable_one(full_path, *timeout)
-                                .await;
-                            match sub {
-                                Err(e) => {
-                                    errors.push(e);
-                                    continue;
-                                }
-                                Ok(v) => match v.last() {
-                                    Event::Update(Value::String(text)) => Origin {
-                                        parent: Some(parent.clone()),
-                                        source,
-                                        text,
-                                    },
-                                    Event::Unsubscribed | Event::Update(_) => {
-                                        errors.push(anyhow!("expected string"));
-                                        continue;
-                                    }
-                                },
-                            }
-                        }
-                    };
-                    let value = ModuleKind::Resolved(
-                        parser::parse(ori.clone())
-                            .with_context(|| format!("parsing file {ori:?}"))?,
-                    );
-                    let kind = ExprKind::Module { name, export, value };
-                    format_with_flags(PrintFlag::NoSource | PrintFlag::NoParents, || {
-                        info!("load and parse {ori} {:?}", ts.elapsed())
-                    });
-                    return Ok(Expr { id, ori: Arc::new(ori), pos, kind });
-                }
-                bail!("module {name} could not be found {errors:?}")
-            });
-            jh.await?
         }
         if !self.has_unresolved_modules() {
             return Box::pin(async { Ok(self.clone()) });
@@ -281,15 +274,10 @@ impl Expr {
                         e.resolve_modules_int(&scope, prepend, resolvers).await
                     }))
                     .await?;
-                    Ok(Expr {
-                        id: self.id,
-                        ori: self.ori.clone(),
-                        pos: self.pos,
-                        kind: ExprKind::Module {
-                            value: ModuleKind::Inline(Arc::from(exprs)),
-                            name,
-                            export,
-                        },
+                    expr!(ExprKind::Module {
+                        value: ModuleKind::Inline(Arc::from(exprs)),
+                        name,
+                        export,
                     })
                 })
             }
@@ -315,15 +303,10 @@ impl Expr {
                         e.resolve_modules_int(&scope, &prepend, resolvers).await
                     }))
                     .await?;
-                    Ok(Expr {
-                        id: self.id,
-                        ori: self.ori.clone(),
-                        pos: self.pos,
-                        kind: ExprKind::Module {
-                            value: ModuleKind::Resolved(Arc::from(exprs)),
-                            name,
-                            export,
-                        },
+                    expr!(ExprKind::Module {
+                        value: ModuleKind::Resolved(Arc::from(exprs)),
+                        name,
+                        export,
                     })
                 })
             }
@@ -335,64 +318,39 @@ impl Expr {
                 let source = Arc::new(
                     source.resolve_modules_int(scope, prepend, resolvers).await?,
                 );
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Module {
-                        name,
-                        export,
-                        value: ModuleKind::Dynamic { sandbox, sig, source },
-                    },
+                expr!(ExprKind::Module {
+                    name,
+                    export,
+                    value: ModuleKind::Dynamic { sandbox, sig, source },
                 })
             }),
             ExprKind::Do { exprs } => Box::pin(async move {
                 let exprs = Arc::from(subexprs!(exprs));
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Do { exprs },
-                })
+                expr!(ExprKind::Do { exprs })
             }),
             ExprKind::Bind(b) => Box::pin(async move {
                 let Bind { rec, doc, pattern, typ, export, value } = &*b;
                 let value = value.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Bind(Arc::new(Bind {
-                        rec: *rec,
-                        doc: doc.clone(),
-                        pattern: pattern.clone(),
-                        typ: typ.clone(),
-                        export: *export,
-                        value,
-                    })),
-                })
+                expr!(ExprKind::Bind(Arc::new(Bind {
+                    rec: *rec,
+                    doc: doc.clone(),
+                    pattern: pattern.clone(),
+                    typ: typ.clone(),
+                    export: *export,
+                    value,
+                })))
             }),
             ExprKind::StructWith { source, replace } => Box::pin(async move {
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::StructWith {
-                        source: Arc::new(
-                            source.resolve_modules_int(scope, prepend, resolvers).await?,
-                        ),
-                        replace: Arc::from(subtuples!(replace)),
-                    },
+                expr!(ExprKind::StructWith {
+                    source: Arc::new(
+                        source.resolve_modules_int(scope, prepend, resolvers).await?,
+                    ),
+                    replace: Arc::from(subtuples!(replace)),
                 })
             }),
             ExprKind::Connect { name, value, deref } => Box::pin(async move {
                 let value = value.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Connect { name, value: Arc::new(value), deref },
-                })
+                expr!(ExprKind::Connect { name, value: Arc::new(value), deref })
             }),
             ExprKind::Lambda(l) => Box::pin(async move {
                 let Lambda { args, vargs, rtype, constraints, throws, body } = &*l;
@@ -410,50 +368,41 @@ impl Expr {
                     constraints: constraints.clone(),
                     body,
                 };
-                let kind = ExprKind::Lambda(Arc::new(l));
-                Ok(Expr { id: self.id, ori: self.ori.clone(), pos: self.pos, kind })
+                expr!(ExprKind::Lambda(Arc::new(l)))
             }),
             ExprKind::TypeCast { expr, typ } => Box::pin(async move {
                 let expr = expr.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::TypeCast { expr: Arc::new(expr), typ },
-                })
+                expr!(ExprKind::TypeCast { expr: Arc::new(expr), typ })
             }),
             ExprKind::Apply { args, function } => Box::pin(async move {
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Apply { args: Arc::from(subtuples!(args)), function },
-                })
+                expr!(ExprKind::Apply { args: Arc::from(subtuples!(args)), function })
             }),
             ExprKind::Any { args } => only_args!(Any, args),
             ExprKind::Array { args } => only_args!(Array, args),
+            ExprKind::Map { args } => Box::pin(async move {
+                let args = Arc::from(subtuples!(args));
+                expr!(ExprKind::Map { args })
+            }),
+            ExprKind::MapRef { source, key } => Box::pin(async move {
+                let source = Arc::new(
+                    source.resolve_modules_int(scope, prepend, resolvers).await?,
+                );
+                let key =
+                    Arc::new(key.resolve_modules_inner(scope, prepend, resolvers).await?);
+                expr!(ExprKind::MapRef { source, key })
+            }),
             ExprKind::Tuple { args } => only_args!(Tuple, args),
             ExprKind::StringInterpolate { args } => only_args!(StringInterpolate, args),
             ExprKind::Struct { args } => Box::pin(async move {
                 let args = Arc::from(subtuples!(args));
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Struct { args },
-                })
+                expr!(ExprKind::Struct { args })
             }),
             ExprKind::ArrayRef { source, i } => Box::pin(async move {
                 let source = Arc::new(
                     source.resolve_modules_int(scope, prepend, resolvers).await?,
                 );
                 let i = Arc::new(i.resolve_modules_int(scope, prepend, resolvers).await?);
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::ArrayRef { source, i },
-                })
+                expr!(ExprKind::ArrayRef { source, i })
             }),
             ExprKind::ArraySlice { source, start, end } => Box::pin(async move {
                 let source = Arc::new(
@@ -471,21 +420,11 @@ impl Expr {
                         e.resolve_modules_int(scope, prepend, resolvers).await?,
                     )),
                 };
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::ArraySlice { source, start, end },
-                })
+                expr!(ExprKind::ArraySlice { source, start, end })
             }),
             ExprKind::Variant { tag, args } => Box::pin(async move {
                 let args = Arc::from(subexprs!(args));
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Variant { tag, args },
-                })
+                expr!(ExprKind::Variant { tag, args })
             }),
             ExprKind::Select { arg, arms } => Box::pin(async move {
                 let arg =
@@ -507,21 +446,11 @@ impl Expr {
                     Ok::<_, anyhow::Error>((p, e))
                 }))
                 .await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Select { arg, arms: Arc::from(arms) },
-                })
+                expr!(ExprKind::Select { arg, arms: Arc::from(arms) })
             }),
             ExprKind::Qop(e) => Box::pin(async move {
                 let e = e.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Qop(Arc::new(e)),
-                })
+                expr!(ExprKind::Qop(Arc::new(e)))
             }),
             ExprKind::TryCatch(tc) => Box::pin(async move {
                 let exprs = try_join_all(tc.exprs.iter().map(|e| async {
@@ -530,44 +459,24 @@ impl Expr {
                 .await?;
                 let handler =
                     tc.handler.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::TryCatch(Arc::new(TryCatch {
-                        bind: tc.bind.clone(),
-                        constraint: tc.constraint.clone(),
-                        handler: Arc::new(handler),
-                        exprs: Arc::from_iter(exprs),
-                    })),
-                })
+                expr!(ExprKind::TryCatch(Arc::new(TryCatch {
+                    bind: tc.bind.clone(),
+                    constraint: tc.constraint.clone(),
+                    handler: Arc::new(handler),
+                    exprs: Arc::from_iter(exprs),
+                })))
             }),
             ExprKind::ByRef(e) => Box::pin(async move {
                 let e = e.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::ByRef(Arc::new(e)),
-                })
+                expr!(ExprKind::ByRef(Arc::new(e)))
             }),
             ExprKind::Deref(e) => Box::pin(async move {
                 let e = e.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Deref(Arc::new(e)),
-                })
+                expr!(ExprKind::Deref(Arc::new(e)))
             }),
             ExprKind::Not { expr: e } => Box::pin(async move {
                 let e = e.resolve_modules_int(scope, prepend, resolvers).await?;
-                Ok(Expr {
-                    id: self.id,
-                    ori: self.ori.clone(),
-                    pos: self.pos,
-                    kind: ExprKind::Not { expr: Arc::new(e) },
-                })
+                expr!(ExprKind::Not { expr: Arc::new(e) })
             }),
             ExprKind::Add { lhs, rhs } => bin_op!(Add, lhs, rhs),
             ExprKind::Sub { lhs, rhs } => bin_op!(Sub, lhs, rhs),
