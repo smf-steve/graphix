@@ -716,8 +716,8 @@ run!(map_ref_missing, MAP_REF_MISSING, |v: Result<&Value>| match v {
 
 const MAP_REF_WRONG_TYPE: &str = r#"
 {
-  let arr = [1, 2, 3];
-  arr{"a"}
+  let m = {1 => "1", 2 => "2", 3 => "3"};
+  m{"a"}
 }
 "#;
 
