@@ -610,7 +610,7 @@ parser! {
     fn mapref[I]()(I) -> Expr
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range]
     {
-        (position(), ref_pexp(), between(sptoken('<'), sptoken('>'), expr())).map(|(pos, source, key)| {
+        (position(), ref_pexp(), between(sptoken('{'), sptoken('}'), expr())).map(|(pos, source, key)| {
             ExprKind::MapRef { source: Arc::new(source), key: Arc::new(key) }.to_expr(pos)
         })
     }
@@ -1077,12 +1077,12 @@ parser! {
             attempt(spaces().with(structure())),
             attempt(spaces().with(map())),
             attempt(spaces().with(variant())),
-            attempt(spaces().with(qop(apply()))),
             attempt(spaces().with(structwith())),
             attempt(spaces().with(qop(arrayref()))),
             attempt(spaces().with(qop(tupleref()))),
             attempt(spaces().with(qop(structref()))),
             attempt(spaces().with(qop(mapref()))),
+            attempt(spaces().with(qop(apply()))),
             attempt(spaces().with(qop(do_block()))),
             attempt(spaces().with(qop(select()))),
             attempt(spaces().with(qop(cast()))),
@@ -1538,7 +1538,7 @@ parser! {
             between(
                 token('{'),
                 sptoken('}'),
-                sep_by1((expr(), spstring("=>").with(expr())), csep()),
+                sep_by((expr(), spstring("=>").with(expr())), csep()),
             ),
         )
             .map(|(pos, mut args): (_, LPooled<Vec<(Expr, Expr)>>)| {
@@ -1678,19 +1678,19 @@ parser! {
                 attempt(spaces().with(byref())),
                 attempt(spaces().with(connect())),
                 attempt(spaces().with(arith())),
+                attempt(spaces().with(qop(mapref()))),
+                attempt(spaces().with(qop(arrayref()))),
+                attempt(spaces().with(qop(tupleref()))),
+                attempt(spaces().with(qop(structref()))),
                 attempt(spaces().with(qop(deref()))),
+                attempt(spaces().with(qop(apply()))),
                 attempt(spaces().with(tuple())),
                 attempt(spaces().with(between(token('('), sptoken(')'), expr()))),
-                attempt(spaces().with(structure())),
-                attempt(spaces().with(map())),
-                attempt(spaces().with(variant())),
             ))),
-            attempt(spaces().with(qop(apply()))),
+            attempt(spaces().with(structure())),
+            attempt(spaces().with(map())),
+            attempt(spaces().with(variant())),
             attempt(spaces().with(structwith())),
-            attempt(spaces().with(qop(arrayref()))),
-            attempt(spaces().with(qop(tupleref()))),
-            attempt(spaces().with(qop(structref()))),
-            attempt(spaces().with(qop(mapref()))),
             attempt(spaces().with(qop(do_block()))),
             attempt(spaces().with(lambda())),
             attempt(spaces().with(letbind())),
@@ -1723,6 +1723,15 @@ pub fn parse(ori: Origin) -> anyhow::Result<Arc<[Expr]>> {
 /// Parse one and only one expression.
 pub fn parse_one(s: &str) -> anyhow::Result<Expr> {
     expr()
+        .skip(spaces())
+        .skip(eof())
+        .easy_parse(position::Stream::new(&*s))
+        .map(|(r, _)| r)
+        .map_err(|e| anyhow::anyhow!(format!("{e}")))
+}
+
+pub fn test_parse_mapref(s: &str) -> anyhow::Result<Expr> {
+    mapref()
         .skip(spaces())
         .skip(eof())
         .easy_parse(position::Stream::new(&*s))

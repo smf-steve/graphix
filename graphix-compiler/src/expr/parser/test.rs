@@ -1360,6 +1360,6 @@ fn tupleref() {
 
 #[test]
 fn prop0() {
-    let s = "try use a catch(a) => u32:0";
-    dbg!(parse_one(s).unwrap());
+    let s = "(u32:0)<(43).0>";
+    dbg!(test_parse_mapref(s).unwrap());
 }

@@ -1751,8 +1751,9 @@ impl Type {
 
     pub(crate) fn flatten_set(set: impl IntoIterator<Item = Self>) -> Self {
         let init: Box<dyn Iterator<Item = Self>> = Box::new(set.into_iter());
-        let mut iters: SmallVec<[Box<dyn Iterator<Item = Self>>; 16]> = smallvec![init];
-        let mut acc: SmallVec<[Self; 16]> = smallvec![];
+        let mut iters: LPooled<Vec<Box<dyn Iterator<Item = Self>>>> =
+            LPooled::from_iter([init]);
+        let mut acc: LPooled<Vec<Self>> = LPooled::take();
         loop {
             match iters.last_mut() {
                 None => break,
@@ -1769,28 +1770,35 @@ impl Type {
                     Some(t) => {
                         acc.push(t);
                         let mut i = 0;
-                        let mut j;
+                        let mut j = 0;
                         while i < acc.len() {
-                            j = i + 1;
                             while j < acc.len() {
-                                if let Some(t) = acc[i].merge(&acc[j]) {
-                                    acc[i] = t;
-                                    acc.remove(j);
-                                } else {
+                                if j == i {
                                     j += 1;
+                                    continue;
+                                }
+                                match acc[i].merge(&acc[j]) {
+                                    None => j += 1,
+                                    Some(t) => {
+                                        acc[i] = t;
+                                        acc.remove(j);
+                                        i = 0;
+                                        j = 0;
+                                    }
                                 }
                             }
                             i += 1;
+                            j = 0;
                         }
                     }
                 },
             }
         }
         acc.sort();
-        match &*acc {
+        match &**acc {
             [] => Type::Primitive(BitFlags::empty()),
             [t] => t.clone(),
-            _ => Type::Set(Arc::from_iter(acc)),
+            _ => Type::Set(Arc::from_iter(acc.drain(..))),
         }
     }
 
@@ -1852,11 +1860,11 @@ impl Type {
             (Type::Ref { .. }, _) | (_, Type::Ref { .. }) => None,
             (Type::Bottom, t) | (t, Type::Bottom) => Some(t.clone()),
             (Type::Any, _) | (_, Type::Any) => Some(Type::Any),
-            (Type::Primitive(p), t) | (t, Type::Primitive(p)) if p.is_empty() => {
-                Some(t.clone())
-            }
             (Type::Primitive(s0), Type::Primitive(s1)) => {
                 Some(Type::Primitive(*s0 | *s1))
+            }
+            (Type::Primitive(p), t) | (t, Type::Primitive(p)) if p.is_empty() => {
+                Some(t.clone())
             }
             (Type::Fn(f0), Type::Fn(f1)) => {
                 if f0 == f1 {

@@ -786,9 +786,10 @@ impl fmt::Display for ExprKind {
                 }
                 write!(f, "}}")
             }
-            ExprKind::MapRef { source, key } => {
-                write!(f, "{source}<{key}>")
-            }
+            ExprKind::MapRef { source, key } => match &source.kind {
+                ExprKind::Ref { name } => write!(f, "{name}{{{key}}}"),
+                _ => write!(f, "({source}){{{key}}}"),
+            },
             ExprKind::Any { args } => {
                 write!(f, "any")?;
                 print_exprs(f, args, "(", ")", ", ")
