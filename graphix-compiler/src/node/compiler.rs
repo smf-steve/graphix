@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     expr::{self, Expr, ExprId, ExprKind, ModuleKind},
-    node::map::Map,
+    node::map::{Map, MapRef},
     CFlag, ExecCtx, Node, Rt, Scope, UserEvent,
 };
 use anyhow::{bail, Context, Result};
@@ -152,7 +152,9 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         ExprKind::Map { args } => {
             Map::compile(ctx, flags, spec.clone(), scope, top_id, args)
         }
-        ExprKind::MapRef { source: _, key: _ } => todo!(),
+        ExprKind::MapRef { source, key } => {
+            MapRef::compile(ctx, flags, spec.clone(), scope, top_id, source, key)
+        }
         ExprKind::Not { expr } => {
             Not::compile(ctx, flags, spec.clone(), scope, top_id, expr)
         }
