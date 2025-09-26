@@ -1,7 +1,8 @@
-use super::{compiler::compile, wrap_error, CFlag, Cached};
+use super::{compiler::compile, CFlag, Cached};
 use crate::{
     defetyp,
     expr::{Expr, ExprId},
+    node::error::wrap_error,
     typ::Type,
     wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };

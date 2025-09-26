@@ -1,4 +1,4 @@
-use super::{callsite::CallSite, Constant, Nop, Ref, NOP};
+use super::{bind::Ref, callsite::CallSite, Constant, Nop, NOP};
 use crate::{
     expr::{ExprId, ModPath},
     typ::{FnType, Type},

@@ -1,17 +1,19 @@
 use super::{
     array::{Array, ArrayRef, ArraySlice},
+    bind::{Bind, ByRef, Deref, Ref},
     callsite::CallSite,
     data::{Struct, StructRef, StructWith, Tuple, TupleRef, Variant},
     dynamic::DynamicModule,
+    error::{Qop, TryCatch},
     lambda::Lambda,
     op::{Add, And, Div, Eq, Gt, Gte, Lt, Lte, Mod, Mul, Ne, Not, Or, Sub},
     select::Select,
-    Any, Bind, Block, ByRef, Connect, ConnectDeref, Constant, Deref, Qop, Ref, Sample,
-    StringInterpolate, TypeCast, TypeDef, Use,
+    Any, Block, Connect, ConnectDeref, Constant, Sample, StringInterpolate, TypeCast,
+    TypeDef, Use,
 };
 use crate::{
     expr::{self, Expr, ExprId, ExprKind, ModuleKind},
-    node::TryCatch,
+    node::map::Map,
     CFlag, ExecCtx, Node, Rt, Scope, UserEvent,
 };
 use anyhow::{bail, Context, Result};
@@ -147,7 +149,9 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         ExprKind::TypeDef(expr::TypeDef { name, params, typ }) => {
             TypeDef::compile(ctx, spec.clone(), scope, name, params, typ)
         }
-        ExprKind::Map { args: _ } => todo!(),
+        ExprKind::Map { args } => {
+            Map::compile(ctx, flags, spec.clone(), scope, top_id, args)
+        }
         ExprKind::MapRef { source: _, key: _ } => todo!(),
         ExprKind::Not { expr } => {
             Not::compile(ctx, flags, spec.clone(), scope, top_id, expr)

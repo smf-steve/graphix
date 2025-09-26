@@ -6,7 +6,7 @@ use crate::{
         parser, Expr, ExprId, ExprKind, Origin, Sandbox, Sig, SigItem, Source,
         StructurePattern, TypeDef,
     },
-    node::{Bind, Block},
+    node::{bind::Bind, Block},
     typ::Type,
     wrap, BindId, CFlag, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
@@ -58,18 +58,18 @@ fn check_sig<R: Rt, E: UserEvent>(
     for n in nodes {
         if let Some(binds) = ctx.env.binds.get(&scope.lexical)
             && let Some(bind) = (&**n as &dyn Any).downcast_ref::<Bind<R, E>>()
-            && let Expr { kind: ExprKind::Bind(bexp), .. } = &bind.spec
+            && let Expr { kind: ExprKind::Bind(bexp), .. } = bind.spec()
             && let StructurePattern::Bind(name) = &bexp.pattern
             && let Some(id) = bind.single_id()
             && let Some(proxy_id) = binds.get(&CompactString::from(name.as_str()))
             && let Some(proxy_bind) = ctx.env.by_id.get(&proxy_id)
         {
             proxy_bind.typ.unbind_tvars();
-            if !proxy_bind.typ.contains(&ctx.env, &bind.typ)? {
+            if !proxy_bind.typ.contains(&ctx.env, bind.typ())? {
                 bail!(
                     "signature mismatch in bind {name}, expected type {}, found type {}",
                     proxy_bind.typ,
-                    bind.typ
+                    bind.typ()
                 )
             }
             proxy.insert(id, *proxy_id);
