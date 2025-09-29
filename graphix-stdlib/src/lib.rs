@@ -1,18 +1,24 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use arcstr::ArcStr;
+use compact_str::format_compact;
 use enumflags2::{bitflags, BitFlags};
 use fxhash::FxHashMap;
 use graphix_compiler::{
-    expr::ModuleResolver, typ::FnType, Apply, BuiltIn, BuiltInInitFn, Event, ExecCtx,
-    Node, Rt, UserEvent,
+    expr::{ExprId, ModuleResolver},
+    node::genn,
+    typ::{FnType, Type},
+    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Refs, Rt,
+    Scope, UserEvent,
 };
 use netidx::{path::Path, subscriber::Value};
 use netidx_core::utils::Either;
 use std::{
+    collections::hash_map::Entry,
     fmt::Debug,
     iter,
     sync::{Arc, LazyLock},
 };
+use triomphe::Arc as TArc;
 
 mod array;
 mod core;
@@ -158,6 +164,214 @@ impl<R: Rt, E: UserEvent, T: EvalCached> Apply<R, E> for CachedArgs<T> {
 
     fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.cached.clear()
+    }
+}
+
+pub trait MapCollection: Debug + Clone + Default + Send + Sync + 'static {
+    /// return the length of the collection
+    fn len(&self) -> usize;
+
+    /// iterate the collection elements as values
+    fn iter_values(&self) -> impl Iterator<Item = Value>;
+
+    /// given a value, return Some if the value is the collection type
+    /// we are mapping.
+    fn select(v: Value) -> Option<Self>;
+
+    /// given a collection wrap it in a value
+    fn project(self) -> Value;
+
+    /// return the element type given the function type
+    fn etyp(ft: &FnType) -> Result<Type>;
+}
+
+pub trait MapFn<R: Rt, E: UserEvent>: Debug + Default + Send + Sync + 'static {
+    type Collection: MapCollection;
+
+    const NAME: &str;
+    const TYP: LazyLock<FnType>;
+
+    /// finish will be called when every lambda instance has produced
+    /// a value for the updated array. Out contains the output of the
+    /// predicate lambda for each index i, and a is the array. out and
+    /// a are guaranteed to have the same length. out[i].cur is
+    /// guaranteed to be Some.
+    fn finish(&mut self, slots: &[Slot<R, E>], a: &Self::Collection) -> Option<Value>;
+}
+
+#[derive(Debug)]
+pub struct Slot<R: Rt, E: UserEvent> {
+    id: BindId,
+    pred: Node<R, E>,
+    pub cur: Option<Value>,
+}
+
+impl<R: Rt, E: UserEvent> Slot<R, E> {
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        self.pred.delete(ctx);
+        ctx.cached.remove(&self.id);
+        ctx.env.unbind_variable(self.id);
+    }
+}
+
+#[derive(Debug)]
+pub struct MapQ<R: Rt, E: UserEvent, T: MapFn<R, E>> {
+    scope: Scope,
+    predid: BindId,
+    top_id: ExprId,
+    mftyp: TArc<FnType>,
+    etyp: Type,
+    slots: Vec<Slot<R, E>>,
+    cur: T::Collection,
+    t: T,
+}
+
+impl<R: Rt, E: UserEvent, T: MapFn<R, E>> BuiltIn<R, E> for MapQ<R, E, T> {
+    const NAME: &str = T::NAME;
+    const TYP: LazyLock<FnType> = T::TYP;
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|_ctx, typ, scope, from, top_id| match from {
+            [_, _] => Ok(Box::new(Self {
+                scope: scope.append(&format_compact!("fn{}", LambdaId::new().inner())),
+                predid: BindId::new(),
+                top_id,
+                etyp: T::Collection::etyp(typ)?,
+                mftyp: match &typ.args[1].typ {
+                    Type::Fn(ft) => ft.clone(),
+                    t => bail!("expected a function not {t}"),
+                },
+                slots: vec![],
+                cur: Default::default(),
+                t: T::default(),
+            })),
+            _ => bail!("expected two arguments"),
+        })
+    }
+}
+
+impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        let slen = self.slots.len();
+        if let Some(v) = from[1].update(ctx, event) {
+            ctx.cached.insert(self.predid, v.clone());
+            event.variables.insert(self.predid, v);
+        }
+        let (up, resized) =
+            match from[0].update(ctx, event).and_then(|v| T::Collection::select(v)) {
+                Some(a) if a.len() == slen => (Some(a), false),
+                Some(a) if a.len() < slen => {
+                    while self.slots.len() > a.len() {
+                        if let Some(mut s) = self.slots.pop() {
+                            s.delete(ctx)
+                        }
+                    }
+                    (Some(a), true)
+                }
+                Some(a) => {
+                    while self.slots.len() < a.len() {
+                        let (id, node) = genn::bind(
+                            ctx,
+                            &self.scope.lexical,
+                            "x",
+                            self.etyp.clone(),
+                            self.top_id,
+                        );
+                        let fargs = vec![node];
+                        let fnode = genn::reference(
+                            ctx,
+                            self.predid,
+                            Type::Fn(self.mftyp.clone()),
+                            self.top_id,
+                        );
+                        let pred = genn::apply(
+                            fnode,
+                            self.scope.clone(),
+                            fargs,
+                            &self.mftyp,
+                            self.top_id,
+                        );
+                        self.slots.push(Slot { id, pred, cur: None });
+                    }
+                    (Some(a), true)
+                }
+                None => (None, false),
+            };
+        if let Some(a) = up {
+            for (s, v) in self.slots.iter().zip(a.iter_values()) {
+                ctx.cached.insert(s.id, v.clone());
+                event.variables.insert(s.id, v);
+            }
+            self.cur = a.clone();
+            if a.len() == 0 {
+                return Some(T::Collection::project(a));
+            }
+        }
+        let init = event.init;
+        let mut up = resized;
+        for (i, s) in self.slots.iter_mut().enumerate() {
+            if i == slen {
+                // new nodes were added starting here
+                event.init = true;
+                if let Entry::Vacant(e) = event.variables.entry(self.predid)
+                    && let Some(v) = ctx.cached.get(&self.predid)
+                {
+                    e.insert(v.clone());
+                }
+            }
+            if let Some(v) = s.pred.update(ctx, event) {
+                s.cur = Some(v);
+                up = true;
+            }
+        }
+        event.init = init;
+        if up && self.slots.iter().all(|s| s.cur.is_some()) {
+            self.t.finish(&mut &self.slots, &self.cur)
+        } else {
+            None
+        }
+    }
+
+    fn typecheck(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        _from: &mut [Node<R, E>],
+    ) -> anyhow::Result<()> {
+        let (_, node) =
+            genn::bind(ctx, &self.scope.lexical, "x", self.etyp.clone(), self.top_id);
+        let fargs = vec![node];
+        let ft = self.mftyp.clone();
+        let fnode = genn::reference(ctx, self.predid, Type::Fn(ft.clone()), self.top_id);
+        let mut node = genn::apply(fnode, self.scope.clone(), fargs, &ft, self.top_id);
+        let r = node.typecheck(ctx);
+        node.delete(ctx);
+        r
+    }
+
+    fn refs(&self, refs: &mut Refs) {
+        for s in &self.slots {
+            s.pred.refs(refs)
+        }
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.cached.remove(&self.predid);
+        for sl in &mut self.slots {
+            sl.delete(ctx)
+        }
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        self.cur = Default::default();
+        for sl in &mut self.slots {
+            sl.cur = None;
+            sl.pred.sleep(ctx);
+        }
     }
 }
 
