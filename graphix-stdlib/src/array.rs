@@ -20,7 +20,27 @@ use std::{
 };
 use triomphe::Arc as TArc;
 
+pub trait MapCollection: Debug + Clone + Default + Send + Sync + 'static {
+    /// return the length of the collection
+    fn len(&self) -> usize;
+
+    /// iterate the collection elements as values
+    fn iter_values(&self) -> impl Iterator<Item = Value>;
+
+    /// given a value, return Some if the value is the collection type
+    /// we are mapping.
+    fn select(v: Value) -> Option<Self>;
+
+    /// given a collection wrap it in a value
+    fn project(self) -> Value;
+
+    /// return the element type given the function type
+    fn etyp(ft: &FnType) -> Result<Type>;
+}
+
 pub trait MapFn<R: Rt, E: UserEvent>: Debug + Default + Send + Sync + 'static {
+    type Collection: MapCollection;
+
     const NAME: &str;
     const TYP: LazyLock<FnType>;
 
@@ -29,7 +49,7 @@ pub trait MapFn<R: Rt, E: UserEvent>: Debug + Default + Send + Sync + 'static {
     /// predicate lambda for each index i, and a is the array. out and
     /// a are guaranteed to have the same length. out[i].cur is
     /// guaranteed to be Some.
-    fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value>;
+    fn finish(&mut self, slots: &[Slot<R, E>], a: &Self::Collection) -> Option<Value>;
 }
 
 #[derive(Debug)]
@@ -55,7 +75,7 @@ pub struct MapQ<R: Rt, E: UserEvent, T: MapFn<R, E>> {
     mftyp: TArc<FnType>,
     etyp: Type,
     slots: Vec<Slot<R, E>>,
-    cur: ValArray,
+    cur: T::Collection,
     t: T,
 }
 
@@ -69,16 +89,13 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> BuiltIn<R, E> for MapQ<R, E, T> {
                 scope: scope.append(&format_compact!("fn{}", LambdaId::new().inner())),
                 predid: BindId::new(),
                 top_id,
-                etyp: match &typ.args[0].typ {
-                    Type::Array(et) => (**et).clone(),
-                    t => bail!("expected array not {t}"),
-                },
+                etyp: T::Collection::etyp(typ)?,
                 mftyp: match &typ.args[1].typ {
                     Type::Fn(ft) => ft.clone(),
                     t => bail!("expected a function not {t}"),
                 },
                 slots: vec![],
-                cur: ValArray::from([]),
+                cur: Default::default(),
                 t: T::default(),
             })),
             _ => bail!("expected two arguments"),
@@ -98,53 +115,54 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
             ctx.cached.insert(self.predid, v.clone());
             event.variables.insert(self.predid, v);
         }
-        let (up, resized) = match from[0].update(ctx, event) {
-            Some(Value::Array(a)) if a.len() == slen => (Some(a), false),
-            Some(Value::Array(a)) if a.len() < slen => {
-                while self.slots.len() > a.len() {
-                    if let Some(mut s) = self.slots.pop() {
-                        s.delete(ctx)
+        let (up, resized) =
+            match from[0].update(ctx, event).and_then(|v| T::Collection::select(v)) {
+                Some(a) if a.len() == slen => (Some(a), false),
+                Some(a) if a.len() < slen => {
+                    while self.slots.len() > a.len() {
+                        if let Some(mut s) = self.slots.pop() {
+                            s.delete(ctx)
+                        }
                     }
+                    (Some(a), true)
                 }
-                (Some(a), true)
-            }
-            Some(Value::Array(a)) => {
-                while self.slots.len() < a.len() {
-                    let (id, node) = genn::bind(
-                        ctx,
-                        &self.scope.lexical,
-                        "x",
-                        self.etyp.clone(),
-                        self.top_id,
-                    );
-                    let fargs = vec![node];
-                    let fnode = genn::reference(
-                        ctx,
-                        self.predid,
-                        Type::Fn(self.mftyp.clone()),
-                        self.top_id,
-                    );
-                    let pred = genn::apply(
-                        fnode,
-                        self.scope.clone(),
-                        fargs,
-                        &self.mftyp,
-                        self.top_id,
-                    );
-                    self.slots.push(Slot { id, pred, cur: None });
+                Some(a) => {
+                    while self.slots.len() < a.len() {
+                        let (id, node) = genn::bind(
+                            ctx,
+                            &self.scope.lexical,
+                            "x",
+                            self.etyp.clone(),
+                            self.top_id,
+                        );
+                        let fargs = vec![node];
+                        let fnode = genn::reference(
+                            ctx,
+                            self.predid,
+                            Type::Fn(self.mftyp.clone()),
+                            self.top_id,
+                        );
+                        let pred = genn::apply(
+                            fnode,
+                            self.scope.clone(),
+                            fargs,
+                            &self.mftyp,
+                            self.top_id,
+                        );
+                        self.slots.push(Slot { id, pred, cur: None });
+                    }
+                    (Some(a), true)
                 }
-                (Some(a), true)
-            }
-            Some(_) | None => (None, false),
-        };
+                None => (None, false),
+            };
         if let Some(a) = up {
-            for (s, v) in self.slots.iter().zip(a.iter()) {
+            for (s, v) in self.slots.iter().zip(a.iter_values()) {
                 ctx.cached.insert(s.id, v.clone());
-                event.variables.insert(s.id, v.clone());
+                event.variables.insert(s.id, v);
             }
             self.cur = a.clone();
             if a.len() == 0 {
-                return Some(Value::Array(a));
+                return Some(T::Collection::project(a));
             }
         }
         let init = event.init;
@@ -202,10 +220,38 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
     }
 
     fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
-        self.cur = ValArray::from([]);
+        self.cur = Default::default();
         for sl in &mut self.slots {
             sl.cur = None;
             sl.pred.sleep(ctx);
+        }
+    }
+}
+
+impl MapCollection for ValArray {
+    fn iter_values(&self) -> impl Iterator<Item = Value> {
+        (**self).iter().cloned()
+    }
+
+    fn len(&self) -> usize {
+        (**self).len()
+    }
+
+    fn select(v: Value) -> Option<Self> {
+        match v {
+            Value::Array(a) => Some(a.clone()),
+            _ => None,
+        }
+    }
+
+    fn project(self) -> Value {
+        Value::Array(self)
+    }
+
+    fn etyp(ft: &FnType) -> Result<Type> {
+        match &ft.args[0].typ {
+            Type::Array(et) => Ok((**et).clone()),
+            _ => bail!("expected array"),
         }
     }
 }
@@ -214,6 +260,8 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
 pub(super) struct MapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for MapImpl {
+    type Collection = ValArray;
+
     const NAME: &str = "array_map";
     deftype!(
         "core::array",
@@ -233,6 +281,8 @@ pub(super) type Map<R, E> = MapQ<R, E, MapImpl>;
 pub(super) struct FilterImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterImpl {
+    type Collection = ValArray;
+
     const NAME: &str = "array_filter";
     deftype!(
         "core::array",
@@ -255,6 +305,8 @@ pub(super) type Filter<R, E> = MapQ<R, E, FilterImpl>;
 pub(super) struct FlatMapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FlatMapImpl {
+    type Collection = ValArray;
+
     const NAME: &str = "array_flat_map";
     deftype!(
         "core::array",
@@ -277,6 +329,8 @@ pub(super) type FlatMap<R, E> = MapQ<R, E, FlatMapImpl>;
 pub(super) struct FilterMapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterMapImpl {
+    type Collection = ValArray;
+
     const NAME: &str = "array_filter_map";
     deftype!(
         "core::array",
@@ -299,6 +353,8 @@ pub(super) type FilterMap<R, E> = MapQ<R, E, FilterMapImpl>;
 pub(super) struct FindImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FindImpl {
+    type Collection = ValArray;
+
     const NAME: &str = "array_find";
     deftype!(
         "core::array",
@@ -325,6 +381,8 @@ pub(super) type Find<R, E> = MapQ<R, E, FindImpl>;
 pub(super) struct FindMapImpl;
 
 impl<R: Rt, E: UserEvent> MapFn<R, E> for FindMapImpl {
+    type Collection = ValArray;
+
     const NAME: &str = "array_find_map";
     deftype!(
         "core::array",
