@@ -1,0 +1,17 @@
+/// return a new map where each element is the output of f applied to
+/// the corresponding key value pair in the current map
+pub let map = |m, f| 'map_map;
+
+/// return the length of the map
+pub let len = |m| 'map_len;
+
+/// get the value associated with the key k in the map m, or null if not present
+pub let get = |m, k| 'map_get;
+
+/// return a new map containing only the key-value pairs where f applied to
+/// (key, value) returns true
+pub let filter = |m, f| 'map_filter;
+
+/// filter_map returns a new map containing the outputs of f
+/// that were not null
+pub let filter_map = |m, f| 'map_filter_map

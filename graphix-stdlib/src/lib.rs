@@ -22,6 +22,7 @@ use triomphe::Arc as TArc;
 
 mod array;
 mod core;
+mod map;
 mod net;
 mod rand;
 mod re;
@@ -380,6 +381,7 @@ impl<R: Rt, E: UserEvent, T: MapFn<R, E>> Apply<R, E> for MapQ<R, E, T> {
 #[repr(u64)]
 pub enum Module {
     Array,
+    Map,
     NetAndTime,
     Rand,
     Re,
@@ -435,6 +437,10 @@ pub fn register<R: Rt, E: UserEvent>(
             Module::Array => {
                 root.push_str("pub mod array;\n");
                 tbl.insert(Path::from("/array"), array::register(ctx)?);
+            }
+            Module::Map => {
+                root.push_str("pub mod map;\n");
+                tbl.insert(Path::from("/map"), map::register(ctx)?);
             }
             Module::NetAndTime => {
                 root.push_str("pub mod time;\n");
