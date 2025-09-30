@@ -14,4 +14,8 @@ pub let filter = |m, f| 'map_filter;
 
 /// filter_map returns a new map containing the outputs of f
 /// that were not null
-pub let filter_map = |m, f| 'map_filter_map
+pub let filter_map = |m, f| 'map_filter_map;
+
+/// iter produces an update for every key-value pair in the map m.
+/// updates are produced in the order they appear in m.
+pub let iter = |m| 'map_iter

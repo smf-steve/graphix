@@ -4,13 +4,14 @@ use crate::{
 use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
 use graphix_compiler::{
+    expr::ExprId,
     typ::{FnType, Type},
-    ExecCtx, Rt, UserEvent,
+    Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Rt, UserEvent,
 };
 use immutable_chunkmap::map::Map as CMap;
 use netidx::subscriber::Value;
 use netidx_value::ValArray;
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 use triomphe::Arc as TArc;
 
 impl MapCollection for CMap<Value, Value, 32> {
@@ -160,11 +161,60 @@ impl EvalCached for GetEv {
 
 type Get = CachedArgs<GetEv>;
 
+#[derive(Debug)]
+pub(super) struct Iter {
+    id: BindId,
+    top_id: ExprId,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Iter {
+    const NAME: &str = "map_iter";
+    deftype!("core::map", "fn(Map<'a, 'b>) -> ('a, 'b)");
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|ctx, _, _, _, top_id| {
+            let id = BindId::new();
+            ctx.rt.ref_var(id, top_id);
+            Ok(Box::new(Self { id, top_id }))
+        })
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for Iter {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if let Some(Value::Map(m)) = from[0].update(ctx, event) {
+            for (k, v) in m.into_iter() {
+                let pair = Value::Array(ValArray::from_iter_exact(
+                    [k.clone(), v.clone()].into_iter(),
+                ));
+                ctx.rt.set_var(self.id, pair);
+            }
+        }
+        event.variables.get(&self.id).map(|v| v.clone())
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id)
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
+        self.id = BindId::new();
+        ctx.rt.ref_var(self.id, self.top_id);
+    }
+}
+
 pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Map<R, E>>()?;
     ctx.register_builtin::<Filter<R, E>>()?;
     ctx.register_builtin::<FilterMap<R, E>>()?;
     ctx.register_builtin::<Len>()?;
     ctx.register_builtin::<Get>()?;
+    ctx.register_builtin::<Iter>()?;
     Ok(literal!(include_str!("map.gx")))
 }
