@@ -1417,3 +1417,192 @@ run!(rand_shuffle, RAND_SHUFFLE, |v: Result<&Value>| {
         _ => false,
     }
 });
+
+// Map module tests
+
+// First test basic map creation without using map module
+const MAP_BASIC: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  m{"a"}
+}
+"#;
+
+run!(map_basic, MAP_BASIC, |v: Result<&Value>| match v {
+    Ok(Value::I64(1)) => true,
+    _ => false,
+});
+
+const MAP_LEN: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  map::len(m)
+}
+"#;
+
+run!(map_len, MAP_LEN, |v: Result<&Value>| match v {
+    Ok(Value::I64(3)) => true,
+    _ => false,
+});
+
+const MAP_GET_PRESENT: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  map::get(m, "b")
+}
+"#;
+
+run!(map_get_present, MAP_GET_PRESENT, |v: Result<&Value>| match v {
+    Ok(Value::I64(2)) => true,
+    _ => false,
+});
+
+const MAP_GET_ABSENT: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  map::get(m, "d")
+}
+"#;
+
+run!(map_get_absent, MAP_GET_ABSENT, |v: Result<&Value>| match v {
+    Ok(Value::Null) => true,
+    _ => false,
+});
+
+const MAP_MAP: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  let result = map::map(m, |(k, v)| (k, v * 2));
+  map::get(result, "b")
+}
+"#;
+
+run!(map_map, MAP_MAP, |v: Result<&Value>| match v {
+    Ok(Value::I64(4)) => true,
+    _ => false,
+});
+
+const MAP_FILTER: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3, "d" => 4};
+  let result = map::filter(m, |(k, v)| v > 2);
+  map::len(result)
+}
+"#;
+
+run!(map_filter, MAP_FILTER, |v: Result<&Value>| match v {
+    Ok(Value::I64(2)) => true,
+    _ => false,
+});
+
+const MAP_FILTER_MAP: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3, "d" => 4};
+  let result = map::filter_map(m, |(k, v)| if v > 2 then (k, v * 10) else null);
+  map::get(result, "c")
+}
+"#;
+
+run!(map_filter_map, MAP_FILTER_MAP, |v: Result<&Value>| match v {
+    Ok(Value::I64(30)) => true,
+    _ => false,
+});
+
+const MAP_FOLD: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  map::fold(m, 0, |acc, (k, v)| acc + v)
+}
+"#;
+
+run!(map_fold, MAP_FOLD, |v: Result<&Value>| match v {
+    Ok(Value::I64(6)) => true,
+    _ => false,
+});
+
+const MAP_ITER: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2};
+  let values = array::group(map::iter(m), |n, _| n == 2);
+  array::len(values)
+}
+"#;
+
+run!(map_iter, MAP_ITER, |v: Result<&Value>| match v {
+    Ok(Value::I64(2)) => true,
+    _ => false,
+});
+
+const MAP_ITERQ: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  let clock = once(1);
+  let values = array::group(map::iterq(#clock, m), |n, _| n == 3);
+  array::len(values)
+}
+"#;
+
+run!(map_iterq, MAP_ITERQ, |v: Result<&Value>| match v {
+    Ok(Value::I64(3)) => true,
+    _ => false,
+});
+
+// Hold function tests
+
+const HOLD_BASIC: &str = r#"
+{
+  let trigger = 1;
+  let value = 42;
+  hold(#trigger, value)
+}
+"#;
+
+run!(hold_basic, HOLD_BASIC, |v: Result<&Value>| match v {
+    Ok(Value::I64(42)) => true,
+    _ => false,
+});
+
+const HOLD_WITH_QUEUE: &str = r#"
+{
+  let values = [10, 20, 30];
+  let triggers = [1, 1, 1];
+  let held_values = array::group(
+    hold(#array::iter(triggers), array::iter(values)),
+    |n, _| n == 3
+  );
+  array::len(held_values)
+}
+"#;
+
+run!(hold_with_queue, HOLD_WITH_QUEUE, |v: Result<&Value>| match v {
+    Ok(Value::I64(3)) => true,
+    _ => false,
+});
+
+const HOLD_NO_TRIGGER: &str = r#"
+{
+  let trigger = never();
+  let value = 42;
+  let result = hold(#trigger, value);
+  any(count(result), 0)
+}
+"#;
+
+run!(hold_no_trigger, HOLD_NO_TRIGGER, |v: Result<&Value>| match v {
+    Ok(Value::I64(0)) => true,
+    _ => false,
+});
+
+const HOLD_MULTIPLE_VALUES: &str = r#"
+{
+  let trigger = time::timer(0.5, false) ~ 1;
+  let values = [100, 200, 300];
+  // Only the last value should be held when trigger fires
+  hold(#trigger, array::iter(values))
+}
+"#;
+
+run!(hold_multiple_values, HOLD_MULTIPLE_VALUES, |v: Result<&Value>| match v {
+    Ok(Value::I64(300)) => true,
+    _ => false,
+});

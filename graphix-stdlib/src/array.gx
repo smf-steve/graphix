@@ -22,18 +22,18 @@ pub let fold = |a, init, f| 'array_fold;
 /// and calls f with the length of the internal buffer and the value of v.
 /// If f returns true then group returns the internal buffer as an array
 /// otherwise group returns nothing.
-pub let group = |v, f| 'group;
+pub let group = |v, f| 'array_group;
 
 /// iter produces an update for every value in the array a. updates are produced
 /// in the order they appear in a.
-pub let iter = |a| 'iter;
+pub let iter = |a| 'array_iter;
 
 /// iterq produces an update for each value in a, but only when clock updates. If
 /// clock does not update but a does, then iterq will store each a in an internal
 /// fifo queue. If clock updates but a does not, iterq will record the number of
 /// times it was triggered, and will update immediatly that many times when a
 /// updates.
-pub let iterq = |#clock, a| 'iterq;
+pub let iterq = |#clock, a| 'array_iterq;
 
 /// returns the length of a
 pub let len = |a| 'array_len;

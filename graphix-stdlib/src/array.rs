@@ -535,7 +535,7 @@ pub(super) struct Group<R: Rt, E: UserEvent> {
 }
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
-    const NAME: &str = "group";
+    const NAME: &str = "array_group";
     deftype!(
         "core::array",
         "fn('a, fn(i64, 'a) -> bool throws 'e) -> Array<'a> throws 'e"
@@ -651,7 +651,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Group<R, E> {
 pub(super) struct Iter(BindId, ExprId);
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Iter {
-    const NAME: &str = "iter";
+    const NAME: &str = "array_iter";
     deftype!("core::array", "fn(Array<'a>) -> 'a");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
@@ -699,7 +699,7 @@ pub(super) struct IterQ {
 }
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for IterQ {
-    const NAME: &str = "iterq";
+    const NAME: &str = "array_iterq";
     deftype!("core::array", "fn(#clock:Any, Array<'a>) -> 'a");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {

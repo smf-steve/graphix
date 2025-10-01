@@ -44,7 +44,7 @@ impl MapCollection for CMap<Value, Value, 32> {
             Type::Map { key, value } => {
                 Ok(Type::Tuple(TArc::from_iter([(**key).clone(), (**value).clone()])))
             }
-            _ => bail!("expected Map"),
+            _ => bail!("expected Map, got {:?}", ft.args[0].typ),
         }
     }
 }
@@ -236,7 +236,7 @@ pub(super) struct IterQ {
 }
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for IterQ {
-    const NAME: &str = "iterq";
+    const NAME: &str = "map_iterq";
     deftype!("core::map", "fn(#clock:Any, Map<'a, 'b>) -> ('a, 'b)");
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
