@@ -16,6 +16,17 @@ pub let filter = |m, f| 'map_filter;
 /// that were not null
 pub let filter_map = |m, f| 'map_filter_map;
 
+/// return the result of f applied to the init and every k, v pair of m in
+/// sequence. f(f(f(init, (k0, v0)), (k1, v1)), ...)
+pub let fold = |m, init, f| 'map_fold;
+
 /// iter produces an update for every key-value pair in the map m.
 /// updates are produced in the order they appear in m.
-pub let iter = |m| 'map_iter
+pub let iter = |m| 'map_iter;
+
+/// iterq produces updates for each value in m, but it only produces an update when
+/// clock updates. If clock does not update but m does, then iterq will store each m
+/// in an internal fifo queue. If clock updates but a does not, iterq will record the
+/// number of times it was triggered, and will update immediatly that many times when a
+/// updates.
+pub let iterq = |#clock, m| 'map_iterq

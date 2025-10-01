@@ -1,5 +1,6 @@
 use crate::{
-    deftype, CachedArgs, CachedVals, EvalCached, MapCollection, MapFn, MapQ, Slot,
+    deftype, CachedArgs, CachedVals, EvalCached, FoldFn, FoldQ, MapCollection, MapFn,
+    MapQ, Slot,
 };
 use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
@@ -11,6 +12,8 @@ use graphix_compiler::{
 use immutable_chunkmap::map::Map as CMap;
 use netidx::subscriber::Value;
 use netidx_value::ValArray;
+use poolshark::local::LPooled;
+use std::collections::VecDeque;
 use std::{fmt::Debug, sync::Arc};
 use triomphe::Arc as TArc;
 
@@ -125,6 +128,21 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterMapImpl {
 
 type FilterMap<R, E> = MapQ<R, E, FilterMapImpl>;
 
+#[derive(Debug)]
+struct FoldImpl;
+
+impl<R: Rt, E: UserEvent> FoldFn<R, E> for FoldImpl {
+    type Collection = CMap<Value, Value, 32>;
+
+    const NAME: &str = "map_fold";
+    deftype!(
+        "core::map",
+        "fn(Map<'a, 'b>, 'c, fn('c, ('a, 'b)) -> 'c throws 'e) -> 'c throws 'e"
+    );
+}
+
+type Fold<R, E> = FoldQ<R, E, FoldImpl>;
+
 #[derive(Debug, Default)]
 struct LenEv;
 
@@ -209,12 +227,81 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Iter {
     }
 }
 
+#[derive(Debug)]
+pub(super) struct IterQ {
+    triggered: usize,
+    queue: VecDeque<(usize, LPooled<Vec<(Value, Value)>>)>,
+    id: BindId,
+    top_id: ExprId,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for IterQ {
+    const NAME: &str = "iterq";
+    deftype!("core::map", "fn(#clock:Any, Map<'a, 'b>) -> ('a, 'b)");
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|ctx, _, _, _, top_id| {
+            let id = BindId::new();
+            ctx.rt.ref_var(id, top_id);
+            Ok(Box::new(IterQ { triggered: 0, queue: VecDeque::new(), id, top_id }))
+        })
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for IterQ {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if from[0].update(ctx, event).is_some() {
+            self.triggered += 1;
+        }
+        if let Some(Value::Map(m)) = from[1].update(ctx, event) {
+            let pairs: LPooled<Vec<(Value, Value)>> =
+                m.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            if !pairs.is_empty() {
+                self.queue.push_back((0, pairs));
+            }
+        }
+        while self.triggered > 0 && !self.queue.is_empty() {
+            let (i, pairs) = self.queue.front_mut().unwrap();
+            while self.triggered > 0 && *i < pairs.len() {
+                let (k, v) = pairs[*i].clone();
+                let pair = Value::Array(ValArray::from_iter_exact([k, v].into_iter()));
+                ctx.rt.set_var(self.id, pair);
+                *i += 1;
+                self.triggered -= 1;
+            }
+            if *i == pairs.len() {
+                self.queue.pop_front();
+            }
+        }
+        event.variables.get(&self.id).cloned()
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id)
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
+        self.id = BindId::new();
+        ctx.rt.ref_var(self.id, self.top_id);
+        self.queue.clear();
+        self.triggered = 0;
+    }
+}
+
 pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Map<R, E>>()?;
     ctx.register_builtin::<Filter<R, E>>()?;
     ctx.register_builtin::<FilterMap<R, E>>()?;
+    ctx.register_builtin::<Fold<R, E>>()?;
     ctx.register_builtin::<Len>()?;
     ctx.register_builtin::<Get>()?;
     ctx.register_builtin::<Iter>()?;
+    ctx.register_builtin::<IterQ>()?;
     Ok(literal!(include_str!("map.gx")))
 }

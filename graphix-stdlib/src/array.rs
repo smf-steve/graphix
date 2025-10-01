@@ -1,5 +1,6 @@
 use crate::{
-    deftype, CachedArgs, CachedVals, EvalCached, MapCollection, MapFn, MapQ, Slot,
+    deftype, CachedArgs, CachedVals, EvalCached, FoldFn, FoldQ, MapCollection, MapFn,
+    MapQ, Slot,
 };
 use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
@@ -9,18 +10,12 @@ use graphix_compiler::{
     node::genn,
     typ::{FnType, Type},
     Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, LambdaId, Node, Refs, Rt,
-    Scope, UserEvent,
+    UserEvent,
 };
 use netidx::{publisher::Typ, subscriber::Value, utils::Either};
 use netidx_value::ValArray;
 use smallvec::{smallvec, SmallVec};
-use std::{
-    collections::{hash_map::Entry, VecDeque},
-    fmt::Debug,
-    iter,
-    sync::Arc,
-};
-use triomphe::Arc as TArc;
+use std::{collections::VecDeque, fmt::Debug, iter, sync::Arc};
 
 impl MapCollection for ValArray {
     fn iter_values(&self) -> impl Iterator<Item = Value> {
@@ -198,215 +193,19 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FindMapImpl {
 pub(super) type FindMap<R, E> = MapQ<R, E, FindMapImpl>;
 
 #[derive(Debug)]
-pub(super) struct Fold<R: Rt, E: UserEvent> {
-    top_id: ExprId,
-    fid: BindId,
-    scope: Scope,
-    binds: Vec<BindId>,
-    nodes: Vec<Node<R, E>>,
-    inits: Vec<Option<Value>>,
-    initids: Vec<BindId>,
-    initid: BindId,
-    mftype: TArc<FnType>,
-    etyp: Type,
-    ityp: Type,
-    init: Option<Value>,
-}
+struct FoldImpl;
 
-impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Fold<R, E> {
+impl<R: Rt, E: UserEvent> FoldFn<R, E> for FoldImpl {
+    type Collection = ValArray;
+
     const NAME: &str = "array_fold";
     deftype!(
         "core::array",
         "fn(Array<'a>, 'b, fn('b, 'a) -> 'b throws 'e) -> 'b throws 'e"
     );
-
-    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
-        Arc::new(|_ctx, typ, scope, from, top_id| match from {
-            [_, _, _] => Ok(Box::new(Self {
-                top_id,
-                scope: scope.clone(),
-                binds: vec![],
-                nodes: vec![],
-                inits: vec![],
-                initids: vec![],
-                initid: BindId::new(),
-                fid: BindId::new(),
-                etyp: match &typ.args[0].typ {
-                    Type::Array(et) => (**et).clone(),
-                    t => bail!("expected array not {t}"),
-                },
-                ityp: typ.args[1].typ.clone(),
-                mftype: match &typ.args[2].typ {
-                    Type::Fn(ft) => ft.clone(),
-                    t => bail!("expected a function not {t}"),
-                },
-                init: None,
-            })),
-            _ => bail!("expected three arguments"),
-        })
-    }
 }
 
-impl<R: Rt, E: UserEvent> Apply<R, E> for Fold<R, E> {
-    fn update(
-        &mut self,
-        ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
-        event: &mut Event<E>,
-    ) -> Option<Value> {
-        let init = match from[0].update(ctx, event) {
-            None => self.nodes.len(),
-            Some(Value::Array(a)) if a.len() == self.binds.len() => {
-                for (id, v) in self.binds.iter().zip(a.iter()) {
-                    ctx.cached.insert(*id, v.clone());
-                    event.variables.insert(*id, v.clone());
-                }
-                self.nodes.len()
-            }
-            Some(Value::Array(a)) => {
-                while self.binds.len() < a.len() {
-                    self.binds.push(BindId::new());
-                    self.inits.push(None);
-                    self.initids.push(BindId::new());
-                }
-                while a.len() < self.binds.len() {
-                    if let Some(id) = self.binds.pop() {
-                        ctx.cached.remove(&id);
-                    }
-                    if let Some(id) = self.initids.pop() {
-                        ctx.cached.remove(&id);
-                    }
-                    self.inits.pop();
-                    if let Some(mut n) = self.nodes.pop() {
-                        n.delete(ctx);
-                    }
-                }
-                let init = self.nodes.len();
-                for i in 0..self.binds.len() {
-                    ctx.cached.insert(self.binds[i], a[i].clone());
-                    event.variables.insert(self.binds[i], a[i].clone());
-                    if i >= self.nodes.len() {
-                        let n = genn::reference(
-                            ctx,
-                            if i == 0 { self.initid } else { self.initids[i - 1] },
-                            self.ityp.clone(),
-                            self.top_id,
-                        );
-                        let x = genn::reference(
-                            ctx,
-                            self.binds[i],
-                            self.etyp.clone(),
-                            self.top_id,
-                        );
-                        let fnode = genn::reference(
-                            ctx,
-                            self.fid,
-                            Type::Fn(self.mftype.clone()),
-                            self.top_id,
-                        );
-                        let node = genn::apply(
-                            fnode,
-                            self.scope.clone(),
-                            vec![n, x],
-                            &self.mftype,
-                            self.top_id,
-                        );
-                        self.nodes.push(node);
-                    }
-                }
-                init
-            }
-            _ => self.nodes.len(),
-        };
-        if let Some(v) = from[1].update(ctx, event) {
-            ctx.cached.insert(self.initid, v.clone());
-            event.variables.insert(self.initid, v.clone());
-            self.init = Some(v);
-        }
-        if let Some(v) = from[2].update(ctx, event) {
-            ctx.cached.insert(self.fid, v.clone());
-            event.variables.insert(self.fid, v);
-        }
-        let old_init = event.init;
-        for i in 0..self.nodes.len() {
-            if i == init {
-                event.init = true;
-                if let Some(v) = ctx.cached.get(&self.fid)
-                    && let Entry::Vacant(e) = event.variables.entry(self.fid)
-                {
-                    e.insert(v.clone());
-                }
-                if i == 0 {
-                    if let Some(v) = self.init.as_ref()
-                        && let Entry::Vacant(e) = event.variables.entry(self.initid)
-                    {
-                        e.insert(v.clone());
-                    }
-                } else {
-                    if let Some(v) = self.inits[i - 1].clone() {
-                        event.variables.insert(self.initids[i - 1], v);
-                    }
-                }
-            }
-            match self.nodes[i].update(ctx, event) {
-                Some(v) => {
-                    ctx.cached.insert(self.initids[i], v.clone());
-                    event.variables.insert(self.initids[i], v.clone());
-                    self.inits[i] = Some(v);
-                }
-                None => {
-                    ctx.cached.remove(&self.initids[i]);
-                    event.variables.remove(&self.initids[i]);
-                    self.inits[i] = None;
-                }
-            }
-        }
-        event.init = old_init;
-        self.inits.last().and_then(|v| v.clone())
-    }
-
-    fn typecheck(
-        &mut self,
-        ctx: &mut ExecCtx<R, E>,
-        _from: &mut [Node<R, E>],
-    ) -> anyhow::Result<()> {
-        let mut n = genn::reference(ctx, self.initid, self.ityp.clone(), self.top_id);
-        let x = genn::reference(ctx, BindId::new(), self.etyp.clone(), self.top_id);
-        let fnode =
-            genn::reference(ctx, self.fid, Type::Fn(self.mftype.clone()), self.top_id);
-        n = genn::apply(fnode, self.scope.clone(), vec![n, x], &self.mftype, self.top_id);
-        let r = n.typecheck(ctx);
-        n.delete(ctx);
-        r
-    }
-
-    fn refs(&self, refs: &mut Refs) {
-        for n in &self.nodes {
-            n.refs(refs)
-        }
-    }
-
-    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
-        let i =
-            iter::once(&self.initid).chain(self.binds.iter()).chain(self.initids.iter());
-        for id in i {
-            ctx.cached.remove(id);
-        }
-        for n in &mut self.nodes {
-            n.delete(ctx);
-        }
-    }
-
-    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
-        self.init = None;
-        for v in &mut self.inits {
-            *v = None
-        }
-        for n in &mut self.nodes {
-            n.sleep(ctx)
-        }
-    }
-}
+type Fold<R, E> = FoldQ<R, E, FoldImpl>;
 
 #[derive(Debug, Default)]
 pub(super) struct ConcatEv(SmallVec<[Value; 32]>);
