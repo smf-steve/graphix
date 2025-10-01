@@ -179,6 +179,42 @@ impl EvalCached for GetEv {
 
 type Get = CachedArgs<GetEv>;
 
+#[derive(Debug, Default)]
+struct InsertEv;
+
+impl EvalCached for InsertEv {
+    const NAME: &str = "map_insert";
+    deftype!("core::map", "fn(Map<'a, 'b>, 'a, 'b) -> Map<'a, 'b>");
+
+    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+        match (&from.0[0], &from.0[1], &from.0[2]) {
+            (Some(Value::Map(m)), Some(key), Some(value)) => {
+                Some(Value::Map(m.insert(key.clone(), value.clone()).0))
+            }
+            _ => None,
+        }
+    }
+}
+
+type Insert = CachedArgs<InsertEv>;
+
+#[derive(Debug, Default)]
+struct RemoveEv;
+
+impl EvalCached for RemoveEv {
+    const NAME: &str = "map_remove";
+    deftype!("core::map", "fn(Map<'a, 'b>, 'a) -> Map<'a, 'b>");
+
+    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+        match (&from.0[0], &from.0[1]) {
+            (Some(Value::Map(m)), Some(key)) => Some(Value::Map(m.remove(key).0)),
+            _ => None,
+        }
+    }
+}
+
+type Remove = CachedArgs<RemoveEv>;
+
 #[derive(Debug)]
 pub(super) struct Iter {
     id: BindId,
@@ -301,6 +337,8 @@ pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<A
     ctx.register_builtin::<Fold<R, E>>()?;
     ctx.register_builtin::<Len>()?;
     ctx.register_builtin::<Get>()?;
+    ctx.register_builtin::<Insert>()?;
+    ctx.register_builtin::<Remove>()?;
     ctx.register_builtin::<Iter>()?;
     ctx.register_builtin::<IterQ>()?;
     Ok(literal!(include_str!("map.gx")))

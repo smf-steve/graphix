@@ -20,6 +20,12 @@ pub let len = |m| 'map_len;
 /// get the value associated with the key k in the map m, or null if not present
 pub let get = |m, k| 'map_get;
 
+/// insert a new value into the map
+pub let insert = |m, k, v| 'map_insert;
+
+/// remove the value associated with the specified key from the map
+pub let remove = |m, k| 'map_remove;
+
 /// iter produces an update for every key-value pair in the map m.
 /// updates are produced in the order they appear in m.
 pub let iter = |m| 'map_iter;

@@ -1550,7 +1550,33 @@ run!(map_iterq, MAP_ITERQ, |v: Result<&Value>| match v {
     _ => false,
 });
 
-// Hold function tests
+const MAP_INSERT: &str = r#"
+{
+  let m = {"a" => 1, "b" => 2, "c" => 3};
+  let m = map::insert(m, "d", 4);
+  let m = map::insert(m, "e", 5);
+  m == { "a" => 1, "b" => 2, "c" => 3, "d" => 4, "e" => 5 }
+}
+"#;
+
+run!(map_insert, MAP_INSERT, |v: Result<&Value>| match v {
+    Ok(Value::Bool(true)) => true,
+    _ => false,
+});
+
+const MAP_REMOVE: &str = r#"
+{
+  let m = { "a" => 1, "b" => 2, "c" => 3, "d" => 4, "e" => 5 };
+  let m = map::remove(m, "d");
+  let m = map::remove(m, "e");
+  m == {"a" => 1, "b" => 2, "c" => 3}
+}
+"#;
+
+run!(map_remove, MAP_REMOVE, |v: Result<&Value>| match v {
+    Ok(Value::Bool(true)) => true,
+    _ => false,
+});
 
 const HOLD_BASIC: &str = r#"
 {
@@ -1565,7 +1591,7 @@ run!(hold_basic, HOLD_BASIC, |v: Result<&Value>| match v {
     _ => false,
 });
 
-const HOLD_WITH_QUEUE: &str = r#"
+const HOLD_MULTIPLE: &str = r#"
 {
   let values = [10, 20, 30];
   let triggers = [1, 1, 1];
@@ -1575,7 +1601,7 @@ const HOLD_WITH_QUEUE: &str = r#"
 }
 "#;
 
-run!(hold_with_queue, HOLD_WITH_QUEUE, |v: Result<&Value>| match v {
+run!(hold_multiple, HOLD_MULTIPLE, |v: Result<&Value>| match v {
     Ok(Value::I64(3)) => true,
     _ => false,
 });
