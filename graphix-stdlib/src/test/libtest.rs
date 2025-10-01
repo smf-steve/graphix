@@ -1,7 +1,7 @@
 use crate::run;
 use anyhow::bail;
 use anyhow::Result;
-use arcstr::ArcStr;
+use arcstr::{literal, ArcStr};
 use netidx::subscriber::Value;
 
 const IS_ERR: &str = r#"
@@ -1418,21 +1418,6 @@ run!(rand_shuffle, RAND_SHUFFLE, |v: Result<&Value>| {
     }
 });
 
-// Map module tests
-
-// First test basic map creation without using map module
-const MAP_BASIC: &str = r#"
-{
-  let m = {"a" => 1, "b" => 2, "c" => 3};
-  m{"a"}
-}
-"#;
-
-run!(map_basic, MAP_BASIC, |v: Result<&Value>| match v {
-    Ok(Value::I64(1)) => true,
-    _ => false,
-});
-
 const MAP_LEN: &str = r#"
 {
   let m = {"a" => 1, "b" => 2, "c" => 3};
@@ -1472,39 +1457,46 @@ run!(map_get_absent, MAP_GET_ABSENT, |v: Result<&Value>| match v {
 const MAP_MAP: &str = r#"
 {
   let m = {"a" => 1, "b" => 2, "c" => 3};
-  let result = map::map(m, |(k, v)| (k, v * 2));
-  map::get(result, "b")
+  map::map(m, |(k, v)| (k, v * 2))
 }
 "#;
 
 run!(map_map, MAP_MAP, |v: Result<&Value>| match v {
-    Ok(Value::I64(4)) => true,
+    Ok(Value::Map(m)) =>
+        m.len() == 3
+            && m[&Value::String(literal!("a"))] == Value::I64(2)
+            && m[&Value::String(literal!("b"))] == Value::I64(4)
+            && m[&Value::String(literal!("c"))] == Value::I64(6),
     _ => false,
 });
 
 const MAP_FILTER: &str = r#"
 {
   let m = {"a" => 1, "b" => 2, "c" => 3, "d" => 4};
-  let result = map::filter(m, |(k, v)| v > 2);
-  map::len(result)
+  map::filter(m, |(k, v)| v > 2)
 }
 "#;
 
 run!(map_filter, MAP_FILTER, |v: Result<&Value>| match v {
-    Ok(Value::I64(2)) => true,
+    Ok(Value::Map(m)) =>
+        m.len() == 2
+            && m[&Value::String(literal!("c"))] == Value::I64(3)
+            && m[&Value::String(literal!("d"))] == Value::I64(4),
     _ => false,
 });
 
 const MAP_FILTER_MAP: &str = r#"
 {
   let m = {"a" => 1, "b" => 2, "c" => 3, "d" => 4};
-  let result = map::filter_map(m, |(k, v)| if v > 2 then (k, v * 10) else null);
-  map::get(result, "c")
+  map::filter_map(m, |(k, v)| select v { v if v > 2 => (k, v * 10), _ => null })
 }
 "#;
 
 run!(map_filter_map, MAP_FILTER_MAP, |v: Result<&Value>| match v {
-    Ok(Value::I64(30)) => true,
+    Ok(Value::Map(m)) =>
+        m.len() == 2
+            && m[&Value::String(literal!("c"))] == Value::I64(30)
+            && m[&Value::String(literal!("d"))] == Value::I64(40),
     _ => false,
 });
 
@@ -1523,27 +1515,38 @@ run!(map_fold, MAP_FOLD, |v: Result<&Value>| match v {
 const MAP_ITER: &str = r#"
 {
   let m = {"a" => 1, "b" => 2};
-  let values = array::group(map::iter(m), |n, _| n == 2);
-  array::len(values)
+  let (_, v) = map::iter(m);
+  array::group(v, |n, _| n == 2)
 }
 "#;
 
 run!(map_iter, MAP_ITER, |v: Result<&Value>| match v {
-    Ok(Value::I64(2)) => true,
+    Ok(Value::Array(a)) => match &a[..] {
+        [Value::I64(1), Value::I64(2)] => true,
+        _ => false,
+    },
     _ => false,
 });
 
 const MAP_ITERQ: &str = r#"
 {
   let m = {"a" => 1, "b" => 2, "c" => 3};
-  let clock = once(1);
-  let values = array::group(map::iterq(#clock, m), |n, _| n == 3);
-  array::len(values)
+  m <- {"d" => 4, "e" => 5};
+  let clock = 1;
+  let (_, v) = map::iterq(#clock, m);
+  array::group(v, |n, _| {
+    clock <- n;
+    n == 5
+  })
 }
 "#;
 
 run!(map_iterq, MAP_ITERQ, |v: Result<&Value>| match v {
-    Ok(Value::I64(3)) => true,
+    Ok(Value::Array(a)) => match &a[..] {
+        [Value::I64(1), Value::I64(2), Value::I64(3), Value::I64(4), Value::I64(5)] =>
+            true,
+        _ => false,
+    },
     _ => false,
 });
 
@@ -1551,9 +1554,9 @@ run!(map_iterq, MAP_ITERQ, |v: Result<&Value>| match v {
 
 const HOLD_BASIC: &str = r#"
 {
-  let trigger = 1;
+  let clock = 1;
   let value = 42;
-  hold(#trigger, value)
+  hold(#clock, value)
 }
 "#;
 
@@ -1566,10 +1569,8 @@ const HOLD_WITH_QUEUE: &str = r#"
 {
   let values = [10, 20, 30];
   let triggers = [1, 1, 1];
-  let held_values = array::group(
-    hold(#array::iter(triggers), array::iter(values)),
-    |n, _| n == 3
-  );
+  let v = hold(#clock:array::iter(triggers), array::iter(values));
+  let held_values = array::group(v, |n, _| n == 3);
   array::len(held_values)
 }
 "#;
@@ -1581,10 +1582,9 @@ run!(hold_with_queue, HOLD_WITH_QUEUE, |v: Result<&Value>| match v {
 
 const HOLD_NO_TRIGGER: &str = r#"
 {
-  let trigger = never();
+  let clock = never();
   let value = 42;
-  let result = hold(#trigger, value);
-  any(count(result), 0)
+  any(count(hold(#clock, value)), 0)
 }
 "#;
 
@@ -1595,10 +1595,10 @@ run!(hold_no_trigger, HOLD_NO_TRIGGER, |v: Result<&Value>| match v {
 
 const HOLD_MULTIPLE_VALUES: &str = r#"
 {
-  let trigger = time::timer(0.5, false) ~ 1;
+  let clock = time::timer(0.5, false) ~ 1;
   let values = [100, 200, 300];
-  // Only the last value should be held when trigger fires
-  hold(#trigger, array::iter(values))
+  // Only the last value should be held when clock fires
+  hold(#clock, array::iter(values))
 }
 "#;
 
