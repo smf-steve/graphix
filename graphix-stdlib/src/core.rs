@@ -515,6 +515,55 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Queue {
 }
 
 #[derive(Debug)]
+struct Hold {
+    triggered: usize,
+    current: Option<Value>,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Hold {
+    const NAME: &str = "hold";
+    deftype!("core", "fn(#clock:Any, 'a) -> 'a");
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|_, _, _, from, _| match from {
+            [_, _] => Ok(Box::new(Self { triggered: 0, current: None })),
+            _ => bail!("expected two arguments"),
+        })
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for Hold {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if from[0].update(ctx, event).is_some() {
+            self.triggered += 1;
+        }
+        if let Some(v) = from[1].update(ctx, event) {
+            self.current = Some(v);
+        }
+        if self.triggered > 0
+            && let Some(v) = self.current.take()
+        {
+            self.triggered -= 1;
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    fn delete(&mut self, _: &mut ExecCtx<R, E>) {}
+
+    fn sleep(&mut self, _: &mut ExecCtx<R, E>) {
+        self.triggered = 0;
+        self.current = None;
+    }
+}
+
+#[derive(Debug)]
 struct Seq {
     id: BindId,
     top_id: ExprId,
@@ -1018,6 +1067,7 @@ printfn!(Println, "println", println, eprintln);
 
 pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<Queue>()?;
+    ctx.register_builtin::<Hold>()?;
     ctx.register_builtin::<All>()?;
     ctx.register_builtin::<And>()?;
     ctx.register_builtin::<Count>()?;

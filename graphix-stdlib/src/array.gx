@@ -28,10 +28,10 @@ pub let group = |v, f| 'group;
 /// in the order they appear in a.
 pub let iter = |a| 'iter;
 
-/// iterq produces updates for each value in a, but it only produces an update when
-/// clock updates. If clock does not update but a does, then iterq will store each a
-/// in an internal fifo queue. If clock updates but a does not, iterq will record the
-/// number of times it was triggered, and will update immediatly that many times when a
+/// iterq produces an update for each value in a, but only when clock updates. If
+/// clock does not update but a does, then iterq will store each a in an internal
+/// fifo queue. If clock updates but a does not, iterq will record the number of
+/// times it was triggered, and will update immediatly that many times when a
 /// updates.
 pub let iterq = |#clock, a| 'iterq;
 

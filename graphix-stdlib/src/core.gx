@@ -94,6 +94,13 @@ pub let uniq = |v| 'uniq;
 /// values from the queue when they are available.
 pub let queue = |#clock, v| 'queue;
 
+/// hold the most recent value of v interally until clock updates. If v updates
+/// more than once before clock updates, older values of v will be discarded,
+/// only the most recent value will be retained. If clock updates when no v is held
+/// internall, record the number of times it updated, and pass that many v updates
+/// through immediatly when they happen.
+pub let hold = |#clock, v| 'hold;
+
 /// ignore updates to any argument and never return anything
 pub let never = |@args| 'never;
 
