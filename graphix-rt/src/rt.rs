@@ -340,8 +340,10 @@ impl<X: GXExt> Rt for GXRt<X> {
     }
 
     fn set_timer(&mut self, id: BindId, timeout: Duration) {
-        self.tasks
-            .spawn(time::sleep(timeout).map(move |()| (id, Value::DateTime(Utc::now()))));
+        self.tasks.spawn(
+            time::sleep(timeout)
+                .map(move |()| (id, Value::DateTime(Arc::new(Utc::now())))),
+        );
     }
 
     fn ref_var(&mut self, id: BindId, ref_by: ExprId) {

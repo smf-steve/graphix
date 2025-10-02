@@ -672,7 +672,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Throttle {
         if up[0]
             && let Some(Value::Duration(d)) = &self.args.0[0]
         {
-            self.wait = *d;
+            self.wait = **d;
             if let Some(id) = self.tid.take()
                 && let Some(last) = &mut self.last
             {
