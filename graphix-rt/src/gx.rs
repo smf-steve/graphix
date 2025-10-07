@@ -19,7 +19,10 @@ use netidx::{
     path::Path, protocol::valarray::ValArray, publisher::Value, subscriber::Dval,
 };
 use netidx_protocols::rpc::server::RpcCall;
-use poolshark::global::{GPooled, Pool};
+use poolshark::{
+    global::{GPooled, Pool},
+    local::LPooled,
+};
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
@@ -220,7 +223,7 @@ impl<X: GXExt> GX<X> {
         }
         for (id, n) in self.nodes.iter_mut() {
             if let Some(init) = self.ctx.rt.updated.get(id) {
-                let mut clear: SmallVec<[BindId; 16]> = smallvec![];
+                let mut clear: LPooled<Vec<BindId>> = LPooled::take();
                 self.event.init = *init;
                 if self.event.init {
                     let mut refs = Refs::default();
@@ -237,7 +240,7 @@ impl<X: GXExt> GX<X> {
                 if let Some(v) = n.update(&mut self.ctx, &mut self.event) {
                     batch.push(GXEvent::Updated(*id, v))
                 }
-                for id in clear {
+                for id in clear.drain(..) {
                     self.event.variables.remove(&id);
                 }
             }
@@ -330,15 +333,15 @@ impl<X: GXExt> GX<X> {
             try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
                 .await
                 .context(CouldNotResolve)?;
-        let nodes = exprs
+        let mut nodes = exprs
             .iter()
             .map(|e| {
                 compile(&mut self.ctx, flags, &scope, e.clone())
                     .with_context(|| format!("compiling root expression {e}"))
             })
-            .collect::<Result<SmallVec<[_; 4]>>>()
+            .collect::<Result<LPooled<Vec<_>>>>()
             .with_context(|| ori.clone())?;
-        for (e, n) in exprs.iter().zip(nodes.into_iter()) {
+        for (e, n) in exprs.iter().zip(nodes.drain(..)) {
             self.ctx.rt.updated.insert(e.id, true);
             self.nodes.insert(e.id, n);
         }
@@ -353,14 +356,14 @@ impl<X: GXExt> GX<X> {
             try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
                 .await
                 .context(CouldNotResolve)?;
-        let nodes = exprs
+        let mut nodes = exprs
             .iter()
             .map(|e| compile(&mut self.ctx, self.flags, &scope, e.clone()))
-            .collect::<Result<SmallVec<[_; 4]>>>()
+            .collect::<Result<LPooled<Vec<_>>>>()
             .with_context(|| ori.clone())?;
         let exprs = exprs
             .iter()
-            .zip(nodes.into_iter())
+            .zip(nodes.drain(..))
             .map(|(e, n)| {
                 let output = is_output(&n);
                 let typ = n.typ().clone();

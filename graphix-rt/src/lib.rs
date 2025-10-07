@@ -7,7 +7,6 @@
 //! library are supported by this runtime.
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
-use core::fmt;
 use derive_builder::Builder;
 use enumflags2::BitFlags;
 use graphix_compiler::{
@@ -27,7 +26,7 @@ use netidx_value::FromValue;
 use poolshark::global::GPooled;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use std::{future, path::PathBuf, time::Duration};
+use std::{fmt, future, path::PathBuf, time::Duration};
 use tokio::{
     sync::{
         mpsc::{self as tmpsc},
@@ -125,6 +124,7 @@ impl fmt::Display for CouldNotResolve {
     }
 }
 
+#[derive(Debug)]
 pub struct CompExp<X: GXExt> {
     pub id: ExprId,
     pub typ: Type,
@@ -138,6 +138,7 @@ impl<X: GXExt> Drop for CompExp<X> {
     }
 }
 
+#[derive(Debug)]
 pub struct CompRes<X: GXExt> {
     pub exprs: SmallVec<[CompExp<X>; 1]>,
     pub env: Env<GXRt<X>, X::UserEvent>,
@@ -286,7 +287,7 @@ enum ToGX<X: GXExt> {
     },
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum GXEvent<X: GXExt> {
     Updated(ExprId, Value),
     Env(Env<GXRt<X>, X::UserEvent>),
@@ -296,6 +297,12 @@ pub enum GXEvent<X: GXExt> {
 ///
 /// Drop the handle to shutdown the associated background tasks.
 pub struct GXHandle<X: GXExt>(tmpsc::UnboundedSender<ToGX<X>>);
+
+impl<X: GXExt> fmt::Debug for GXHandle<X> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GXHandle")
+    }
+}
 
 impl<X: GXExt> Clone for GXHandle<X> {
     fn clone(&self) -> Self {

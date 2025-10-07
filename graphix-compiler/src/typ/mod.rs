@@ -797,6 +797,33 @@ impl Type {
         t: &Self,
     ) -> Result<Self> {
         match (self, t) {
+            (
+                Type::Ref { scope: s0, name: n0, .. },
+                Type::Ref { scope: s1, name: n1, .. },
+            ) if s0 == s1 && n0 == n1 => Ok(Type::Primitive(BitFlags::empty())),
+            (t0 @ Type::Ref { .. }, t1) | (t0, t1 @ Type::Ref { .. }) => {
+                let t0 = t0.lookup_ref(env)?;
+                let t1 = t1.lookup_ref(env)?;
+                let t0_addr = (t0 as *const Type).addr();
+                let t1_addr = (t1 as *const Type).addr();
+                match hist.get(&(t0_addr, t1_addr)) {
+                    Some(r) => Ok(r.clone()),
+                    None => {
+                        let r = Type::Primitive(BitFlags::empty());
+                        hist.insert((t0_addr, t1_addr), r);
+                        match t0.diff_int(env, hist, &t1) {
+                            Ok(r) => {
+                                hist.insert((t0_addr, t1_addr), r.clone());
+                                Ok(r)
+                            }
+                            Err(e) => {
+                                hist.remove(&(t0_addr, t1_addr));
+                                Err(e)
+                            }
+                        }
+                    }
+                }
+            }
             (Type::Set(s0), Type::Set(s1)) => {
                 let mut s: SmallVec<[Type; 4]> = smallvec![];
                 for i in 0..s0.len() {
@@ -915,33 +942,6 @@ impl Type {
             }
             (_, Type::Any) => Ok(Type::Primitive(BitFlags::empty())),
             (Type::Any, _) => Ok(Type::Any),
-            (
-                Type::Ref { scope: s0, name: n0, .. },
-                Type::Ref { scope: s1, name: n1, .. },
-            ) if s0 == s1 && n0 == n1 => Ok(Type::Primitive(BitFlags::empty())),
-            (t0 @ Type::Ref { .. }, t1) | (t0, t1 @ Type::Ref { .. }) => {
-                let t0 = t0.lookup_ref(env)?;
-                let t1 = t1.lookup_ref(env)?;
-                let t0_addr = (t0 as *const Type).addr();
-                let t1_addr = (t1 as *const Type).addr();
-                match hist.get(&(t0_addr, t1_addr)) {
-                    Some(r) => Ok(r.clone()),
-                    None => {
-                        let r = Type::Primitive(BitFlags::empty());
-                        hist.insert((t0_addr, t1_addr), r);
-                        match t0.diff_int(env, hist, &t1) {
-                            Ok(r) => {
-                                hist.insert((t0_addr, t1_addr), r.clone());
-                                Ok(r)
-                            }
-                            Err(e) => {
-                                hist.remove(&(t0_addr, t1_addr));
-                                Err(e)
-                            }
-                        }
-                    }
-                }
-            }
             (Type::Primitive(s0), Type::Primitive(s1)) => {
                 let mut s = *s0;
                 s.remove(*s1);

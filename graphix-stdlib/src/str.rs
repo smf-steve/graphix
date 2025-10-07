@@ -769,13 +769,16 @@ struct ParseEv;
 
 impl EvalCached for ParseEv {
     const NAME: &str = "string_parse";
-    deftype!("str", "fn(string) -> Any");
+    deftype!("str", "fn(string) -> Result<PrimNoErr, `ParseError(string)>");
 
     fn eval(&mut self, from: &CachedVals) -> Option<Value> {
         match &from.0[0] {
             Some(Value::String(s)) => match s.parse::<Value>() {
-                Ok(v) => Some(v),
-                Err(e) => Some(Value::error(e.to_string())),
+                Ok(v) => match v {
+                    Value::Error(e) => Some(errf!(literal!("ParseError"), "{e}")),
+                    v => Some(v),
+                },
+                Err(e) => Some(errf!(literal!("ParseError"), "{e:?}")),
             },
             _ => None,
         }
