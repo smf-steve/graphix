@@ -1,9 +1,10 @@
 use crate::{
     env::Env,
     expr::{ExprId, Pattern, StructurePattern},
+    format_with_flags,
     node::{compiler, Cached},
     typ::Type,
-    BindId, CFlag, Event, ExecCtx, Rt, Scope, UserEvent,
+    BindId, CFlag, Event, ExecCtx, PrintFlag, Rt, Scope, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
@@ -87,7 +88,9 @@ impl StructPatternNode {
                             .collect::<Result<Box<[Self]>>>()?;
                         (all, single, multi)
                     }
-                    _ => bail!("slice patterns can't match {type_predicate}"),
+                    _ => format_with_flags(PrintFlag::DerefTVars, || {
+                        bail!("slice patterns can't match {type_predicate}")
+                    })?,
                 }
             }};
         }
@@ -135,7 +138,9 @@ impl StructPatternNode {
                             .collect::<Result<Box<[Self]>>>()?;
                         Self::Slice { tuple: false, all, binds }
                     }
-                    _ => bail!("slice patterns can't match {type_predicate}"),
+                    _ => format_with_flags(PrintFlag::DerefTVars, || {
+                        bail!("slice patterns can't match {type_predicate}")
+                    })?,
                 }
             }
             StructurePattern::Tuple { all, binds } => {
@@ -162,7 +167,9 @@ impl StructPatternNode {
                             .collect::<Result<Box<[Self]>>>()?;
                         Self::Slice { tuple: true, all, binds }
                     }
-                    _ => bail!("tuple patterns can't match {type_predicate}"),
+                    _ => format_with_flags(PrintFlag::DerefTVars, || {
+                        bail!("tuple patterns can't match {type_predicate}")
+                    })?,
                 }
             }
             StructurePattern::Variant { all, tag, binds } => {
@@ -195,7 +202,9 @@ impl StructPatternNode {
                             .collect::<Result<Box<[Self]>>>()?;
                         Self::Variant { tag: tag.clone(), all, binds }
                     }
-                    _ => bail!("variant patterns can't match {type_predicate}"),
+                    _ => format_with_flags(PrintFlag::DerefTVars, || {
+                        bail!("variant patterns can't match {type_predicate}")
+                    })?,
                 }
             }
             StructurePattern::Struct { exhaustive, all, binds } => {
@@ -264,7 +273,9 @@ impl StructPatternNode {
                             .collect::<Result<Box<[(ArcStr, usize, Self)]>>>()?;
                         Self::Struct { all, binds }
                     }
-                    _ => bail!("struct patterns can't match {type_predicate}"),
+                    _ => format_with_flags(PrintFlag::DerefTVars, || {
+                        bail!("struct patterns can't match {type_predicate}")
+                    })?,
                 }
             }
         };
@@ -591,7 +602,6 @@ impl<R: Rt, E: UserEvent> PatternNode<R, E> {
     pub(super) fn compile(
         ctx: &mut ExecCtx<R, E>,
         flags: BitFlags<CFlag>,
-        arg_type: &Type,
         spec: &Pattern,
         scope: &Scope,
         top_id: ExprId,
@@ -600,14 +610,6 @@ impl<R: Rt, E: UserEvent> PatternNode<R, E> {
             Some(t) => (true, t.scope_refs(&scope.lexical).lookup_ref(&ctx.env)?.clone()),
             None => {
                 let typ = spec.structure_predicate.infer_type_predicate(&ctx.env)?;
-                match &spec.structure_predicate {
-                    StructurePattern::Bind(_) | StructurePattern::Ignore => {
-                        arg_type.contains(&ctx.env, &typ)?;
-                    }
-                    _ => {
-                        typ.could_match(&ctx.env, &arg_type)?;
-                    }
-                }
                 (false, typ)
             }
         };

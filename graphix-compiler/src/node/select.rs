@@ -4,7 +4,8 @@ use crate::{
     format_with_flags,
     node::pattern::PatternNode,
     typ::Type,
-    BindId, CFlag, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update, UserEvent,
+    wrap, BindId, CFlag, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update,
+    UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use compact_str::format_compact;
@@ -36,16 +37,12 @@ impl<R: Rt, E: UserEvent> Select<R, E> {
         arms: &[(Pattern, Expr)],
     ) -> Result<Node<R, E>> {
         let arg = Cached::new(compile(ctx, flags, arg.clone(), scope, top_id)?);
-        let mut atype = arg.node.typ().clone();
         let arms = arms
             .iter()
             .map(|(pat, spec)| {
                 let scope = scope.append(&format_compact!("sel{}", SelectId::new().0));
-                let pat = PatternNode::compile(ctx, flags, &atype, pat, &scope, top_id)
+                let pat = PatternNode::compile(ctx, flags, pat, &scope, top_id)
                     .with_context(|| format!("in select at {}", spec.pos))?;
-                if !pat.guard.is_some() && !pat.structure_predicate.is_refutable() {
-                    atype = atype.diff(&ctx.env, &pat.type_predicate)?;
-                }
                 let n = Cached::new(compile(ctx, flags, spec.clone(), &scope, top_id)?);
                 Ok((pat, n))
             })
@@ -184,8 +181,8 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Select<R, E> {
         let mut rtype = Type::Primitive(BitFlags::empty());
         let mut mtype = Type::Primitive(BitFlags::empty());
         let mut itype = Type::Primitive(BitFlags::empty());
-        let mut saw_true = false; // oooooh it's such a hack
-        let mut saw_false = false; // round two round two
+        let mut saw_true = false;
+        let mut saw_false = false;
         for (pat, n) in self.arms.iter_mut() {
             match &mut pat.guard {
                 Some(guard) => guard.node.typecheck(ctx)?,
@@ -205,7 +202,6 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Select<R, E> {
                 }
             }
             itype = itype.union(&ctx.env, &pat.type_predicate)?;
-            n.node.typecheck(ctx)?;
             rtype = rtype.union(&ctx.env, n.node.typ())?;
         }
         itype.check_contains(&ctx.env, &self.arg.node.typ()).map_err(|e| {
@@ -218,6 +214,11 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Select<R, E> {
                 anyhow!("missing match cases {e}")
             })
         })?;
+        for (pat, n) in self.arms.iter_mut() {
+            // make sure tvars are aliased properly even if itype was Any
+            self.arg.node.typ().contains(&ctx.env, &pat.type_predicate)?;
+            wrap!(n.node, n.node.typecheck(ctx))?;
+        }
         let mut atype = self.arg.node.typ().clone().normalize();
         for (pat, _) in self.arms.iter() {
             if !pat.type_predicate.could_match(&ctx.env, &atype)? {

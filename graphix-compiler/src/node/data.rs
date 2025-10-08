@@ -359,18 +359,18 @@ impl<R: Rt, E: UserEvent> Update<R, E> for StructRef<R, E> {
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
         wrap!(self.source, self.source.typecheck(ctx))?;
         let etyp = deref_typ!("struct", ctx, self.source.typ(),
-        Some(Type::Struct(flds)) => {
-            let typ = flds.iter().enumerate().find_map(|(i, (n, t))| {
-                if &self.field_name == n {
-                    Some((i, t.clone()))
-                } else {
-                    None
+            Some(Type::Struct(flds)) => {
+                let typ = flds.iter().enumerate().find_map(|(i, (n, t))| {
+                    if &self.field_name == n {
+                        Some((i, t.clone()))
+                    } else {
+                        None
+                    }
+                });
+                match typ {
+                    Some((i, t)) => Ok((i, t)),
+                    None => bail!("in struct, unknown field {}", self.field_name),
                 }
-            });
-            match typ {
-                Some((i, t)) => Ok((i, t)),
-                None => bail!("in struct, unknown field {}", self.field_name),
-            }
         });
         let (idx, typ) = wrap!(self, etyp)?;
         self.field = Some(idx);

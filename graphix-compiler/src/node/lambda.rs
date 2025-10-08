@@ -14,7 +14,6 @@ use enumflags2::BitFlags;
 use netidx::{subscriber::Value, utils::Either};
 use parking_lot::RwLock;
 use poolshark::local::LPooled;
-use smallvec::{smallvec, SmallVec};
 use std::sync::Arc as SArc;
 use triomphe::Arc;
 
@@ -198,7 +197,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
         l: &expr::Lambda,
         top_id: ExprId,
     ) -> Result<Node<R, E>> {
-        let mut s: SmallVec<[&ArcStr; 16]> = smallvec![];
+        let mut s: LPooled<Vec<&ArcStr>> = LPooled::take();
         for a in l.args.iter() {
             a.pattern.with_names(&mut |n| s.push(n));
         }
@@ -220,7 +219,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
         };
         let rtype = l.rtype.as_ref().map(|t| t.scope_refs(&scope.lexical));
         let throws = l.throws.as_ref().map(|t| t.scope_refs(&scope.lexical));
-        let argspec = l
+        let mut argspec = l
             .args
             .iter()
             .map(|a| match &a.constraint {
@@ -235,8 +234,8 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                     constraint: Some(typ.scope_refs(&scope.lexical)),
                 },
             })
-            .collect::<SmallVec<[_; 16]>>();
-        let argspec = Arc::from_iter(argspec);
+            .collect::<LPooled<Vec<_>>>();
+        let argspec = Arc::from_iter(argspec.drain(..));
         let constraints = l
             .constraints
             .iter()
@@ -245,8 +244,8 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                 let tc = tc.scope_refs(&scope.lexical);
                 Ok((tv, tc))
             })
-            .collect::<Result<SmallVec<[_; 4]>>>()?;
-        let constraints = Arc::new(RwLock::new(constraints.into_iter().collect()));
+            .collect::<Result<LPooled<Vec<_>>>>()?;
+        let constraints = Arc::new(RwLock::new(constraints));
         let typ = match &l.body {
             Either::Left(_) => {
                 let args = Arc::from_iter(argspec.iter().map(|a| FnArgType {
@@ -351,7 +350,8 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
     }
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
-        let mut faux_args: Vec<Node<R, E>> = self
+        self.typ.unbind_tvars();
+        let mut faux_args: LPooled<Vec<Node<R, E>>> = self
             .def
             .argspec
             .iter()
