@@ -333,6 +333,7 @@ parser! {
                                 | (Some(Expr { kind: ExprKind::Variant { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Struct { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Qop(_), .. }), _)
+                                | (Some(Expr { kind: ExprKind::OrNever(_), .. }), _)
                                 | (Some(Expr { kind: ExprKind::TryCatch(_), .. }), _)
                                 | (Some(Expr { kind: ExprKind::Do { .. }, .. }), _)
                                 | (Some(Expr { kind: ExprKind::Module { .. }, .. }), _)
@@ -1063,9 +1064,21 @@ parser! {
     fn qop[I, P](p: P)(I) -> Expr
     where [I: RangeStream<Token = char, Position = SourcePosition>, I::Range: Range, P: Parser<I, Output = Expr>]
     {
-        (position(), p, optional(attempt(sptoken('?')))).map(|(pos, e, qop)| match qop {
+        enum Op {
+            Qop,
+            OrNever,
+        }
+        (
+            position(),
+            p,
+            optional(choice((
+                attempt(sptoken('?')).map(|_| Op::Qop),
+                attempt(sptoken('$')).map(|_| Op::OrNever)
+            )))
+        ).map(|(pos, e, qop)| match qop {
             None => e,
-            Some(_) => ExprKind::Qop(Arc::new(e)).to_expr(pos),
+            Some(Op::Qop) => ExprKind::Qop(Arc::new(e)).to_expr(pos),
+            Some(Op::OrNever) => ExprKind::OrNever(Arc::new(e)).to_expr(pos)
         })
     }
 }

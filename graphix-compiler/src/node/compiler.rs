@@ -13,7 +13,10 @@ use super::{
 };
 use crate::{
     expr::{self, Expr, ExprId, ExprKind, ModuleKind},
-    node::map::{Map, MapRef},
+    node::{
+        error::OrNever,
+        map::{Map, MapRef},
+    },
     CFlag, ExecCtx, Node, Rt, Scope, UserEvent,
 };
 use anyhow::{bail, Context, Result};
@@ -125,6 +128,9 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         }
         ExprKind::Bind(b) => Bind::compile(ctx, flags, spec.clone(), scope, top_id, b),
         ExprKind::Qop(e) => Qop::compile(ctx, flags, spec.clone(), scope, top_id, e),
+        ExprKind::OrNever(e) => {
+            OrNever::compile(ctx, flags, spec.clone(), scope, top_id, e)
+        }
         ExprKind::TryCatch(tc) => {
             TryCatch::new(ctx, flags, spec.clone(), scope, top_id, tc)
         }

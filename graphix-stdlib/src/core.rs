@@ -71,34 +71,6 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for FilterErr {
 }
 
 #[derive(Debug)]
-struct OrNever;
-
-impl<R: Rt, E: UserEvent> BuiltIn<R, E> for OrNever {
-    const NAME: &str = "or_never";
-    deftype!("core", "fn(['a, error]) -> 'a");
-
-    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
-        Arc::new(|_, _, _, _, _| Ok(Box::new(OrNever)))
-    }
-}
-
-impl<R: Rt, E: UserEvent> Apply<R, E> for OrNever {
-    fn update(
-        &mut self,
-        ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
-        event: &mut Event<E>,
-    ) -> Option<Value> {
-        from[0].update(ctx, event).and_then(|v| match v {
-            Value::Error(_) => None,
-            v => Some(v),
-        })
-    }
-
-    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
-}
-
-#[derive(Debug)]
 struct ToError;
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for ToError {
@@ -1102,7 +1074,6 @@ pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<A
     ctx.register_builtin::<Divide>()?;
     ctx.register_builtin::<Filter<R, E>>()?;
     ctx.register_builtin::<FilterErr>()?;
-    ctx.register_builtin::<OrNever>()?;
     ctx.register_builtin::<IsErr>()?;
     ctx.register_builtin::<Max>()?;
     ctx.register_builtin::<Mean>()?;

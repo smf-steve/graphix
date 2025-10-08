@@ -309,3 +309,68 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Qop<R, E> {
         Ok(())
     }
 }
+
+#[derive(Debug)]
+pub(crate) struct OrNever<R: Rt, E: UserEvent> {
+    spec: Expr,
+    typ: Type,
+    n: Node<R, E>,
+}
+
+impl<R: Rt, E: UserEvent> OrNever<R, E> {
+    pub(crate) fn compile(
+        ctx: &mut ExecCtx<R, E>,
+        flags: BitFlags<CFlag>,
+        spec: Expr,
+        scope: &Scope,
+        top_id: ExprId,
+        e: &Expr,
+    ) -> Result<Node<R, E>> {
+        let n = compile(ctx, flags, e.clone(), scope, top_id)?;
+        let typ = Type::empty_tvar();
+        Ok(Box::new(Self { spec, typ, n }))
+    }
+}
+
+impl<R: Rt, E: UserEvent> Update<R, E> for OrNever<R, E> {
+    fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
+        match self.n.update(ctx, event) {
+            None | Some(Value::Error(_)) => None,
+            Some(v) => Some(v),
+        }
+    }
+
+    fn typ(&self) -> &Type {
+        &self.typ
+    }
+
+    fn spec(&self) -> &Expr {
+        &self.spec
+    }
+
+    fn refs(&self, refs: &mut Refs) {
+        self.n.refs(refs)
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        self.n.delete(ctx)
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        self.n.sleep(ctx);
+    }
+
+    fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
+        wrap!(self.n, self.n.typecheck(ctx))?;
+        let err = Type::Error(Arc::new(Type::empty_tvar()));
+        if !self.n.typ().contains_with_flags(BitFlags::empty(), &ctx.env, &err)? {
+            format_with_flags(PrintFlag::DerefTVars, || {
+                bail!("cannot use the $ operator on non error type {}", self.n.typ())
+            })?
+        }
+        let err = Type::Primitive(Typ::Error.into());
+        let rtyp = self.n.typ().diff(&ctx.env, &err)?;
+        wrap!(self, self.typ.check_contains(&ctx.env, &rtyp))?;
+        Ok(())
+    }
+}

@@ -407,7 +407,7 @@ macro_rules! bind {
 
 macro_rules! qop {
     ($inner:expr) => {
-        $inner.prop_map(|e| match &e.kind {
+        ($inner, any::<bool>()).prop_map(|(e, qop)| match &e.kind {
             ExprKind::Do { .. }
             | ExprKind::Select { .. }
             | ExprKind::TypeCast { .. }
@@ -416,7 +416,13 @@ macro_rules! qop {
             | ExprKind::Apply { .. }
             | ExprKind::ArrayRef { .. }
             | ExprKind::TupleRef { .. }
-            | ExprKind::StructRef { .. } => ExprKind::Qop(Arc::new(e)).to_expr_nopos(),
+            | ExprKind::StructRef { .. } => {
+                if qop {
+                    ExprKind::Qop(Arc::new(e)).to_expr_nopos()
+                } else {
+                    ExprKind::OrNever(Arc::new(e)).to_expr_nopos()
+                }
+            }
             _ => e,
         })
     };
@@ -1230,6 +1236,7 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
             ExprKind::Connect { name: name1, value: value1, deref: d1 },
         ) => dbg!(dbg!(d0 == d1) && dbg!(name0 == name1) && dbg!(check(value0, value1))),
         (ExprKind::Qop(e0), ExprKind::Qop(e1)) => check(e0, e1),
+        (ExprKind::OrNever(e0), ExprKind::OrNever(e1)) => check(e0, e1),
         (ExprKind::TryCatch(tc0), ExprKind::TryCatch(tc1)) => {
             let TryCatch { bind: b0, constraint: c0, handler: h0, exprs: e0 } = &**tc0;
             let TryCatch { bind: b1, constraint: c1, handler: h1, exprs: e1 } = &**tc1;

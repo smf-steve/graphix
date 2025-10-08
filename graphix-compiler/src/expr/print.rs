@@ -397,6 +397,12 @@ impl ExprKind {
                 kill_newline!(buf);
                 writeln!(buf, "?")
             }
+            ExprKind::OrNever(e) => {
+                try_single_line!(true);
+                e.kind.pretty_print(indent, limit, true, buf)?;
+                kill_newline!(buf);
+                writeln!(buf, "$")
+            }
             ExprKind::TryCatch(tc) => {
                 try_single_line!(true);
                 writeln!(buf, "try")?;
@@ -821,6 +827,7 @@ impl fmt::Display for ExprKind {
                 write!(f, " }}")
             }
             ExprKind::Qop(e) => write!(f, "{}?", e),
+            ExprKind::OrNever(e) => write!(f, "{}$", e),
             ExprKind::TryCatch(tc) => {
                 write!(f, "try ")?;
                 print_exprs(f, &tc.exprs, "", "", "; ")?;

@@ -32,18 +32,6 @@ run!(filter_err, FILTER_ERR, |v: Result<&Value>| match v {
     _ => false,
 });
 
-const OR_NEVER: &str = r#"
-{
-  let a = [error("foo"), 42];
-  or_never(array::iter(a))
-}
-"#;
-
-run!(or_never, OR_NEVER, |v: Result<&Value>| match v {
-    Ok(Value::I64(42)) => true,
-    _ => false,
-});
-
 const ERROR: &str = r#"
   error("foo")
 "#;

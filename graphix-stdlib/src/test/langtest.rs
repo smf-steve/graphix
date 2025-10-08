@@ -2129,3 +2129,15 @@ run!(catch5, CATCH5, |v: Result<&Value>| match v {
     Err(_) => true,
     _ => false,
 });
+
+const OR_NEVER: &str = r#"
+{
+    let a = [error("foo"), 42];
+    array::iter(a)$
+}
+"#;
+
+run!(or_never, OR_NEVER, |v: Result<&Value>| match v {
+    Ok(Value::I64(42)) => true,
+    _ => false,
+});

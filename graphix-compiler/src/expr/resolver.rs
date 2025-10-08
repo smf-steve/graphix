@@ -452,6 +452,10 @@ impl Expr {
                 let e = e.resolve_modules_int(scope, prepend, resolvers).await?;
                 expr!(ExprKind::Qop(Arc::new(e)))
             }),
+            ExprKind::OrNever(e) => Box::pin(async move {
+                let e = e.resolve_modules_int(scope, prepend, resolvers).await?;
+                expr!(ExprKind::OrNever(Arc::new(e)))
+            }),
             ExprKind::TryCatch(tc) => Box::pin(async move {
                 let exprs = try_join_all(tc.exprs.iter().map(|e| async {
                     e.resolve_modules_int(&scope, &prepend, resolvers).await

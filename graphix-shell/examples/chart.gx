@@ -28,11 +28,11 @@ chart(
     #title: line(#style: label_style, "Cycle(n)"),
     #style: axis_style,
     #labels: [
-      line(#style: label_style, "[(data[0]?).0]"),
-      line(#style: label_style, "[(data[array::len(data) / 2]?).0]"),
-      line(#style: label_style, "[(data[-1]?).0]")
+      line(#style: label_style, "[(data[0]$).0]"),
+      line(#style: label_style, "[(data[array::len(data) / 2]$).0]"),
+      line(#style: label_style, "[(data[-1]$).0]")
     ],
-    {min: (data[0]?).0, max: (data[-1]?).0}
+    {min: (data[0]$).0, max: (data[-1]$).0}
   ),
   #y_axis:&axis(
     #title: line(#style: label_style, "Stuff"),

@@ -27,7 +27,7 @@ pub let browser = |
             viewport <- p ~ { x: 0, y: 0 }
         }
     };
-    let (mode, structure) = select or_never(net::list_table(path)) {
+    let (mode, structure) = select net::list_table(path)$ {
         { columns, rows } => {
             let mode = uniq(select columns {
                 [] => `List,
@@ -38,7 +38,7 @@ pub let browser = |
                 cols => array::sort(#numeric:true, cols)
             };
             let rows: Array<string> = {
-                let base = select str::dirname(or_never(rows[0])) {
+                let base = select str::dirname(rows[0]$) {
                     null as _ => "/",
                     s => s
                 };
@@ -58,7 +58,7 @@ pub let browser = |
             let len = array::len(rows);
             let start = min(len - 1, viewport.y);
             let end = min(len, viewport.y + size.height - 1);
-            or_never((rows)[start .. end])
+            (rows)[start .. end]$
         }
     };
     let content_widths: Array<i64> = [];
@@ -72,7 +72,7 @@ pub let browser = |
             cols: [],
             widths: [`Min(name_width)]
         };
-        let candidates = array::enumerate(or_never((structure.columns)[viewport.x ..]));
+        let candidates = array::enumerate((structure.columns)[viewport.x ..]$);
         let candidates = any(content_widths ~ candidates, candidates);
         array::fold(candidates, init, |{total, cols, widths}, (i, col)| {
             let len = min(max_width, max(str::len(col), get_width(i + 1)));
@@ -87,10 +87,10 @@ pub let browser = |
         })
     };
     let visible_columns: Array<string> = uniq(visible_columns);
-    *selected_row <- or_never(visible_rows[selected.y]);
+    *selected_row <- visible_rows[selected.y]$;
     *selected_path <- select mode {
         `List => "[*selected_row]",
-        `Table => "[*selected_row]/[or_never(visible_columns[selected.x - 1])]"
+        `Table => "[*selected_row]/[visible_columns[selected.x - 1]$]"
     };
     let header = select mode {
         `List => row(#style:header_style, [cell(line("Name")), cell(line("Value"))]),
