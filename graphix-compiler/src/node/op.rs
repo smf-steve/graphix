@@ -288,13 +288,13 @@ macro_rules! arith_op {
                 let typ = Type::empty_tvar();
                 let id = match ctx.env.lookup_catch(&scope.dynamic).ok() {
                     None => {
-                        if flags.contains(CFlag::WarnUnhandled | CFlag::WarningsAreErrors) {
+                        if flags.contains(CFlag::WarnUnhandledArith | CFlag::WarningsAreErrors) {
                             bail!(
                                 "ERROR: in {} at {} error raised by arith op will not be caught",
                                 spec.ori, spec.pos
                             )
                         }
-                        if flags.contains(CFlag::WarnUnhandled) {
+                        if flags.contains(CFlag::WarnUnhandledArith) {
                             eprintln!(
                                 "WARNING: in {} at {} error raised by arith op will not be caught",
                                 spec.ori, spec.pos

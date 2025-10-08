@@ -51,6 +51,7 @@ use triomphe::Arc;
 #[repr(u64)]
 pub enum CFlag {
     WarnUnhandled,
+    WarnUnhandledArith,
     WarnUnused,
     WarningsAreErrors,
 }

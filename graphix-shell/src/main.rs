@@ -1,7 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
+use enumflags2::BitFlags;
 use flexi_logger::{FileSpec, Logger};
-use graphix_compiler::expr::ModuleResolver;
+use graphix_compiler::{expr::ModuleResolver, CFlag};
 use graphix_rt::NoExt;
 use graphix_shell::{Mode, ShellBuilder};
 use log::info;
@@ -11,7 +12,57 @@ use netidx::{
     subscriber::{Subscriber, SubscriberBuilder},
     InternalOnly,
 };
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, str::FromStr, time::Duration};
+
+#[derive(Debug, Clone, Copy)]
+enum RawFlag {
+    Unhandled,
+    NoUnhandled,
+    UnhandledArith,
+    NoUnhandledArith,
+    Unused,
+    NoUnused,
+    Error,
+    NoError,
+}
+
+impl FromStr for RawFlag {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "unhandled" => Ok(Self::Unhandled),
+            "no-unhandled" => Ok(Self::NoUnhandled),
+            "unhandled-arith" => Ok(Self::UnhandledArith),
+            "no-unhandled-arith" => Ok(Self::NoUnhandledArith),
+            "unused" => Ok(Self::Unused),
+            "no-unused" => Ok(Self::NoUnused),
+            "error" => Ok(Self::Error),
+            "no-error" => Ok(Self::NoError),
+            s => bail!("invalid flag {s}"),
+        }
+    }
+}
+
+impl RawFlag {
+    fn as_flags(flags: &[RawFlag]) -> (BitFlags<CFlag>, BitFlags<CFlag>) {
+        let mut enable = BitFlags::empty();
+        let mut disable = BitFlags::empty();
+        for fl in flags {
+            match fl {
+                Self::Unhandled => enable.insert(CFlag::WarnUnhandled),
+                Self::NoUnhandled => disable.insert(CFlag::WarnUnhandled),
+                Self::UnhandledArith => enable.insert(CFlag::WarnUnhandledArith),
+                Self::NoUnhandledArith => disable.insert(CFlag::WarnUnhandledArith),
+                Self::Unused => enable.insert(CFlag::WarnUnused),
+                Self::NoUnused => disable.insert(CFlag::WarnUnused),
+                Self::Error => enable.insert(CFlag::WarningsAreErrors),
+                Self::NoError => disable.insert(CFlag::WarningsAreErrors),
+            }
+        }
+        (enable, disable)
+    }
+}
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -61,6 +112,16 @@ struct Params {
     no_init: bool,
     /// run the program in the specified file instead of starting the REPL
     file: Option<PathBuf>,
+    /// enable or disable compiler flags. Currently supported flags are,
+    /// - unhandled, no-unhandled: warn about unhandled ? operators (default)
+    /// - unhandled-arith, no-unhandled-arith: warn about unhandled arith exceptions
+    /// - unused, no-unused: warn about unused variables (default)
+    /// - error, no-error makes warnings errors
+    ///
+    /// the no- variant turns the flag off. If both are specifed the no- variant
+    /// always wins
+    #[arg(short = 'W')]
+    warn: Vec<RawFlag>,
 }
 
 impl Params {
@@ -130,5 +191,13 @@ async fn main() -> Result<()> {
             }
         }
     }
-    shell.publisher(publisher).subscriber(subscriber).build()?.run().await
+    let (enable, disable) = RawFlag::as_flags(&p.warn);
+    shell
+        .publisher(publisher)
+        .subscriber(subscriber)
+        .enable_flags(enable)
+        .disable_flags(disable)
+        .build()?
+        .run()
+        .await
 }

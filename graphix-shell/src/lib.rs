@@ -175,6 +175,14 @@ pub struct Shell<X: GXExt> {
     /// startup. Then your user only needs to `use m`
     #[builder(setter(strip_option), default)]
     register: Option<Arc<dyn Fn(&mut ExecCtx<GXRt<X>, X::UserEvent>) -> ArcStr>>,
+    /// Enable compiler flags, these will be ORed with the default set of flags
+    /// for the mode.
+    #[builder(default)]
+    enable_flags: BitFlags<CFlag>,
+    /// Disable compiler flags, these will be subtracted from the final set.
+    /// (default_flags | enable_flags) - disable_flags
+    #[builder(default)]
+    disable_flags: BitFlags<CFlag>,
 }
 
 impl<X: GXExt> Shell<X> {
@@ -191,19 +199,23 @@ impl<X: GXExt> Shell<X> {
             Some(m) => ArcStr::from(format!("{root};\nmod tui;\n{m}")),
             None => ArcStr::from(format!("{root};\nmod tui")),
         };
+        let mut flags = match self.mode {
+            Mode::File(_) | Mode::Static(_) => CFlag::WarnUnhandled | CFlag::WarnUnused,
+            Mode::Repl => BitFlags::empty(),
+        };
+        flags.insert(self.enable_flags);
+        flags.remove(self.disable_flags);
         let mut mods = vec![mods, tui_mods()];
         for res in self.module_resolvers.drain(..) {
             mods.push(res);
         }
         let mut gx = GXConfig::builder(ctx, sub);
+        gx = gx.flags(flags);
         if let Some(s) = self.publish_timeout {
             gx = gx.publish_timeout(s);
         }
         if let Some(s) = self.resolve_timeout {
             gx = gx.resolve_timeout(s);
-        }
-        if let Mode::File(_) = &self.mode {
-            gx = gx.flags(CFlag::WarnUnhandled.into());
         }
         Ok(gx
             .root(root)
