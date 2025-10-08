@@ -57,6 +57,9 @@ pub let filter = |v, f| 'filter;
 /// return true if e is an error
 pub let is_err = |e| 'is_err;
 
+/// return e iff e is not an error, otherwise return nothing
+pub let or_never = |e| 'or_never;
+
 /// construct an error from the specified string
 pub let error = |e| 'error;
 
