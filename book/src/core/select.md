@@ -136,6 +136,10 @@ is structural. Graphix supports several kinds of structural matching,
 - variants
 - literals, ignore
 
+NB: In most contexts you can match the entire value as well as parts of it's
+structure by adding a `v@` pattern before the pattern. You will see this in many
+of the examples.
+
 ### Slice Patterns
 
 Suppose we want to classify arrays that have at least two elements vs arrays

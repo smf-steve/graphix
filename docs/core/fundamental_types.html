@@ -227,10 +227,11 @@ unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
 -: u32
 4294967295
 </code></pre>
-<p>It is safe to continue using the shell and runtime if such an error occurrs,
-even if it is not caught. However the particular arith operation that caused the
-error will not update, which may cause problems depending on what your program
-is doing with it.</p>
+<p>The thread panic message is an artifact of how the overflow error is handled at
+runtime, it is safe to continue using the shell and runtime if such an error
+occurrs. However the particular arith operation that caused the error will not
+update, which may cause problems depending on what your program is doing with
+it.</p>
 <h3 id="number-sets"><a class="header" href="#number-sets">Number Sets</a></h3>
 <p>There are a few sets of number types that classify numbers into various kinds.
 <code>Number</code> being the most broad, it contains all the number types. <code>Int</code> contains
@@ -318,21 +319,17 @@ you do with an <code>Any</code> type is call <code>cast</code> to turn it into t
 an error), or use a <code>select</code> expression to match it's type (more on select later).</p>
 <h2 id="null"><a class="header" href="#null">Null</a></h2>
 <p>Null is nothing, just like in many other languages. Unlike most other languages
-<code>null</code> is a type not a catch all hack. If the type of a value does not include
-<code>null</code> then it can't be null. The set <code>['a, null]</code> is commonly used instead of
-an option type in Graphix, it serves the same purpose, and is more efficient,
-because <code>null</code> is part of the underlying variant that represents all Graphix
-values after type erasure.</p>
+<code>null</code> is a type not a catch all. If the type of a value does not include <code>null</code>
+then it can't be null. The set <code>['a, null]</code> (alias <code>Option&lt;'a&gt;</code>) is commonly
+used to represent things that will sometimes return <code>null</code>.</p>
 <h2 id="array"><a class="header" href="#array">Array</a></h2>
-<p>Arrays in Graphix have a type parameter indicating their element type.
-<code>Array&lt;string&gt;</code> indicates an array of strings. Every element of an array must be
-the same type. Arrays are zero indexed <code>a[0]</code> is the first element. Arrays can
-hold any Graphix type as an element, including other arrays at arbitrary levels
-of nesting. There is a special type <code>Array&lt;Any&gt;</code> that can also be written as
-<code>array</code> (case sensitive), that represents the fundamental array type in the
-underlying value representation. <code>[x, y, z]</code> constructs a three element array.
-There are many functions in the <code>array</code> module of the standard library for
-working with arrays.</p>
+<p>Arrays are immutable, contiguous, and homogenous. They are parameterized,
+<code>Array&lt;string&gt;</code> indicates an array of strings. Arrays are zero indexed <code>a[0]</code> is
+the first element. Array elements can be any type, including other arrays at
+arbitrary levels of nesting. There is a special <code>array</code> (case sensitive), that
+represents the fundamental array type in the underlying value representation.
+Array literals are written like <code>[x, y, z]</code>. There are many functions in the
+<code>array</code> module of the standard library for working with arrays.</p>
 <h3 id="array-slicing-and-indexing"><a class="header" href="#array-slicing-and-indexing">Array Slicing and Indexing</a></h3>
 <p>Graphix supports array subslicing, the syntax will be familar to Rust programmers.</p>
 <ul>
@@ -384,7 +381,9 @@ x.0
 <h2 id="map"><a class="header" href="#map">Map</a></h2>
 <p>Maps in Graphix are key-value data structures with O(log(N)) lookup, insert, and
 remove operations. Maps are parameterized by their key and value type, for
-example <code>Map&lt;string, i64&gt;</code> indicates a map with string keys and integer values.</p>
+example <code>Map&lt;string, i64&gt;</code> indicates a map with string keys and integer values.
+There are many functions for working with maps in the <code>map</code> standard library
+module</p>
 <h3 id="map-literals"><a class="header" href="#map-literals">Map Literals</a></h3>
 <p>Maps can be constructed using the <code>{key =&gt; value}</code> syntax:</p>
 <pre><code>〉{"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
@@ -419,8 +418,8 @@ O(log(N)) performance for all operations regardless of map size.</p>
 <h2 id="error"><a class="header" href="#error">Error</a></h2>
 <p>Error is the built in error type. It carries a type parameter indicating the
 type of error, for example <code>Error&lt;`MapKeyError(string)&gt;</code> is an error that
-carries a <code>MapKeyError</code> variant. You can access the inner error value using
-<code>e.0</code> e.g.,</p>
+carries a <code>`MapKeyError</code> variant. You can access the inner error value
+using <code>e.0</code> e.g.,</p>
 <pre><code>〉let e = error(`MapKeyError("no such key"))
 〉e.0
 -: `MapKeyError(string)

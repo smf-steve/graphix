@@ -62,10 +62,11 @@ unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
 4294967295
 ```
 
-It is safe to continue using the shell and runtime if such an error occurrs,
-even if it is not caught. However the particular arith operation that caused the
-error will not update, which may cause problems depending on what your program
-is doing with it.
+The thread panic message is an artifact of how the overflow error is handled at
+runtime, it is safe to continue using the shell and runtime if such an error
+occurrs. However the particular arith operation that caused the error will not
+update, which may cause problems depending on what your program is doing with
+it.
 
 ### Number Sets
 
@@ -184,23 +185,19 @@ an error), or use a `select` expression to match it's type (more on select later
 ## Null
 
 Null is nothing, just like in many other languages. Unlike most other languages
-`null` is a type not a catch all hack. If the type of a value does not include
-`null` then it can't be null. The set `['a, null]` is commonly used instead of
-an option type in Graphix, it serves the same purpose, and is more efficient,
-because `null` is part of the underlying variant that represents all Graphix
-values after type erasure.
+`null` is a type not a catch all. If the type of a value does not include `null`
+then it can't be null. The set `['a, null]` (alias `Option<'a>`) is commonly
+used to represent things that will sometimes return `null`.
 
 ## Array
 
-Arrays in Graphix have a type parameter indicating their element type.
-`Array<string>` indicates an array of strings. Every element of an array must be
-the same type. Arrays are zero indexed `a[0]` is the first element. Arrays can
-hold any Graphix type as an element, including other arrays at arbitrary levels
-of nesting. There is a special type `Array<Any>` that can also be written as
-`array` (case sensitive), that represents the fundamental array type in the
-underlying value representation. `[x, y, z]` constructs a three element array.
-There are many functions in the `array` module of the standard library for
-working with arrays.
+Arrays are immutable, contiguous, and homogenous. They are parameterized,
+`Array<string>` indicates an array of strings. Arrays are zero indexed `a[0]` is
+the first element. Array elements can be any type, including other arrays at
+arbitrary levels of nesting. There is a special `array` (case sensitive), that
+represents the fundamental array type in the underlying value representation.
+Array literals are written like `[x, y, z]`. There are many functions in the
+`array` module of the standard library for working with arrays.
 
 ### Array Slicing and Indexing
 
@@ -260,6 +257,8 @@ Will print 1.
 Maps in Graphix are key-value data structures with O(log(N)) lookup, insert, and
 remove operations. Maps are parameterized by their key and value type, for
 example `Map<string, i64>` indicates a map with string keys and integer values.
+There are many functions for working with maps in the `map` standard library
+module
 
 ### Map Literals
 
@@ -313,8 +312,8 @@ O(log(N)) performance for all operations regardless of map size.
 
 Error is the built in error type. It carries a type parameter indicating the
 type of error, for example ```Error<`MapKeyError(string)>``` is an error that
-carries a `MapKeyError` variant. You can access the inner error value using
-`e.0` e.g.,
+carries a ``` `MapKeyError ``` variant. You can access the inner error value
+using `e.0` e.g.,
 
 ```
 〉let e = error(`MapKeyError("no such key"))

@@ -2,10 +2,9 @@
 
 Connect, written `x <- expr` is where things get interesting in Graphix. The
 sharp eyed may have noticed that up until now there was no way to introduce a
-cycle in the graph. Connect is the first (and really the only) graph operator in
-Graphix, it allows you to connect one part of the graph to another by name,
-causing the output of the right side to flow to the name on the left side.
-Consider,
+cycle in the graph. Connect is the only graph operator in Graphix, it allows you
+to connect one part of the graph to another by name, causing the output of the
+right side to flow to the name on the left side. Consider,
 
 ```
 let x = "off"
@@ -29,8 +28,7 @@ const("on") =====
 ```
 
 We can also build an infinite loop with connect. This won't crash the program,
-and it won't stop other parts of the program from being evaluated, it's a
-completely legit thing to do.
+and it won't stop other parts of the program from being evaluated,
 
 ```
 let x = 0;
@@ -52,18 +50,18 @@ What connect does is it schedules an update to `x` for the next cycle, the
 current cycle proceeds as normal to it's conclusion as if the connect didn't
 happen yet, because it didn't. In the above case the event loop would never
 wait, because there is always work to do adding 1 to `x`, however it will still
-check for IO events, and any other events that might have happened.
+check for other events every cycle.
 
 When combined with other operations, specifically select, connect becomes a
-powerful general looping construct, and is actually the only way to write a loop
-in Graphix. A quick example,
+powerful general looping construct, and is the only way to write a loop in
+Graphix. A quick example,
 
 ```
 let count = {
   let x = 0;
   select x {
     n if n < 10 => x <- x + 1,
-    _ => never()
+    _ => never() // never() never updates
   };
   x
 };

@@ -57,6 +57,6 @@ language. Some of it's features are,
 - type inference
 - structural type discipline
 - parametric polymorphism
-- algebreic data types
+- algebraic data types
 - pattern matching
 - first class functions, and closures

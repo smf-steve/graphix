@@ -178,7 +178,7 @@
                         <h1 id="let-binds"><a class="header" href="#let-binds">Let Binds</a></h1>
 <p>Let bindings introduce names that are visible in their scope after they are
 defined.</p>
-<pre><code>let x = 2 + 2 + x; // error x isn't defined yet
+<pre><code>let x = 2 + 2 + x; // compile error x isn't defined yet
 let y = x + 1 // ok
 </code></pre>
 <p>The same name can be used again in the same scope, it will shadow the previous
@@ -192,8 +192,7 @@ time. Sometimes this is necessary in order to help type inference.</p>
 <pre><code>let x: Number = 1; // note x will be of type Number even though it's an i64
 let y: string = x + 1; // compile time type error
 </code></pre>
-<p>You can use destructuring patterns in let binds as long as they will always
-match.</p>
+<p>You can use patterns in let binds as long as they will always match.</p>
 <pre><code>let (x, y) = (3, "hello"); // binds x to 3 and y to "hello"
 x == 3; // true
 y == "hello" // true
@@ -203,7 +202,7 @@ y == "hello" // true
 </code></pre>
 <p>You can assign documentation to a let bind using a <code>///</code> comment. Documentation
 will be displayed in the shell when the user tab completes and will be made
-available by the lsp server (when one exists).</p>
+available by the lsp server.</p>
 <pre><code>// this is a normal comment
 let x = 1;
 /// this is documentation for y
