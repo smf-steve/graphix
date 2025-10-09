@@ -112,7 +112,14 @@ You'll recognize that this is just the normal select exhaustivness checking at
 work. Since errors are just normal types, the important point is the compiler
 knows the type of every error at compile time, everything else flows from there.
 
-## The $ Operator, Or Never
+## Unhandled Errors
+
+By default when evaluating a file, the compiler will print a warning whenever an
+error raised by `?` is not handled explicitly by a try catch block. Arithmetic
+errors such as overflow do not generate this warning by default. Using `-W`
+flags you can change the compilers behavior in this respect.
+
+## The $ Operator, aka Or Never
 
 The `$` operator goes in the same position as `?`, and is best described as "or
 never". It the expression on it's left is a non error, then `$` doesn't do

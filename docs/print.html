@@ -1033,7 +1033,12 @@ Caused by:
 <p>You'll recognize that this is just the normal select exhaustivness checking at
 work. Since errors are just normal types, the important point is the compiler
 knows the type of every error at compile time, everything else flows from there.</p>
-<h2 id="the--operator-or-never"><a class="header" href="#the--operator-or-never">The $ Operator, Or Never</a></h2>
+<h2 id="unhandled-errors"><a class="header" href="#unhandled-errors">Unhandled Errors</a></h2>
+<p>By default when evaluating a file, the compiler will print a warning whenever an
+error raised by <code>?</code> is not handled explicitly by a try catch block. Arithmetic
+errors such as overflow do not generate this warning by default. Using <code>-W</code>
+flags you can change the compilers behavior in this respect.</p>
+<h2 id="the--operator-aka-or-never"><a class="header" href="#the--operator-aka-or-never">The $ Operator, aka Or Never</a></h2>
 <p>The <code>$</code> operator goes in the same position as <code>?</code>, and is best described as "or
 never". It the expression on it's left is a non error, then <code>$</code> doesn't do
 anything, otherwise it returns nothing. This is a concise way of writing,</p>
