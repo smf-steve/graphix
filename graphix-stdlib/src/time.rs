@@ -1,6 +1,7 @@
 use crate::{arity2, deftype, CachedVals};
 use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
+use chrono::Utc;
 use graphix_compiler::{
     err, expr::ExprId, Apply, BindId, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Rt,
     UserEvent,
@@ -242,8 +243,39 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Timer {
     }
 }
 
+#[derive(Debug)]
+struct Now;
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Now {
+    const NAME: &str = "time_now";
+    deftype!("time", "fn(Any) -> datetime");
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|_, _, _, _, _| Ok(Box::new(Self)))
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for Now {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if from[0].update(ctx, event).is_some() {
+            Some(Value::from(Utc::now()))
+        } else {
+            None
+        }
+    }
+
+    fn delete(&mut self, _ctx: &mut ExecCtx<R, E>) {}
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
+}
+
 pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<ArcStr> {
     ctx.register_builtin::<AfterIdle>()?;
     ctx.register_builtin::<Timer>()?;
+    ctx.register_builtin::<Now>()?;
     Ok(literal!(include_str!("time.gx")))
 }

@@ -76,8 +76,8 @@ only integers, `Real` contains only reals (decimal plus the two float types),
 
 ## Bool
 
-Graphix has a boolean type, it's literals are written as `true` and `false`, and
-the name of the type is `bool`.
+Boolean literals are written as `true` and `false`, and the name of the boolean
+type is `bool`.
 
 Boolean expressions using `&&`, `||`, and `!` are supported. These operators
 only operate on `bool`. They can be grouped with parenthesis. For example,
@@ -255,8 +255,73 @@ x.0
 
 Will print 1.
 
+## Map
+
+Maps in Graphix are key-value data structures with O(log(N)) lookup, insert, and
+remove operations. Maps are parameterized by their key and value type, for
+example `Map<string, i64>` indicates a map with string keys and integer values.
+
+### Map Literals
+
+Maps can be constructed using the `{key => value}` syntax:
+
+```
+〉{"a" => 1, "b" => 2, "c" => 3}
+-: Map<'_1893: string, '_1895: i64>
+{"a" => 1, "b" => 2, "c" => 3}
+```
+
+Keys and values can be any Graphix type, for example here is a map where the key
+is a `Map<string, i64>`.
+
+```
+{{"foo" => 42} => "foo", {"bar" => 42} => "bar"}
+-: Map<'_1919: Map<'_1915: string, '_1917: i64>, '_1921: string>
+{{"bar" => 42} => "bar", {"foo" => 42} => "foo"}
+```
+
+### Map Indexing
+
+Maps can be indexed using the `map{key}` syntax to retrieve values:
+
+```
+〉let m = {"a" => 1, "b" => 2, "c" => 3}
+〉m{"b"}
+-: ['_1907: i64, Error<`MapKeyError(string)>]
+2
+```
+
+If a key is not present in the map, indexing returns a `MapKeyError`:
+
+```
+〉m{"missing"}
+-: ['_1907: i64, Error<`MapKeyError(string)>]
+error:["MapKeyError", "map key \"missing\" not found"]
+```
+
+### Mutability and Implementation
+
+Like all Graphix values, maps are immutable. All operations that "change" a map
+actually create a new map, leaving the original unchanged. Maps are memory
+pooled and very efficient - creating new maps typically reuses existing memory
+rather than allocating new memory.
+
+Maps maintain their key-value pairs in a balanced tree structure, ensuring
+O(log(N)) performance for all operations regardless of map size.
+
 ## Error
 
-Error is the built in error type. It carries a string describing the error. It
-can be constructed with the `error` function, and it's type name `error` can be
-used in pattern matching.
+Error is the built in error type. It carries a type parameter indicating the
+type of error, for example ```Error<`MapKeyError(string)>``` is an error that
+carries a `MapKeyError` variant. You can access the inner error value using
+`e.0` e.g.,
+
+```
+〉let e = error(`MapKeyError("no such key"))
+〉e.0
+-: `MapKeyError(string)
+`MapKeyError("no such key")
+```
+
+More information about dealing with errors is available in the section on error
+handling.

@@ -237,8 +237,8 @@ is doing with it.</p>
 only integers, <code>Real</code> contains only reals (decimal plus the two float types),
 <code>SInt</code> contains signed integers, <code>UInt</code> contains unsigned integers.</p>
 <h2 id="bool"><a class="header" href="#bool">Bool</a></h2>
-<p>Graphix has a boolean type, it's literals are written as <code>true</code> and <code>false</code>, and
-the name of the type is <code>bool</code>.</p>
+<p>Boolean literals are written as <code>true</code> and <code>false</code>, and the name of the boolean
+type is <code>bool</code>.</p>
 <p>Boolean expressions using <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code> are supported. These operators
 only operate on <code>bool</code>. They can be grouped with parenthesis. For example,</p>
 <pre><code>〉true &amp;&amp; false
@@ -381,10 +381,53 @@ Consider</p>
 x.0
 </code></pre>
 <p>Will print 1.</p>
+<h2 id="map"><a class="header" href="#map">Map</a></h2>
+<p>Maps in Graphix are key-value data structures with O(log(N)) lookup, insert, and
+remove operations. Maps are parameterized by their key and value type, for
+example <code>Map&lt;string, i64&gt;</code> indicates a map with string keys and integer values.</p>
+<h3 id="map-literals"><a class="header" href="#map-literals">Map Literals</a></h3>
+<p>Maps can be constructed using the <code>{key =&gt; value}</code> syntax:</p>
+<pre><code>〉{"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
+-: Map&lt;'_1893: string, '_1895: i64&gt;
+{"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
+</code></pre>
+<p>Keys and values can be any Graphix type, for example here is a map where the key
+is a <code>Map&lt;string, i64&gt;</code>.</p>
+<pre><code>{{"foo" =&gt; 42} =&gt; "foo", {"bar" =&gt; 42} =&gt; "bar"}
+-: Map&lt;'_1919: Map&lt;'_1915: string, '_1917: i64&gt;, '_1921: string&gt;
+{{"bar" =&gt; 42} =&gt; "bar", {"foo" =&gt; 42} =&gt; "foo"}
+</code></pre>
+<h3 id="map-indexing"><a class="header" href="#map-indexing">Map Indexing</a></h3>
+<p>Maps can be indexed using the <code>map{key}</code> syntax to retrieve values:</p>
+<pre><code>〉let m = {"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
+〉m{"b"}
+-: ['_1907: i64, Error&lt;`MapKeyError(string)&gt;]
+2
+</code></pre>
+<p>If a key is not present in the map, indexing returns a <code>MapKeyError</code>:</p>
+<pre><code>〉m{"missing"}
+-: ['_1907: i64, Error&lt;`MapKeyError(string)&gt;]
+error:["MapKeyError", "map key \"missing\" not found"]
+</code></pre>
+<h3 id="mutability-and-implementation-1"><a class="header" href="#mutability-and-implementation-1">Mutability and Implementation</a></h3>
+<p>Like all Graphix values, maps are immutable. All operations that "change" a map
+actually create a new map, leaving the original unchanged. Maps are memory
+pooled and very efficient - creating new maps typically reuses existing memory
+rather than allocating new memory.</p>
+<p>Maps maintain their key-value pairs in a balanced tree structure, ensuring
+O(log(N)) performance for all operations regardless of map size.</p>
 <h2 id="error"><a class="header" href="#error">Error</a></h2>
-<p>Error is the built in error type. It carries a string describing the error. It
-can be constructed with the <code>error</code> function, and it's type name <code>error</code> can be
-used in pattern matching.</p>
+<p>Error is the built in error type. It carries a type parameter indicating the
+type of error, for example <code>Error&lt;`MapKeyError(string)&gt;</code> is an error that
+carries a <code>MapKeyError</code> variant. You can access the inner error value using
+<code>e.0</code> e.g.,</p>
+<pre><code>〉let e = error(`MapKeyError("no such key"))
+〉e.0
+-: `MapKeyError(string)
+`MapKeyError("no such key")
+</code></pre>
+<p>More information about dealing with errors is available in the section on error
+handling.</p>
 
                     </main>
 

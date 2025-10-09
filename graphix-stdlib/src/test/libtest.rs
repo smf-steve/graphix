@@ -1632,3 +1632,10 @@ run!(hold_multiple_values, HOLD_MULTIPLE_VALUES, |v: Result<&Value>| match v {
     Ok(Value::I64(300)) => true,
     _ => false,
 });
+
+const NOW: &str = r#"time::now(null)"#;
+
+run!(now, NOW, |v: Result<&Value>| match v {
+    Ok(Value::DateTime(_)) => true,
+    _ => false,
+});
