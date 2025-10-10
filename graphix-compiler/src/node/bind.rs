@@ -18,7 +18,6 @@ pub(crate) struct Bind<R: Rt, E: UserEvent> {
     typ: Type,
     pattern: StructPatternNode,
     node: Node<R, E>,
-    top_id: ExprId,
 }
 
 impl<R: Rt, E: UserEvent> Bind<R, E> {
@@ -85,7 +84,7 @@ impl<R: Rt, E: UserEvent> Bind<R, E> {
                 }
             });
         }
-        Ok(Box::new(Self { spec, typ, pattern, node, top_id }))
+        Ok(Box::new(Self { spec, typ, pattern, node }))
     }
 
     /// Return the id if this bind has only a single binding, otherwise return None
@@ -112,9 +111,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Bind<R, E> {
             self.pattern.bind(&v, &mut |id, v| {
                 event.variables.insert(id, v.clone());
                 ctx.cached.insert(id, v);
-                if self.spec.id == self.top_id {
-                    ctx.rt.notify_set(id);
-                }
+                ctx.rt.notify_set(id);
             })
         }
         None

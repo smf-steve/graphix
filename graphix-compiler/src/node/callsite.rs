@@ -221,7 +221,7 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
 
 impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
     fn update(&mut self, ctx: &mut ExecCtx<R, E>, event: &mut Event<E>) -> Option<Value> {
-        let mut set = vec![];
+        let mut set: LPooled<Vec<BindId>> = LPooled::take();
         let bound = match (&self.function, self.fnode.update(ctx, event)) {
             (_, None) => false,
             (Some((cid, _)), Some(Value::U64(id))) if cid.0 == id => false,
@@ -258,7 +258,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
                 });
                 let res = f.update(ctx, &mut self.args, event);
                 event.init = init;
-                for id in set {
+                for id in set.drain(..) {
                     event.variables.remove(&id);
                 }
                 res

@@ -1107,6 +1107,15 @@ f(g, 42) // valid call
 84
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="closures-and-first-class-functions"><a class="header" href="#closures-and-first-class-functions">Closures and First Class Functions</a></h1>
+<p>Functions can reference variables outside their definition as long as they are
+in the lexical scope of the function. These references are valid regardless of
+where the function is called.</p>
+<pre><code>let f = {
+  let v = cast&lt;i64&gt;(net::subscribe("/foo/bar")$)$;
+  |n| v + n
+};
+f(2)
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursion"><a class="header" href="#recursion">Recursion</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>
