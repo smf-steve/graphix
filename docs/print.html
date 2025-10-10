@@ -1111,11 +1111,38 @@ f(g, 42) // valid call
 in the lexical scope of the function. These references are valid regardless of
 where the function is called.</p>
 <pre><code>let f = {
-  let v = cast&lt;i64&gt;(net::subscribe("/foo/bar")$)$;
+  let v = cast&lt;i64&gt;(net::subscribe("/local/foo")$)$;
   |n| v + n
 };
 f(2)
 </code></pre>
+<p>In the above example <code>f</code> captures <code>v</code> and can use it even when it is called from
+a scope where <code>v</code> isn't visible. It will output 2 + whatever value "/local/foo"
+has.</p>
+<p>Functions can be stored in data structures just like any other value.</p>
+<pre><code>type T = { count: i64, f: fn(T) -&gt; T };
+let t = { count: 0, f: |t: T| {t with count: t.count + 1} };
+(t.f)(t)
+</code></pre>
+<p>when run will output,</p>
+<pre><code>{count: 1, f: 158}
+</code></pre>
+<p>Since functions are always late bound, you can have multiple values of type <code>T</code>
+where each <code>t.f</code> is a different function.</p>
+<pre><code>type T = { count: i64, f: fn(T) -&gt; T };
+let t0 = { count: 0, f: |t: T| {t with count: t.count + 1} };
+let t1 = { count: 0, f: |t: T| {t with count: t.count - 1} };
+println((t0.f)(t0));
+println((t1.f)(t1))
+</code></pre>
+<p>when run will output,</p>
+<pre><code>{count: 1, f: 158}
+{count: -1, f: 159}
+</code></pre>
+<p>You can clearly see that f is bound to different functions by the runtime the
+numbers 158 and 159 are the actual representations of functions at runtime.
+While Graphix is not an object oriented language, you can use closures and late
+binding to simulate some useful aspects of the OOP.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursion"><a class="header" href="#recursion">Recursion</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>
