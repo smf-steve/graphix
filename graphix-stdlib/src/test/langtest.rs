@@ -1328,6 +1328,26 @@ run!(late_binding3, LATE_BINDING3, |v: Result<&Value>| match v {
     _ => false,
 });
 
+const LATE_BINDING4: &str = r#"
+{
+    let f = |#foo: i64 = 0, #bar: i64 = 1, baz| (foo - bar) + baz;
+    let g = |#bar: i64 = 1, #foo: i64 = 0, baz| (foo - bar) + baz;
+    let h = |#bar: i64 = 1, #zam: i64 = 55, #foo: i64 = 0, baz| (foo - bar) + baz + zam;
+    let fs = [f, g, h];
+    let f: fn(i64) -> i64 = never();
+    f <- array::iter(fs);
+    array::group(f(1), |n, _| n == 3)
+}
+"#;
+
+run!(late_binding4, LATE_BINDING4, |v: Result<&Value>| match v {
+    Ok(v) => match v.clone().cast_to::<[i64; 3]>() {
+        Ok([0, 0, 55]) => true,
+        Ok(_) | Err(_) => false,
+    },
+    _ => false,
+});
+
 const RECTYPES0: &str = r#"
 {
   type List = [
