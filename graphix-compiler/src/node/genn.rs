@@ -4,6 +4,7 @@ use crate::{
     typ::{FnType, Type},
     BindId, ExecCtx, Node, Rt, Scope, UserEvent,
 };
+use enumflags2::BitFlags;
 use netidx::publisher::{Typ, Value};
 use poolshark::local::LPooled;
 use std::collections::HashMap;
@@ -57,10 +58,12 @@ pub fn apply<R: Rt, E: UserEvent>(
     ftype.alias_tvars(&mut LPooled::take());
     Box::new(CallSite {
         spec: NOP.clone(),
-        ftype,
+        rtype: ftype.rtype.clone(),
+        ftype: Some(ftype),
+        named_args: HashMap::default(),
         args,
         scope,
-        arg_spec: HashMap::default(),
+        flags: BitFlags::empty(),
         fnode,
         function: None,
         top_id,

@@ -459,9 +459,9 @@ impl FnType {
     pub fn map_argpos(
         &self,
         other: &Self,
-    ) -> FxHashMap<ArcStr, (Option<usize>, Option<usize>)> {
-        let mut tbl: FxHashMap<ArcStr, (Option<usize>, Option<usize>)> =
-            FxHashMap::default();
+    ) -> LPooled<FxHashMap<ArcStr, (Option<usize>, Option<usize>)>> {
+        let mut tbl: LPooled<FxHashMap<ArcStr, (Option<usize>, Option<usize>)>> =
+            LPooled::take();
         for (i, a) in self.args.iter().enumerate() {
             match &a.label {
                 None => break,

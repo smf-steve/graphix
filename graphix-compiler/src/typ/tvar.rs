@@ -218,6 +218,6 @@ impl TVar {
     }
 
     pub(super) fn addr(&self) -> usize {
-        self.0.as_ptr().addr()
+        Arc::as_ptr(&self.0).addr()
     }
 }

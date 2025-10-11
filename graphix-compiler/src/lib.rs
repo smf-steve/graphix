@@ -289,8 +289,9 @@ pub type InitFn<R, E> = sync::Arc<
     dyn for<'a, 'b, 'c> Fn(
             &'a Scope,
             &'b mut ExecCtx<R, E>,
-            &'c [Node<R, E>],
+            &'c mut [Node<R, E>],
             ExprId,
+            bool,
         ) -> Result<Box<dyn Apply<R, E>>>
         + Send
         + Sync

@@ -1119,30 +1119,47 @@ f(2)
 <p>In the above example <code>f</code> captures <code>v</code> and can use it even when it is called from
 a scope where <code>v</code> isn't visible. It will output 2 + whatever value "/local/foo"
 has.</p>
-<p>Functions can be stored in data structures just like any other value.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="functions-are-first-class-values"><a class="header" href="#functions-are-first-class-values">Functions are First Class values</a></h1>
+<p>We can store a function in a structure, which can itself be stored in a data
+structure, a file, or even sent across the network to another instance of the
+same program. Here we build a struct that maintains a count, and a function to
+operate on the count, returning a new struct of the same type with a different
+count.</p>
 <pre><code>type T = { count: i64, f: fn(T) -&gt; T };
 let t = { count: 0, f: |t: T| {t with count: t.count + 1} };
 (t.f)(t)
 </code></pre>
-<p>when run will output,</p>
+<p>when run this example will output,</p>
 <pre><code>{count: 1, f: 158}
 </code></pre>
-<p>Since functions are always late bound, you can have multiple values of type <code>T</code>
-where each <code>t.f</code> is a different function.</p>
+<p>158 is the lambda id, it's the actual value that is stored to represent a
+function. The type system ensures that a normal number can't be confused for a
+lambda id.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="late-binding"><a class="header" href="#late-binding">Late Binding</a></h1>
+<p>Functions are always late bound. Late binding means that the runtime actually
+figures out which function is going to be called at runtime, not compile time.
+At compile time we only know the type of the function we are going to call. This
+complicates the compiler significantly, but it is a powerful abstraction tool.
+For example we can create two structs of type <code>T</code> that each contain a different
+implementation of <code>f</code>, and we can use them interchangibly with any function that
+accepts a <code>T</code>. In this simple example we create one implementation of <code>f</code> that
+increments the count, and one that decrements it.</p>
 <pre><code>type T = { count: i64, f: fn(T) -&gt; T };
-let t0 = { count: 0, f: |t: T| {t with count: t.count + 1} };
-let t1 = { count: 0, f: |t: T| {t with count: t.count - 1} };
-println((t0.f)(t0));
-println((t1.f)(t1))
+let ts = [
+  { count: 0, f: |t: T| {t with count: t.count + 1} },
+  { count: 0, f: |t: T| {t with count: t.count - 1} }
+];
+let t = array::iter(ts);
+(t.f)(t)
 </code></pre>
-<p>when run will output,</p>
+<p>when run this example will output,</p>
 <pre><code>{count: 1, f: 158}
 {count: -1, f: 159}
 </code></pre>
-<p>You can clearly see that f is bound to different functions by the runtime the
-numbers 158 and 159 are the actual representations of functions at runtime.
-While Graphix is not an object oriented language, you can use closures and late
-binding to simulate some useful aspects of the OOP.</p>
+<p>You can clearly see that f is bound to different functions by the runtime since
+the lambda ids (158 and 159) are different. While Graphix is not an object
+oriented language, you can use closures and late binding to achieve some of the
+same outcomes as OOP.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursion"><a class="header" href="#recursion">Recursion</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Closures - The Graphix Programming Language</title>
+        <title>Late Binding - The Graphix Programming Language</title>
 
 
         <!-- Custom HTML head -->
@@ -175,29 +175,41 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="closures-and-first-class-functions"><a class="header" href="#closures-and-first-class-functions">Closures and First Class Functions</a></h1>
-<p>Functions can reference variables outside their definition as long as they are
-in the lexical scope of the function. These references are valid regardless of
-where the function is called.</p>
-<pre><code>let f = {
-  let v = cast&lt;i64&gt;(net::subscribe("/local/foo")$)$;
-  |n| v + n
-};
-f(2)
+                        <h1 id="late-binding"><a class="header" href="#late-binding">Late Binding</a></h1>
+<p>Functions are always late bound. Late binding means that the runtime actually
+figures out which function is going to be called at runtime, not compile time.
+At compile time we only know the type of the function we are going to call. This
+complicates the compiler significantly, but it is a powerful abstraction tool.
+For example we can create two structs of type <code>T</code> that each contain a different
+implementation of <code>f</code>, and we can use them interchangibly with any function that
+accepts a <code>T</code>. In this simple example we create one implementation of <code>f</code> that
+increments the count, and one that decrements it.</p>
+<pre><code>type T = { count: i64, f: fn(T) -&gt; T };
+let ts = [
+  { count: 0, f: |t: T| {t with count: t.count + 1} },
+  { count: 0, f: |t: T| {t with count: t.count - 1} }
+];
+let t = array::iter(ts);
+(t.f)(t)
 </code></pre>
-<p>In the above example <code>f</code> captures <code>v</code> and can use it even when it is called from
-a scope where <code>v</code> isn't visible. It will output 2 + whatever value "/local/foo"
-has.</p>
+<p>when run this example will output,</p>
+<pre><code>{count: 1, f: 158}
+{count: -1, f: 159}
+</code></pre>
+<p>You can clearly see that f is bound to different functions by the runtime since
+the lambda ids (158 and 159) are different. While Graphix is not an object
+oriented language, you can use closures and late binding to achieve some of the
+same outcomes as OOP.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../functions/labeled.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../functions/first_class.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../functions/first_class.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../functions/polymorphism.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -207,11 +219,11 @@ has.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../functions/labeled.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../functions/first_class.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../functions/first_class.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../functions/polymorphism.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

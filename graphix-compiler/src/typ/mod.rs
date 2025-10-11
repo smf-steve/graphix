@@ -282,7 +282,7 @@ impl Type {
             {
                 Ok(true)
             }
-            (Self::TVar(t0), tt1 @ Self::TVar(t1)) => {
+            (tt0 @ Self::TVar(t0), tt1 @ Self::TVar(t1)) => {
                 #[derive(Debug)]
                 enum Act {
                     RightCopy,
@@ -290,11 +290,18 @@ impl Type {
                     LeftAlias,
                     LeftCopy,
                 }
+                if t0.would_cycle(tt1) || t1.would_cycle(tt0) {
+                    return Ok(true);
+                }
                 let act = {
                     let t0 = t0.read();
                     let t1 = t1.read();
-                    let addr = Arc::as_ptr(&t0.typ).addr();
-                    if addr == Arc::as_ptr(&t1.typ).addr() {
+                    let addr0 = Arc::as_ptr(&t0.typ).addr();
+                    let addr1 = Arc::as_ptr(&t1.typ).addr();
+                    if addr0 == addr1 {
+                        return Ok(true);
+                    }
+                    if would_cycle_inner(addr0, tt1) || would_cycle_inner(addr1, tt0) {
                         return Ok(true);
                     }
                     let t0i = t0.typ.read();
@@ -304,9 +311,6 @@ impl Type {
                             return t0.contains_int(flags, env, hist, &*t1)
                         }
                         (None, None) => {
-                            if would_cycle_inner(addr, tt1) {
-                                return Ok(true);
-                            }
                             if t0.frozen && t1.frozen {
                                 return Ok(true);
                             }
@@ -316,18 +320,8 @@ impl Type {
                                 Act::LeftAlias
                             }
                         }
-                        (Some(_), None) => {
-                            if would_cycle_inner(addr, tt1) {
-                                return Ok(true);
-                            }
-                            Act::RightCopy
-                        }
-                        (None, Some(_)) => {
-                            if would_cycle_inner(addr, tt1) {
-                                return Ok(true);
-                            }
-                            Act::LeftCopy
-                        }
+                        (Some(_), None) => Act::RightCopy,
+                        (None, Some(_)) => Act::LeftCopy,
                     }
                 };
                 match act {

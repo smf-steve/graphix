@@ -280,7 +280,7 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
         let _typ = typ.clone();
         let _argspec = argspec.clone();
         let body = l.body.clone();
-        let init: InitFn<R, E> = SArc::new(move |scope, ctx, args, tid| {
+        let init: InitFn<R, E> = SArc::new(move |scope, ctx, args, tid, tcerr| {
             // restore the lexical environment to the state it was in
             // when the closure was created
             ctx.with_restored(_env.clone(), |ctx| match body.clone() {
@@ -299,19 +299,29 @@ impl<R: Rt, E: UserEvent> Lambda<R, E> {
                         tid,
                         body.clone(),
                     );
-                    apply.map(|a| {
-                        let f: Box<dyn Apply<R, E>> = Box::new(a);
-                        f
+                    apply.and_then(|a| {
+                        let mut f: Box<dyn Apply<R, E>> = Box::new(a);
+                        if tcerr {
+                            f.typecheck(ctx, args).map(|()| f)
+                        } else {
+                            let _ = f.typecheck(ctx, args);
+                            Ok(f)
+                        }
                     })
                 }
                 Either::Right(builtin) => match ctx.builtins.get(&*builtin) {
                     None => bail!("unknown builtin function {builtin}"),
                     Some((_, init)) => {
                         let init = SArc::clone(init);
-                        init(ctx, &_typ, &_scope, args, tid).map(|apply| {
-                            let f: Box<dyn Apply<R, E>> =
+                        init(ctx, &_typ, &_scope, args, tid).and_then(|apply| {
+                            let mut f: Box<dyn Apply<R, E>> =
                                 Box::new(BuiltInLambda { typ: _typ.clone(), apply });
-                            f
+                            if tcerr {
+                                f.typecheck(ctx, args).map(|()| f)
+                            } else {
+                                let _ = f.typecheck(ctx, args);
+                                Ok(f)
+                            }
                         })
                     }
                 },
@@ -380,13 +390,13 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
         );
         let prev_catch =
             ctx.env.catch.insert_cow(self.def.scope.dynamic.clone(), faux_id);
-        let res =
-            wrap!(self, (self.def.init)(&self.def.scope, ctx, &faux_args, ExprId::new()));
+        let res = wrap!(
+            self,
+            (self.def.init)(&self.def.scope, ctx, &mut faux_args, ExprId::new(), true)
+        );
         let res = res.and_then(|mut f| {
-            let res = wrap!(self, f.typecheck(ctx, &mut faux_args));
             let ftyp = f.typ().clone();
             f.delete(ctx);
-            res?;
             let inferred_throws = ctx.env.by_id[&faux_id]
                 .typ
                 .with_deref(|t| t.cloned())
