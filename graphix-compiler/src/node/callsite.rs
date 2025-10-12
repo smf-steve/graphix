@@ -7,7 +7,7 @@ use crate::{
     wrap, Apply, BindId, CFlag, Event, ExecCtx, LambdaId, Node, PrintFlag, Refs, Rt,
     Scope, Update, UserEvent,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use arcstr::ArcStr;
 use enumflags2::BitFlags;
 use fxhash::{FxHashMap, FxHashSet};
@@ -118,10 +118,32 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
         }
         let ftype = match &self.function {
             Some((_, f)) => &f.typ(),
-            None => self
-                .ftype
-                .as_ref()
-                .ok_or_else(|| anyhow!("BUG fn not typechecked in bind"))?,
+            None => match self.ftype.as_ref() {
+                Some(ftype) => ftype,
+                None => {
+                    let ftype = &*f.typ;
+                    self.ftype = Some(ftype.clone());
+                    for (i, arg) in ftype.args.iter().enumerate() {
+                        if let Some((name, default)) = &arg.label {
+                            match self.named_args.get_mut(name) {
+                                None if !*default => {
+                                    bail!("BUG: in bind missing required argument {name}")
+                                }
+                                None => {
+                                    self.args.insert(i, Nop::new(arg.typ.clone()));
+                                    self.named_args.insert(name.clone(), (None, true));
+                                }
+                                Some((n, _)) => {
+                                    if let Some(n) = n.take() {
+                                        self.args.insert(i, n)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ftype
+                }
+            },
         };
         for arg in ftype.args.iter() {
             if let Some((name, _)) = &arg.label {
