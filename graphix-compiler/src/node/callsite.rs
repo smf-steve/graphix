@@ -123,42 +123,40 @@ impl<R: Rt, E: UserEvent> CallSite<R, E> {
                 .as_ref()
                 .ok_or_else(|| anyhow!("BUG fn not typechecked in bind"))?,
         };
-        for (name, map) in ftype.map_argpos(&f.typ).drain() {
-            let is_default = self.named_args.get(&name).map(|(_, d)| *d).unwrap_or(false);
-            match map {
-                (Some(si), Some(oi)) if si == oi => {
-                    if is_default {
-                        self.args[si] = compile_default!(si, f);
-                    }
+        for arg in ftype.args.iter() {
+            if let Some((name, _)) = &arg.label {
+                let (n, is_default) = self.named_args.get_mut(name).unwrap();
+                if *is_default {
+                    let mut n = self.args.remove(0);
+                    n.delete(ctx);
+                } else {
+                    *n = Some(self.args.remove(0));
                 }
-                (Some(si), Some(oi)) if si < oi => {
-                    let mut i = si;
-                    while i < oi {
-                        self.args.swap(i, i + 1);
-                        i += 1;
-                    }
-                    if is_default {
-                        self.args[i] = compile_default!(si, f);
-                    }
-                }
-                (Some(si), Some(oi)) if oi < si => {
-                    let mut i = si;
-                    while i > oi {
-                        self.args.swap(i, i - 1);
-                        i -= 1
-                    }
-                    if is_default {
-                        self.args[i] = compile_default!(i, f);
-                    }
-                }
-                (Some(_), Some(_)) => unreachable!(),
-                (Some(i), None) => {
-                    self.args.remove(i);
-                }
-                (None, Some(i)) => self.args.insert(i, compile_default!(i, f)),
-                (None, None) => bail!("unexpected args"),
             }
         }
+        let mut labeled: LPooled<FxHashSet<ArcStr>> = LPooled::take();
+        for (i, arg) in f.typ.args.iter().enumerate() {
+            if let Some((name, _)) = &arg.label {
+                labeled.insert(name.clone());
+                match self.named_args.entry(name.clone()) {
+                    Entry::Occupied(mut e) => match e.get_mut().0.take() {
+                        Some(n) => self.args.insert(i, n),
+                        None => self.args.insert(i, compile_default!(i, f)),
+                    },
+                    Entry::Vacant(e) => {
+                        e.insert((None, true));
+                        self.args.insert(i, compile_default!(i, f))
+                    }
+                }
+            }
+        }
+        self.named_args.retain(|name, (n, _)| {
+            let keep = labeled.contains(name);
+            if !keep && let Some(n) = n {
+                n.delete(ctx)
+            }
+            keep
+        });
         let rf = (f.init)(&scope, ctx, &mut self.args, self.top_id, false)?;
         self.function = Some((f.id, rf));
         Ok(())
