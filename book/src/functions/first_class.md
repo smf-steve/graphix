@@ -19,5 +19,4 @@ when run this example will output,
 ```
 
 158 is the lambda id, it's the actual value that is stored to represent a
-function. The type system ensures that a normal number can't be confused for a
-lambda id.
+function.

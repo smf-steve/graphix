@@ -185,7 +185,7 @@ implementation of <code>f</code>, and we can use them interchangibly with any fu
 accepts a <code>T</code>. In this simple example we create one implementation of <code>f</code> that
 increments the count, and one that decrements it.</p>
 <pre><code>type T = { count: i64, f: fn(T) -&gt; T };
-let ts = [
+let ts: Array&lt;T&gt; = [
   { count: 0, f: |t: T| {t with count: t.count + 1} },
   { count: 0, f: |t: T| {t with count: t.count - 1} }
 ];

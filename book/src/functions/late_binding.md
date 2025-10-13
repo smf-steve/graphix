@@ -11,7 +11,7 @@ increments the count, and one that decrements it.
 
 ```
 type T = { count: i64, f: fn(T) -> T };
-let ts = [
+let ts: Array<T> = [
   { count: 0, f: |t: T| {t with count: t.count + 1} },
   { count: 0, f: |t: T| {t with count: t.count - 1} }
 ];

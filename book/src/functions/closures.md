@@ -1,8 +1,8 @@
-# Closures and First Class Functions
+# Lexical Closures
 
-Functions can reference variables outside their definition as long as they are
-in the lexical scope of the function. These references are valid regardless of
-where the function is called.
+Functions can reference variables outside of their definition. These variables
+are captured by the function definition, and remain valid no matter where the
+closure is called. For example,
 
 ```
 let f = {
@@ -12,6 +12,6 @@ let f = {
 f(2)
 ```
 
-In the above example `f` captures `v` and can use it even when it is called from
-a scope where `v` isn't visible. It will output 2 + whatever value "/local/foo"
-has.
+`f` captures `v` and can use it even when it is called from a scope where `v`
+isn't visible. Closures allow functions to encapsulate data, just like an object
+in OOP.

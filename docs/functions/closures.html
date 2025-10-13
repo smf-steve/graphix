@@ -175,19 +175,19 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="closures-and-first-class-functions"><a class="header" href="#closures-and-first-class-functions">Closures and First Class Functions</a></h1>
-<p>Functions can reference variables outside their definition as long as they are
-in the lexical scope of the function. These references are valid regardless of
-where the function is called.</p>
+                        <h1 id="lexical-closures"><a class="header" href="#lexical-closures">Lexical Closures</a></h1>
+<p>Functions can reference variables outside of their definition. These variables
+are captured by the function definition, and remain valid no matter where the
+closure is called. For example,</p>
 <pre><code>let f = {
   let v = cast&lt;i64&gt;(net::subscribe("/local/foo")$)$;
   |n| v + n
 };
 f(2)
 </code></pre>
-<p>In the above example <code>f</code> captures <code>v</code> and can use it even when it is called from
-a scope where <code>v</code> isn't visible. It will output 2 + whatever value "/local/foo"
-has.</p>
+<p><code>f</code> captures <code>v</code> and can use it even when it is called from a scope where <code>v</code>
+isn't visible. Closures allow functions to encapsulate data, just like an object
+in OOP.</p>
 
                     </main>
 
