@@ -1291,6 +1291,15 @@ implementation of which I will not repeat here), which is,</p>
 <p>So map takes an array of <code>'a</code>, and a function mapping <code>'a</code> to <code>'b</code> and possibly
 throwing <code>'e</code> and returns an array of <code>'b</code> possibly throwing <code>'e</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursion"><a class="header" href="#recursion">Recursion</a></h1>
+<p>Functions can be recursive, however there is currently no tail call optimization,
+so you can easily exhaust available stack space. With that warning aside, lets
+write a recursive function to add up pairs of numbers in an array,</p>
+<pre><code>let rec add_pairs = |a: Array&lt;Number&gt;| select a {
+  [] =&gt; [],
+  [e0] =&gt; [e0],
+  [e0, e1, @tl] =&gt; array::push([e0 + e1], add_pairs(tl))
+}
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>
 <p>Considering the underlying execution model functions might be better described
 as "polymorphic graph templates", in that they allow you to specify a part of

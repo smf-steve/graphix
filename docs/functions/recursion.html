@@ -176,6 +176,15 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="recursion"><a class="header" href="#recursion">Recursion</a></h1>
+<p>Functions can be recursive, however there is currently no tail call optimization,
+so you can easily exhaust available stack space. With that warning aside, lets
+write a recursive function to add up pairs of numbers in an array,</p>
+<pre><code>let rec add_pairs = |a: Array&lt;Number&gt;| select a {
+  [] =&gt; [],
+  [e0] =&gt; [e0],
+  [e0, e1, @tl] =&gt; array::push([e0 + e1], add_pairs(tl))
+}
+</code></pre>
 
                     </main>
 
