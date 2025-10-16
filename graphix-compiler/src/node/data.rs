@@ -2,6 +2,7 @@ use super::{compiler::compile, Cached};
 use crate::{
     deref_typ,
     expr::{Expr, ExprId, ExprKind},
+    format_with_flags,
     typ::Type,
     update_args, wrap, CFlag, Event, ExecCtx, Node, PrintFlag, Refs, Rt, Scope, Update,
     UserEvent,

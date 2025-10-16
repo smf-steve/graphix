@@ -360,7 +360,6 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda<R, E> {
     }
 
     fn typecheck(&mut self, ctx: &mut ExecCtx<R, E>) -> Result<()> {
-        self.typ.unbind_tvars();
         let mut faux_args: LPooled<Vec<Node<R, E>>> = self
             .def
             .argspec
