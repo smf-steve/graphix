@@ -176,6 +176,78 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="references"><a class="header" href="#references">References</a></h1>
+<p>A reference value is not the thing itself, but a reference to it, just like a
+pointer in C. This is kind of an odd thing to have in a very high level language
+like Graphix, but there are good reasons for it. Before we get into those lets
+see what one looks like.</p>
+<pre><code>〉let v = &amp;1
+〉v
+-: &amp;i64
+727
+</code></pre>
+<p>The <code>&amp;</code> in front of the <code>1</code> creates a reference. You can create a reference to
+any value. Note that the type isn't <code>i64</code> anymore but <code>&amp;i64</code> indicating that <code>v</code>
+is a reference to an <code>i64</code>. Just like a function when printed the reference id
+is printed, not the value it refers to. We get the value that this reference 727
+refers to with the deref operator *.</p>
+<pre><code>〉*v
+-: i64
+1
+</code></pre>
+<h2 id="but-why"><a class="header" href="#but-why">But Why</a></h2>
+<p>Now that we've got the basic semantics out of the way, what is this good for?
+Suppose we have a large struct, with many fields, or even a struct of structs of
+structs with a lot of data. And suppose every time that struct updates we do a
+bunch of work. This is exactly how UIs are built by the way, they are deeply
+nested tree of structs. Under the normal semantics of Graphix, if any field
+anywhere in our large tree of structs were to update, then we'd rebuild the
+entire object (or at least a substantial part of it), and any function that
+depended on it would have no way of knowing what changed, and thus would have to
+do whatever huge amount of work it is supposed to do all over again. Consider a
+constrained GUI type with just labels and boxes,</p>
+<pre><code>type Gui = [
+  `Label(string),
+  `Box(Array&lt;Gui&gt;)
+]
+</code></pre>
+<p>So we can build labels in boxes, and we can nest the boxes, laying out the
+labels however we like (use your imagination). We have the same problem as the
+more abstract example above, if we were mapping this onto a stateful gui library
+then every time a label text changed anywhere we'd have to destroy all the
+widgets we had created and rebuild the entire UI from scratch. We'd like to be
+able to just update the label text that changed, and we can, with a small change
+to the type.</p>
+<pre><code>type Gui = [
+  `Label(&amp;string),
+  `Box(Array&lt;Gui&gt;)
+]
+</code></pre>
+<p>Now, the string inside the label is a reference instead of the actual string.
+Since references are assigned an id at compile time, they never change, and so
+the layout of our gui can never change just because a label text was updated.
+Whatever is actually building the gui will only see an update to the root when
+the actual layout changes. To handle the labels it can just deref the string
+reference in each label, and when that updates it can update the text of the
+label, exactly what we wanted.</p>
+<h2 id="connect-deref"><a class="header" href="#connect-deref">Connect Deref</a></h2>
+<p>Suppose we want to write a function that can update the value a passed in
+reference refers to, instead of the reference itself (which we can also do). We
+can do that with,</p>
+<pre><code>*r &lt;- "new value"
+</code></pre>
+<p>Consider,</p>
+<pre><code>let f = |x: &amp;i64| *x &lt;- once(*x) + 1;
+let v = 0;
+println("[v]");
+f(&amp;v)
+</code></pre>
+<p>Running this program will output,</p>
+<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+0
+1
+</code></pre>
+<p>We were able to pass <code>v</code> into <code>f</code> by reference and it was able to update it,
+even though the original bind of <code>v</code> isn't even in a scope that <code>f</code> can see.</p>
 
                     </main>
 

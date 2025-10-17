@@ -313,7 +313,10 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Deref<R, E> {
                 }
             }
         }
-        self.id.and_then(|id| event.variables.get(&id).cloned())
+        self.id.and_then(|id| match event.variables.get(&id).cloned() {
+            None if event.init => ctx.cached.get(&id).cloned(),
+            v => v,
+        })
     }
 
     fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {

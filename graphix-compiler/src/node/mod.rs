@@ -589,7 +589,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for ConnectDeref<R, E> {
         if up {
             if let Some(v) = &self.rhs.cached {
                 if let Some(id) = self.target_id {
-                    ctx.set_var(id, v.clone())
+                    ctx.set_var(id, v.clone());
                 }
             }
         }
