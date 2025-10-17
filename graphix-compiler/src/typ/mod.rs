@@ -1,6 +1,7 @@
 use crate::{
     env::Env, expr::ModPath, format_with_flags, PrintFlag, Rt, UserEvent, PRINT_FLAGS,
 };
+use crate::{errf, CAST_ERR_TAG};
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
 use enumflags2::bitflags;
@@ -1511,10 +1512,10 @@ impl Type {
                         },
                         _ => unreachable!(),
                     });
-                    let (keys_ok, ok) = ts.iter().zip(elts_s.iter()).fold(
-                        Ok((true, true)),
+                    let keys_ok = ts.iter().zip(elts_s.iter()).fold(
+                        Ok(true),
                         |acc: Result<_>, ((fname, t), v)| {
-                            let (kok, ok) = acc?;
+                            let kok = acc?;
                             let (name, v) = match v {
                                 Value::Array(a) => match (&a[0], &a[1]) {
                                     (Value::String(n), v) => (n, v),
@@ -1522,20 +1523,12 @@ impl Type {
                                 },
                                 _ => unreachable!(),
                             };
-                            Ok((
-                                kok && name == fname,
-                                ok && kok
-                                    && t.contains(
-                                        env,
-                                        &Type::Primitive(Typ::get(v).into()),
-                                    )?,
-                            ))
+                            Ok(kok
+                                && name == fname
+                                && t.contains(env, &Type::Primitive(Typ::get(v).into()))?)
                         },
                     )?;
-                    if ok {
-                        drop(elts_s);
-                        return Ok(Value::Array(elts));
-                    } else if keys_ok {
+                    if keys_ok {
                         let elts = ts
                             .iter()
                             .zip(elts_s.iter())
@@ -1606,7 +1599,7 @@ impl Type {
     pub fn cast_value<R: Rt, E: UserEvent>(&self, env: &Env<R, E>, v: Value) -> Value {
         match self.cast_value_int(env, &mut LPooled::take(), v) {
             Ok(v) => v,
-            Err(e) => Value::error(e.to_string()),
+            Err(e) => errf!(CAST_ERR_TAG, "{e:?}"),
         }
     }
 

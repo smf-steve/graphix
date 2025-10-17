@@ -129,7 +129,7 @@ macro_rules! errf {
 #[macro_export]
 macro_rules! defetyp {
     ($name:ident, $tag_name:ident, $tag:literal, $typ:expr) => {
-        static $tag_name: ArcStr = literal!($tag);
+        static $tag_name: ArcStr = arcstr::literal!($tag);
         static $name: ::std::sync::LazyLock<$crate::typ::Type> =
             ::std::sync::LazyLock::new(|| {
                 let scope = $crate::expr::ModPath::root();
@@ -139,6 +139,8 @@ macro_rules! defetyp {
             });
     };
 }
+
+defetyp!(CAST_ERR, CAST_ERR_TAG, "InvalidCast", "Error<`{}(string)>");
 
 atomic_id!(LambdaId);
 

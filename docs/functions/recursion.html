@@ -179,11 +179,15 @@
 <p>Functions can be recursive, however there is currently no tail call optimization,
 so you can easily exhaust available stack space. With that warning aside, lets
 write a recursive function to add up pairs of numbers in an array,</p>
-<pre><code>let rec add_pairs = |a: Array&lt;Number&gt;| select a {
-  [] =&gt; [],
-  [e0] =&gt; [e0],
-  [e0, e1, @tl] =&gt; array::push([e0 + e1], add_pairs(tl))
+<pre><code>let rec add_pairs = 'a: Number |a: Array&lt;'a&gt;| -&gt; Array&lt;'a&gt; select a {
+  [e0, e1, tl..] =&gt; array::push_front(add_pairs(tl), e0 + e1),
+  a =&gt; a
 }
+</code></pre>
+<p>running this we see,</p>
+<pre><code>〉add_pairs([1, 2, 3, 4, 5])
+-: Array&lt;'a: i64&gt;
+[3, 7, 5]
 </code></pre>
 
                     </main>

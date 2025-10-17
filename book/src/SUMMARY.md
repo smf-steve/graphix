@@ -25,6 +25,7 @@
   - [Named Types](./udf/named.md)
   - [Parametric Polymorphism](./udf/polymorphic.md)
   - [Recursive Types](./udf/recursive.md)
+  - [References](./udf/references.md)
 - [Modules](./modules/overview.md)
   - [Inline Modules](./modules/inline.md)
   - [External Modules](./modules/external.md)

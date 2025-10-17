@@ -7,7 +7,7 @@ use crate::{
     wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Result};
-use arcstr::{literal, ArcStr};
+use arcstr::ArcStr;
 use enumflags2::BitFlags;
 use netidx_value::{Typ, Value};
 use std::{collections::hash_map::Entry, fmt};

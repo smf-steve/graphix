@@ -1294,11 +1294,15 @@ throwing <code>'e</code> and returns an array of <code>'b</code> possibly throwi
 <p>Functions can be recursive, however there is currently no tail call optimization,
 so you can easily exhaust available stack space. With that warning aside, lets
 write a recursive function to add up pairs of numbers in an array,</p>
-<pre><code>let rec add_pairs = |a: Array&lt;Number&gt;| select a {
-  [] =&gt; [],
-  [e0] =&gt; [e0],
-  [e0, e1, @tl] =&gt; array::push([e0 + e1], add_pairs(tl))
+<pre><code>let rec add_pairs = 'a: Number |a: Array&lt;'a&gt;| -&gt; Array&lt;'a&gt; select a {
+  [e0, e1, tl..] =&gt; array::push_front(add_pairs(tl), e0 + e1),
+  a =&gt; a
 }
+</code></pre>
+<p>running this we see,</p>
+<pre><code>〉add_pairs([1, 2, 3, 4, 5])
+-: Array&lt;'a: i64&gt;
+[3, 7, 5]
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>
 <p>Considering the underlying execution model functions might be better described
@@ -1412,12 +1416,100 @@ correct answer,</p>
 2
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="user-defined-types"><a class="header" href="#user-defined-types">User Defined Types</a></h1>
+<p>You can define your own data types in Graphix. This is useful for many tasks,
+such as enforcing interface invariants, and modeling data. As a data modeling
+language Graphix supports both structures, so called conjunctive types, where
+you are modeling data that always appears together, and variants, or so called
+disjunctive types, where a type can be one of many possible types drawn from a
+set. This contrasts with other languages, for example Python, which only support
+conjunctive types.</p>
+<h2 id="structural-typing"><a class="header" href="#structural-typing">Structural Typing</a></h2>
+<p>In most languages types are dealt with by name, meaning that two structs with
+exactly the same fields are still different types if they have a different name.
+The obvious implication of this is that all types need to be given a name, and
+thus declared. Graphix works differently. Types in Graphix are structural,
+meaning that types that are structurally the same are the same type. In fact
+types in Graphix don't formally have names, there can be aliases for a large
+type to cut down on verbosity, but an alias is always resolved to the structural
+type when type checking. Because of this you don't need to declare types before
+using them.</p>
+<h2 id="set-based-type-system"><a class="header" href="#set-based-type-system">Set Based Type System</a></h2>
+<p>The Graphix type system is based on set operations. For example, a function
+could declare that it can take either an <code>i32</code> or an <code>i64</code> as an argument by
+defining the set, <code>[i32, i64]</code> and annotating it's argument with this type.</p>
+<pre><code>let f = |a: [i32, i64]| ...
+</code></pre>
+<p>When this function is called, the type checker will check that the type of
+argument <code>a</code> is a subset of <code>[i32, i64]</code>, and will produce a type error if it is
+not. Pretty much every operation the type checker performs in Graphix is one of,
+or a combination of, simple set operations contains, union, difference, etc.</p>
+<p>The combination of structural typing, set based type operations, and aggressive
+type inference is meant to make Graphix feel like an untyped scripting language
+most of the time, but still catch a lot of mistakes at compile time, and make it
+possible to enforce interface contracts.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="structs"><a class="header" href="#structs">Structs</a></h1>
+<p>Structs allow you to define a type that groups any number of fields together as
+one data object. The fields are accessible by name anywhere in the program. For
+example,</p>
+<pre><code>{ foo: string, bar: i64 }
+</code></pre>
+<p>defines a struct with two fields, <code>foo</code> and <code>bar</code>. <code>foo</code> has type <code>string</code> and
+<code>bar</code> has type <code>i64</code>. We can assign a struct of this type to a variable, and
+pass it around just like any other data object. For example,</p>
+<pre><code>let s = { foo: "I am foo", bar: 42 }
+println("the struct s is [s]")
+</code></pre>
+<p>will print</p>
+<pre><code>the struct s is {bar: 42, foo: "I am foo"}
+</code></pre>
+<h2 id="field-references"><a class="header" href="#field-references">Field References</a></h2>
+<p>Struct fields can be referenced with the .field notation. That is,</p>
+<pre><code>〉s.foo
+-: string
+"I am foo"
+</code></pre>
+<p>A more complex expression that results in a struct (such as a function call),
+must be placed in parenthesis before the .field. For example,</p>
+<pre><code>〉let f = || s
+〉(f()).foo
+-: string
+"I am foo"
+</code></pre>
+<h2 id="mutability-and-functional-update"><a class="header" href="#mutability-and-functional-update">Mutability and Functional Update</a></h2>
+<p>Structs are not mutable, like everything else in Graphix. However There is a
+quick way create a new struct from an existing struct with only some fields
+changed. This is called functional struct update syntax. For example,</p>
+<pre><code>{ s with bar: 21 }
+</code></pre>
+<p>Will create a new struct with all the same fields as <code>s</code> except <code>bar</code> which will be set to 21. e.g.</p>
+<pre><code>〉{ s with bar: 21 }
+-: {bar: i64, foo: string}
+{bar: 21, foo: "I am foo"}
+</code></pre>
+<p>Notice that the type printed is the full type of the struct, this is because of structural typing.</p>
+<h2 id="implementation"><a class="header" href="#implementation">Implementation</a></h2>
+<p>Structs are implemented as a sorted array of pairs, the field name being the
+first element of the pair, and the data value being the second. The array is
+sorted by the field name, and because of this it is not necessary to do any
+matching when the field is accessed at run time, the index of the field
+reference is pre computed at compile time, so field references are always O(1).
+The reason why the fields are stored at all is so they can be used on the
+network and in files without losing information. Because structs are array
+backed, they are also memory pooled, and so making a new struct does not usually
+allocate any memory, but instead reuses objects from the pool.</p>
+<p>The <code>cast</code> operator can cast even an unsorted array of pairs where the first
+element is a string to a struct type, and this is very useful for reading a
+published struct, or a file of structs. For example,</p>
+<pre><code>〉cast&lt;{foo: string, bar: i64}&gt;([["foo", "I am foo"], ["bar", 42]])$
+-: {bar: i64, foo: string}
+{bar: 42, foo: "I am foo"}
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="variants"><a class="header" href="#variants">Variants</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="tuples-1"><a class="header" href="#tuples-1">Tuples</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="named-types"><a class="header" href="#named-types">Named Types</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="parametric-polymorphism"><a class="header" href="#parametric-polymorphism">Parametric Polymorphism</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursive-types"><a class="header" href="#recursive-types">Recursive Types</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="references"><a class="header" href="#references">References</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="modules"><a class="header" href="#modules">Modules</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="inline-modules"><a class="header" href="#inline-modules">Inline Modules</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="external-modules"><a class="header" href="#external-modules">External Modules</a></h1>

@@ -3,6 +3,7 @@ use crate::{
     expr::{Expr, ExprId, ExprKind, ModPath},
     typ::{TVal, TVar, Type},
     wrap, BindId, CFlag, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
+    CAST_ERR,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::{literal, ArcStr};
@@ -651,7 +652,7 @@ impl<R: Rt, E: UserEvent> TypeCast<R, E> {
         if let Err(e) = target.check_cast(&ctx.env) {
             bail!("in cast at {} {e}", spec.pos);
         }
-        let typ = target.union(&ctx.env, &Type::Primitive(Typ::Error.into()))?;
+        let typ = target.union(&ctx.env, &CAST_ERR)?;
         Ok(Box::new(Self { spec, typ, target, n }))
     }
 }
