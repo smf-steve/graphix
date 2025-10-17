@@ -1415,7 +1415,7 @@ impl Type {
     fn cast_value_int<R: Rt, E: UserEvent>(
         &self,
         env: &Env<R, E>,
-        hist: &mut FxHashSet<usize>,
+        hist: &mut FxHashSet<(usize, usize)>,
         v: Value,
     ) -> Result<Value> {
         if self.is_a_int(env, hist, &v) {
@@ -1606,7 +1606,7 @@ impl Type {
     fn is_a_int<R: Rt, E: UserEvent>(
         &self,
         env: &Env<R, E>,
-        hist: &mut FxHashSet<usize>,
+        hist: &mut FxHashSet<(usize, usize)>,
         v: &Value,
     ) -> bool {
         match self {
@@ -1614,8 +1614,9 @@ impl Type {
                 Err(_) => false,
                 Ok(t) => {
                     let t_addr = (t as *const Type).addr();
-                    !hist.contains(&t_addr) && {
-                        hist.insert(t_addr);
+                    let v_addr = (v as *const Value).addr();
+                    !hist.contains(&(t_addr, v_addr)) && {
+                        hist.insert((t_addr, v_addr));
                         t.is_a_int(env, hist, v)
                     }
                 }
@@ -1653,6 +1654,9 @@ impl Type {
                         && ts.iter().zip(elts.iter()).all(|((n, t), v)| match v {
                             Value::Array(a) if a.len() == 2 => match &a[..] {
                                 [Value::String(key), v] => {
+                                    format_with_flags(PrintFlag::DerefTVars, || {
+                                        eprintln!("t: {t}")
+                                    });
                                     n == key && t.is_a_int(env, hist, v)
                                 }
                                 _ => false,
@@ -1732,7 +1736,10 @@ impl Type {
             | Self::Variant(_, _)
             | Self::Ref { .. }
             | Self::Map { .. } => f(Some(self)),
-            Self::TVar(tv) => f(tv.read().typ.read().as_ref()),
+            Self::TVar(tv) => match tv.read().typ.read().as_ref() {
+                Some(t) => t.with_deref(f),
+                None => f(None),
+            },
         }
     }
 
