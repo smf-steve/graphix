@@ -1627,6 +1627,79 @@ Caused by:
 <p>Indicating that we can't construct a Point3 with the type parameter of <code>string</code>,
 because the constraint is violated.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursive-types"><a class="header" href="#recursive-types">Recursive Types</a></h1>
+<p>Type aliases can be used to define recursive types, and this is a very powerful
+modeling tool for repeating structure. If you want to see an advanced example
+look no further than the <code>Tui</code> type in <code>graphix-shell</code>. Tui's are a set of
+mutually recursive types that define the tree structure of a gui. For a less
+overwelming example consider a classic,</p>
+<pre><code>type List&lt;'a&gt; = [
+  `Cons('a, List&lt;'a&gt;),
+  `Nil
+]
+</code></pre>
+<p>This defines a singly linked list as a set of two variant cases. Either the list
+is empty (nil), or it is a cons cell with a <code>'a</code> and a list, which itself could
+be either a cons cell or nil. If you've never heard the term "cons" and "nil"
+they come from lisp, the original functional programming language from the late
+1950s.</p>
+<p>Lets define some functions to work on our new list type,</p>
+<pre><code>type List&lt;'a&gt; = [
+  `Cons('a, List&lt;'a&gt;),
+  `Nil
+];
+
+/// cons a new item on the head of the list
+let cons = |l: List&lt;'a&gt;, v: 'a| -&gt; List&lt;'a&gt; `Cons(v, l);
+
+/// compute the length of the list
+let len = |l: List&lt;'a&gt;| {
+  let rec len_int = |l: List&lt;'a&gt;, n: i64| select l {
+    `Cons(_, tl) =&gt; len_int(tl, n + 1),
+    `Nil =&gt; n
+  };
+  len_int(l, 0)
+};
+
+/// map f over the list
+let rec map = |l: List&lt;'a&gt;, f: fn('a) -&gt; 'b| -&gt; List&lt;'b&gt; select l {
+  `Cons(v, tl) =&gt; `Cons(f(v), map(tl, f)),
+  `Nil =&gt; `Nil
+};
+
+/// fold f over the list
+let rec fold = |l: List&lt;'a&gt;, init: 'b, f: fn('b, 'a) -&gt; 'b| -&gt; 'b select l {
+  `Cons(v, tl) =&gt; fold(tl, f(init, v), f),
+  `Nil =&gt; init
+}
+</code></pre>
+<p>You can probably see where functional programming gets it's (partly deserved)
+reputation for being elegant and simple. These are after all functions for
+working with a pretty core (and useful) data structure.</p>
+<p>Now lets try them out,</p>
+<pre><code>let l = cons(cons(cons(cons(`Nil, 1), 2), 3), 4);
+l
+</code></pre>
+<p>running this we get,</p>
+<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+`Cons(4, `Cons(3, `Cons(2, `Cons(1, `Nil))))
+</code></pre>
+<p>Lets try something more complex,</p>
+<pre><code>map(l, |x| x * x)
+</code></pre>
+<p>results in</p>
+<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+`Cons(16, `Cons(9, `Cons(4, `Cons(1, `Nil))))
+</code></pre>
+<p>as expected. Finally lets sum the list with fold,</p>
+<pre><code>fold(l, 0, |acc, v| acc + v)
+</code></pre>
+<p>and as expected we get,</p>
+<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+10
+</code></pre>
+<p>So with recursive types and recursive functions you can do some really powerful
+things. When you add these capabilities to the data flow nature of Graphix, it
+only multiplies the power even further.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="references"><a class="header" href="#references">References</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="modules"><a class="header" href="#modules">Modules</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="inline-modules"><a class="header" href="#inline-modules">Inline Modules</a></h1>
