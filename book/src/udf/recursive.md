@@ -3,7 +3,7 @@
 Type aliases can be used to define recursive types, and this is a very powerful
 modeling tool for repeating structure. If you want to see an advanced example
 look no further than the `Tui` type in `graphix-shell`. Tui's are a set of
-mutually recursive types that define the tree structure of a gui. For a less
+mutually recursive types that define the tree structure of a ui. For a less
 overwelming example consider a classic,
 
 ```
@@ -17,9 +17,7 @@ This defines a singly linked list as a set of two variant cases. Either the list
 is empty (nil), or it is a cons cell with a `'a` and a list, which itself could
 be either a cons cell or nil. If you've never heard the term "cons" and "nil"
 they come from lisp, the original functional programming language from the late
-1950s.
-
-Lets define some functions to work on our new list type,
+1950s. Anyway, lets define some functions to work on our new list type,
 
 ```
 type List<'a> = [
@@ -53,10 +51,7 @@ let rec fold = |l: List<'a>, init: 'b, f: fn('b, 'a) -> 'b| -> 'b select l {
 ```
 
 You can probably see where functional programming gets it's (partly deserved)
-reputation for being elegant and simple. These are after all functions for
-working with a pretty core (and useful) data structure.
-
-Now lets try them out,
+reputation for being elegant and simple. Lets try them out,
 
 ```
 let l = cons(cons(cons(cons(`Nil, 1), 2), 3), 4);

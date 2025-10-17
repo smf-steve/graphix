@@ -179,7 +179,7 @@
 <p>Type aliases can be used to define recursive types, and this is a very powerful
 modeling tool for repeating structure. If you want to see an advanced example
 look no further than the <code>Tui</code> type in <code>graphix-shell</code>. Tui's are a set of
-mutually recursive types that define the tree structure of a gui. For a less
+mutually recursive types that define the tree structure of a ui. For a less
 overwelming example consider a classic,</p>
 <pre><code>type List&lt;'a&gt; = [
   `Cons('a, List&lt;'a&gt;),
@@ -190,8 +190,7 @@ overwelming example consider a classic,</p>
 is empty (nil), or it is a cons cell with a <code>'a</code> and a list, which itself could
 be either a cons cell or nil. If you've never heard the term "cons" and "nil"
 they come from lisp, the original functional programming language from the late
-1950s.</p>
-<p>Lets define some functions to work on our new list type,</p>
+1950s. Anyway, lets define some functions to work on our new list type,</p>
 <pre><code>type List&lt;'a&gt; = [
   `Cons('a, List&lt;'a&gt;),
   `Nil
@@ -222,9 +221,7 @@ let rec fold = |l: List&lt;'a&gt;, init: 'b, f: fn('b, 'a) -&gt; 'b| -&gt; 'b se
 }
 </code></pre>
 <p>You can probably see where functional programming gets it's (partly deserved)
-reputation for being elegant and simple. These are after all functions for
-working with a pretty core (and useful) data structure.</p>
-<p>Now lets try them out,</p>
+reputation for being elegant and simple. Lets try them out,</p>
 <pre><code>let l = cons(cons(cons(cons(`Nil, 1), 2), 3), 4);
 l
 </code></pre>
