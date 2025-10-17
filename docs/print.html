@@ -1519,8 +1519,9 @@ pass any other type of value to this function. The most interesting variant in t
 <pre><code>`Other(string)
 </code></pre>
 <p>Because it carries data with it. Variant cases can carry an zero or more values
-with them. We can use pattern matching to extract these values at run time. Lets
-write the body of our food function,</p>
+with them (types separated by commas, e.g. `Other(string, i64)). We can use
+pattern matching to extract these values at run time. Lets write the body of our
+food consuming function,</p>
 <pre><code>let f = |food: [`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]| select food {
   `Vegetable =&gt; "it's a vegetable",
   `Fruit =&gt; "it's a fruit",
@@ -1540,10 +1541,28 @@ f(`Other("foo"))
 <li>no extra items that can't exist in the set are matched</li>
 <li>you can't pass anything to f that isn't in the set</li>
 </ul>
-<p>Single variant cases are actually a perfectly valid type in Graphix, although
-they are much more useful in sets. Once we start naming types (in a later
-section), they will become even more useful.</p>
+<p>Singleton variant cases like `Other(string) are actually a perfectly valid type
+in Graphix, although they are much more useful in sets. Once we start naming
+types (in a later section), they will become even more useful.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="tuples-1"><a class="header" href="#tuples-1">Tuples</a></h1>
+<p>Tuples are like structs where the field names are numbers, or like Arrays where
+every element can be a different type and the length is known at compile time. For example,</p>
+<pre><code>(string, i64, f64)
+</code></pre>
+<p>Is an example of a three tuple.</p>
+<h2 id="field-accessors"><a class="header" href="#field-accessors">Field Accessors</a></h2>
+<p>You can access the fields of a tuple by their field number, e.g. .0, .1, .2, etc.</p>
+<pre><code>〉let t = (1, 2, 3)
+〉t.0 == 1
+-: bool
+true
+</code></pre>
+<p>Tuple fields may also be bound in a pattern match in a let bind, a select arm, or a function argument. For example,</p>
+<pre><code>〉let (f0, f1, f2) = t
+〉f0
+-: i64
+1
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="named-types"><a class="header" href="#named-types">Named Types</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="parametric-polymorphism"><a class="header" href="#parametric-polymorphism">Parametric Polymorphism</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursive-types"><a class="header" href="#recursive-types">Recursive Types</a></h1>

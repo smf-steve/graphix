@@ -22,8 +22,9 @@ pass any other type of value to this function. The most interesting variant in t
 ```
 
 Because it carries data with it. Variant cases can carry an zero or more values
-with them. We can use pattern matching to extract these values at run time. Lets
-write the body of our food function,
+with them (types separated by commas, e.g. `Other(string, i64)). We can use
+pattern matching to extract these values at run time. Lets write the body of our
+food consuming function,
 
 ```
 let f = |food: [`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]| select food {
@@ -49,6 +50,6 @@ In this example the type checker will ensure that,
 - no extra items that can't exist in the set are matched
 - you can't pass anything to f that isn't in the set
 
-Single variant cases are actually a perfectly valid type in Graphix, although
-they are much more useful in sets. Once we start naming types (in a later
-section), they will become even more useful.
+Singleton variant cases like `Other(string) are actually a perfectly valid type
+in Graphix, although they are much more useful in sets. Once we start naming
+types (in a later section), they will become even more useful.
