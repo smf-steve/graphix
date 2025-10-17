@@ -1654,9 +1654,6 @@ impl Type {
                         && ts.iter().zip(elts.iter()).all(|((n, t), v)| match v {
                             Value::Array(a) if a.len() == 2 => match &a[..] {
                                 [Value::String(key), v] => {
-                                    format_with_flags(PrintFlag::DerefTVars, || {
-                                        eprintln!("t: {t}")
-                                    });
                                     n == key && t.is_a_int(env, hist, v)
                                 }
                                 _ => false,
