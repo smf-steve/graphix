@@ -1564,7 +1564,49 @@ true
 1
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="named-types"><a class="header" href="#named-types">Named Types</a></h1>
+<p>You can name types to avoid having to type them more than once. Named types are
+just aliases for the full structure of the type they reference. The fully
+written out type is the same as the alias and visa versa. Lets go back to our
+foods example from the section on variants.</p>
+<pre><code>type FoodKind = [
+  `Vegetable,
+  `Fruit,
+  `Meat,
+  `Grain,
+  `Other(string)
+];
+
+let v: FoodKind = `Vegetable;
+let f = |food: FoodKind| ...
+</code></pre>
+<p>Aliases are very useful for more complex types that are used many times.
+Selective annotations can also help the type checker make sense of complex
+program structures.</p>
+<p>In the next section you'll see that we can do a lot more with them.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="parametric-polymorphism"><a class="header" href="#parametric-polymorphism">Parametric Polymorphism</a></h1>
+<p>We can define type variables as part of the definition of named types and then
+use them in the type definition in order to create type aliases with type
+parameters. For example, suppose in our foods example we wanted to specify that
+`Other could carry a value other than a string,</p>
+<pre><code>type FoodKind&lt;'a&gt; = [
+  `Vegetable,
+  `Fruit,
+  `Meat,
+  `Grain,
+  `Other('a)
+];
+let v: FoodKind&lt;`Cookie&gt; = `Other(`Cookie);
+v
+</code></pre>
+<p>if we paste this program into a file and run it we get,</p>
+<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+`Other(`Cookie)
+</code></pre>
+<p>We can even place constraints on the type that a type variable can take. For example,</p>
+<pre><code>type Point3&lt;'a: Number&gt; = {x: 'a, y: 'a, z: 'a};
+let f = |p: Point3&lt;'a&gt;, x: 'a| {p with x: p.x + x};
+f({x: 0., y: 1., z: 3.14})
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="recursive-types"><a class="header" href="#recursive-types">Recursive Types</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="references"><a class="header" href="#references">References</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="modules"><a class="header" href="#modules">Modules</a></h1>
