@@ -75,12 +75,14 @@ network and in files without losing information. Because structs are array
 backed, they are also memory pooled, and so making a new struct does not usually
 allocate any memory, but instead reuses objects from the pool.
 
-The `cast` operator can cast even an unsorted array of pairs where the first
-element is a string to a struct type, and this is very useful for reading a
-published struct, or a file of structs. For example,
+The `cast` operator can cast an unsorted array of pairs where the first element
+is a string to a struct type. For example,
 
 ```
 〉cast<{foo: string, bar: i64}>([["foo", "I am foo"], ["bar", 42]])$
 -: {bar: i64, foo: string}
 {bar: 42, foo: "I am foo"}
 ```
+
+Structs along with `cast` can be used to communicate complex values over the
+network as long as the two sides agree on what the type is supposed to be.

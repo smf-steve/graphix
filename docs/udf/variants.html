@@ -176,6 +176,43 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="variants"><a class="header" href="#variants">Variants</a></h1>
+<p>Variants allow you to define a case that belongs to a set of possible cases a
+value is allowed to be. For example we might categorize foods,</p>
+<pre><code>[`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]
+</code></pre>
+<p>Here we've defined a set of variants that together cover all the cases we want
+to model. We can write a function that will only accept a member of this set,</p>
+<pre><code>let f = |food: [`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]| ...
+</code></pre>
+<p>and the type checker will ensure that it is an error caught at compile time to
+pass any other type of value to this function. The most interesting variant in this set is probably</p>
+<pre><code>`Other(string)
+</code></pre>
+<p>Because it carries data with it. Variant cases can carry an zero or more values
+with them. We can use pattern matching to extract these values at run time. Lets
+write the body of our food function,</p>
+<pre><code>let f = |food: [`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]| select food {
+  `Vegetable =&gt; "it's a vegetable",
+  `Fruit =&gt; "it's a fruit",
+  `Meat =&gt; "it's meat",
+  `Grain =&gt; "it's grain",
+  `Other(s) =&gt; "it's a [s]"
+};
+f(`Other("foo"))
+</code></pre>
+<p>If we copy the above into a file and run it we will get,</p>
+<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+"it's a foo"
+</code></pre>
+<p>In this example the type checker will ensure that,</p>
+<ul>
+<li>every item in the set is matched by a non guarded arm of the select (see the section on select)</li>
+<li>no extra items that can't exist in the set are matched</li>
+<li>you can't pass anything to f that isn't in the set</li>
+</ul>
+<p>Single variant cases are actually a perfectly valid type in Graphix, although
+they are much more useful in sets. Once we start naming types (in a later
+section), they will become even more useful.</p>
 
                     </main>
 
