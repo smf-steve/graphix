@@ -1,3 +1,7 @@
+# 0.1.13
+
+- fix a bunch of type checker and runtime bugs found while writing docs
+
 # 0.1.12
 
 - delay call site function type resolution until after type checking for more
