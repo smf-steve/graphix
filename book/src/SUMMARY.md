@@ -34,6 +34,7 @@
   - [core](./stdlib/core.md)
   - [net](./stdlib/net.md)
   - [array](./stdlib/array.md)
+  - [map](./stdlib/map.md)
   - [str](./stdlib/str.md)
   - [re](./stdlib/re.md)
   - [time](./stdlib/time.md)
