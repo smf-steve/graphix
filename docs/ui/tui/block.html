@@ -176,6 +176,78 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="block"><a class="header" href="#block">block</a></h1>
+<p>The <code>block</code> widget is a container that wraps other widgets with optional borders, titles, and styling. It's one of the most commonly used widgets for creating structured layouts and visually separating different sections of your TUI.</p>
+<h2 id="function-signature"><a class="header" href="#function-signature">Function Signature</a></h2>
+<pre><code>type Borders = [`All, `None, `Top, `Bottom, `Left, `Right];
+
+/// Creates a block widget that wraps content with borders and styling
+val block: fn(
+    ?#border: &amp;Borders,
+    ?#border_style: &amp;Style,
+    ?#title: &amp;Line,
+    ?#title_bottom: &amp;Line,
+    ?#style: &amp;Style,
+    ?#size: &amp;Size,
+    Widget
+) -&gt; Widget;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<ul>
+<li><strong>border</strong> - Border style: <code>All</code>, <code>None</code>, <code>Top</code>, <code>Bottom</code>, <code>Left</code>, or <code>Right</code></li>
+<li><strong>border_style</strong> - Style for the border</li>
+<li><strong>title</strong> - Line displayed at the top of the block</li>
+<li><strong>title_bottom</strong> - Line displayed at the bottom of the block</li>
+<li><strong>style</strong> - Style for the block's interior</li>
+<li><strong>size</strong> (output) - Rendered size of the block</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::block;
+use tui::paragraph;
+
+let content = paragraph(&amp;"Hello, World!");
+
+block(
+    #border: &amp;`All,
+    #title: &amp;line("My Block"),
+    &amp;content
+)
+</code></pre>
+<h3 id="focus-indication"><a class="header" href="#focus-indication">Focus Indication</a></h3>
+<p>Use dynamic styling to show which block has focus:</p>
+<pre><code class="language-graphix">let focused_block = 0;
+
+block(
+    #border: &amp;`All,
+    #border_style: &amp;style(
+        #fg: select focused_block {
+            0 =&gt; `Red,
+            _ =&gt; `Yellow
+        }
+    ),
+    #title: &amp;line("Block 1"),
+    &amp;content
+)
+</code></pre>
+<h3 id="dynamic-titles"><a class="header" href="#dynamic-titles">Dynamic Titles</a></h3>
+<p>Titles can contain reactive values that update automatically:</p>
+<pre><code class="language-graphix">let count = 0;
+let timer = time::timer(duration:1.s, true);
+count &lt;- timer ~ (count + 1);
+
+block(
+    #border: &amp;`All,
+    #title: &amp;line("Counter: [count]"),
+    &amp;content
+)
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="layout.html">layout</a> - For arranging multiple blocks</li>
+<li><a href="paragraph.html">paragraph</a> - Common content for blocks</li>
+<li><a href="text.html">text</a> - For creating styled text content</li>
+</ul>
 
                     </main>
 

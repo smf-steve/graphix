@@ -176,6 +176,160 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="list"><a class="header" href="#list">list</a></h1>
+<p>The <code>list</code> widget displays a scrollable, selectable list of items with keyboard navigation support. It's perfect for menus, file browsers, option selectors, and any interface that requires choosing from a list of items.</p>
+<h2 id="function-signature"><a class="header" href="#function-signature">Function Signature</a></h2>
+<pre><code>/// Creates a list widget from an array of lines
+val list: fn(
+    ?#selected: &amp;i64,
+    ?#scroll: &amp;i64,
+    ?#highlight_style: &amp;Style,
+    ?#highlight_symbol: &amp;string,
+    ?#repeat_highlight_symbol: &amp;bool,
+    ?#style: &amp;Style,
+    Array&lt;Line&gt;
+) -&gt; Widget;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<ul>
+<li><strong>selected</strong> - Index of the currently selected item (0-indexed)</li>
+<li><strong>scroll</strong> - Scroll position (offset from the top)</li>
+<li><strong>highlight_style</strong> - Style for the selected item</li>
+<li><strong>highlight_symbol</strong> - String displayed before selected item (e.g., "▶ ")</li>
+<li><strong>repeat_highlight_symbol</strong> - Whether to repeat symbol on wrapped lines</li>
+<li><strong>style</strong> - Base style for all list items</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::list;
+
+let items = [
+    line("Apple"),
+    line("Banana"),
+    line("Cherry")
+];
+
+list(
+    #selected: &amp;0,
+    &amp;items
+)
+</code></pre>
+<h3 id="interactive-list-with-navigation"><a class="header" href="#interactive-list-with-navigation">Interactive List with Navigation</a></h3>
+<pre><code class="language-graphix">let items = [
+    line("Apple"), line("Banana"), line("Cherry"),
+    line("Date"), line("Elderberry"), line("Fig"), line("Grape")
+];
+
+let last = array::len(items) - 1;
+let selected = 0;
+let scroll_pos = 0;
+let visible = 5;
+
+// Auto-scroll to keep selection visible
+scroll_pos &lt;- select selected {
+    s if s &lt; scroll_pos =&gt; s,
+    s if s &gt; (scroll_pos + visible - 1) =&gt; s - visible + 1,
+    _ =&gt; never()
+};
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Up if selected &gt; 0 =&gt; {
+                selected &lt;- (k ~ selected) - 1;
+                `Stop
+            },
+            k@`Down if selected &lt; last =&gt; {
+                selected &lt;- (k ~ selected) + 1;
+                `Stop
+            },
+            k@`Home =&gt; { selected &lt;- k ~ 0; `Stop },
+            k@`End =&gt; { selected &lt;- k ~ last; `Stop },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("Fruit Selection"),
+        &amp;list(
+            #highlight_style: &amp;style(#fg: `Black, #bg: `Yellow),
+            #highlight_symbol: &amp;"▶ ",
+            #selected: &amp;selected,
+            #scroll: &amp;scroll_pos,
+            &amp;items
+        )
+    )
+)
+</code></pre>
+<h3 id="styled-items"><a class="header" href="#styled-items">Styled Items</a></h3>
+<pre><code class="language-graphix">let make_item = |text, priority| select priority {
+    `High =&gt; line(#style: style(#fg: `Red, #add_modifier: `Bold), text),
+    `Medium =&gt; line(#style: style(#fg: `Yellow), text),
+    `Low =&gt; line(#style: style(#fg: `White), text)
+};
+
+let items = [
+    make_item("Critical bug", `High),
+    make_item("Feature request", `Medium),
+    make_item("Documentation", `Low)
+];
+
+list(#selected: &amp;0, &amp;items)
+</code></pre>
+<h3 id="action-on-selection"><a class="header" href="#action-on-selection">Action on Selection</a></h3>
+<pre><code class="language-graphix">let selected = 0;
+let action_triggered = never();
+
+let items = [line("Open"), line("Save"), line("Close"), line("Exit")];
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            // ... navigation keys ...
+            k@`Enter =&gt; {
+                action_triggered &lt;- k ~ selected;
+                `Stop
+            },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+select action_triggered {
+    0 =&gt; net::write("/app/action", "open")?,
+    1 =&gt; net::write("/app/action", "save")?,
+    2 =&gt; net::write("/app/action", "close")?,
+    3 =&gt; net::write("/app/action", "exit")?,
+    _ =&gt; never()
+}
+</code></pre>
+<h2 id="auto-scroll-logic"><a class="header" href="#auto-scroll-logic">Auto-scroll Logic</a></h2>
+<p>Keep the selected item visible:</p>
+<pre><code class="language-graphix">let selected = 0;
+let scroll_pos = 0;
+let visible_lines = 10;
+
+scroll_pos &lt;- select selected {
+    s if s &lt; scroll_pos =&gt; s,
+    s if s &gt;= (scroll_pos + visible_lines) =&gt; s - visible_lines + 1,
+    _ =&gt; never()
+};
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="table.html">table</a> - For multi-column structured data</li>
+<li><a href="scroll.html">scrollbar</a> - For adding scrollbars</li>
+<li><a href="block.html">block</a> - For containing lists with borders</li>
+<li><a href="tabs.html">tabs</a> - For switching between different lists</li>
+</ul>
 
                     </main>
 

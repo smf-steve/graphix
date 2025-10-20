@@ -176,6 +176,100 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="paragraph"><a class="header" href="#paragraph">paragraph</a></h1>
+<p>The <code>paragraph</code> widget displays multi-line text with automatic word wrapping and scrolling support. It's ideal for displaying long text content, logs, or any content that needs to flow across multiple lines.</p>
+<h2 id="function-signature"><a class="header" href="#function-signature">Function Signature</a></h2>
+<pre><code>type ScrollPosition = {x: i64, y: i64};
+
+/// Creates a paragraph widget with text content
+val paragraph: fn(
+    ?#scroll: &amp;ScrollPosition,
+    ?#alignment: &amp;Alignment,
+    ?#wrap: &amp;bool,
+    [string, Text]
+) -&gt; Widget;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<ul>
+<li><strong>scroll</strong> - Record with <code>x</code> and <code>y</code> fields for scroll position</li>
+<li><strong>alignment</strong> - <code>Left</code>, <code>Center</code>, or <code>Right</code></li>
+<li><strong>wrap</strong> - Enable/disable word wrapping (default: true)</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::paragraph;
+
+paragraph(&amp;"This is a simple paragraph. It will automatically wrap to fit the available width.")
+</code></pre>
+<h3 id="scrollable-content"><a class="header" href="#scrollable-content">Scrollable Content</a></h3>
+<pre><code class="language-graphix">let long_text = "I've got a lovely bunch of coconuts... [very long text continues]";
+let scroll_y = 0;
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Up if scroll_y &gt; 0 =&gt; {
+                scroll_y &lt;- (k ~ scroll_y) - 1;
+                `Stop
+            },
+            k@`Down if scroll_y &lt; 100 =&gt; {
+                scroll_y &lt;- (k ~ scroll_y) + 1;
+                `Stop
+            },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("Scrollable Text"),
+        &amp;paragraph(
+            #scroll: &amp;{x: 0, y: scroll_y},
+            &amp;long_text
+        )
+    )
+)
+</code></pre>
+<h3 id="live-log-viewer"><a class="header" href="#live-log-viewer">Live Log Viewer</a></h3>
+<p>Display real-time updating content:</p>
+<pre><code class="language-graphix">let log_entries = [];
+let new_entry = net::subscribe("/logs/application")?;
+
+log_entries &lt;- array::window(
+    #n: 100,
+    new_entry ~ log_entries,
+    cast&lt;string&gt;(new_entry)?
+);
+
+let log_text = array::fold(log_entries, "", |acc, entry| "[acc]\n[entry]");
+
+paragraph(&amp;log_text)
+</code></pre>
+<h3 id="centered-message"><a class="header" href="#centered-message">Centered Message</a></h3>
+<pre><code class="language-graphix">paragraph(
+    #alignment: &amp;`Center,
+    &amp;text(&amp;[
+        line(""),
+        line(#style: style(#fg: `Yellow, #add_modifier: `Bold), "Welcome"),
+        line(""),
+        line("Press any key to continue")
+    ])
+)
+</code></pre>
+<h2 id="word-wrapping"><a class="header" href="#word-wrapping">Word Wrapping</a></h2>
+<p>The paragraph widget automatically wraps long lines to fit the available width. Word boundaries are respected, so words won't be split in the middle unless they're longer than the available width.</p>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="text.html">text</a> - For creating styled text content</li>
+<li><a href="scroll.html">scrollbar</a> - For adding scrollbars</li>
+<li><a href="block.html">block</a> - For containing paragraphs with borders</li>
+<li><a href="list.html">list</a> - For line-by-line selectable content</li>
+</ul>
 
                     </main>
 

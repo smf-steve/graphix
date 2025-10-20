@@ -176,6 +176,157 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="chart"><a class="header" href="#chart">chart</a></h1>
+<p>The <code>chart</code> widget renders line charts with multiple datasets, custom axes, labels, and styling. It's ideal for visualizing time series data, trends, sensor readings, and any numeric data relationships.</p>
+<h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
+<pre><code>type GraphType = [`Line, `Scatter];
+type Marker = [`Dot, `Braille, `Block];
+
+/// Creates a chart widget with datasets and axes
+val chart: fn(
+    ?#style: &amp;Style,
+    #x_axis: &amp;Axis,
+    #y_axis: &amp;Axis,
+    Array&lt;Dataset&gt;
+) -&gt; Widget;
+
+/// Creates an axis configuration
+val axis: fn(
+    ?#title: Line,
+    ?#labels: Array&lt;Line&gt;,
+    ?#style: Style,
+    {min: f64, max: f64}
+) -&gt; Axis;
+
+/// Creates a dataset to display on the chart
+val dataset: fn(
+    ?#style: &amp;Style,
+    ?#graph_type: &amp;GraphType,
+    ?#marker: &amp;Marker,
+    ?#name: &amp;Line,
+    Array&lt;(f64, f64)&gt;
+) -&gt; Dataset;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<h3 id="chart-1"><a class="header" href="#chart-1">chart</a></h3>
+<ul>
+<li><strong>style</strong> - Background style for the chart area</li>
+<li><strong>x_axis</strong> - X-axis configuration (required)</li>
+<li><strong>y_axis</strong> - Y-axis configuration (required)</li>
+</ul>
+<h3 id="axis"><a class="header" href="#axis">axis</a></h3>
+<ul>
+<li><strong>title</strong> - Line for axis title</li>
+<li><strong>labels</strong> - Array of lines displayed along axis</li>
+<li><strong>style</strong> - Style for axis lines and ticks</li>
+</ul>
+<h3 id="dataset"><a class="header" href="#dataset">dataset</a></h3>
+<ul>
+<li><strong>style</strong> - Style for the dataset (line and markers)</li>
+<li><strong>graph_type</strong> - <code>Line</code> or <code>Scatter</code></li>
+<li><strong>marker</strong> - <code>Dot</code>, <code>Braille</code>, or <code>Block</code></li>
+<li><strong>name</strong> - Line naming the dataset (for legends)</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::chart;
+
+let data: Array&lt;(f64, f64)&gt; = [(0.0, 0.0), (1.0, 1.0), (2.0, 4.0), (3.0, 9.0)];
+
+let ds = dataset(
+    #style: &amp;style(#fg: `Cyan),
+    #graph_type: &amp;`Line,
+    #marker: &amp;`Dot,
+    &amp;data
+);
+
+chart(
+    #x_axis: &amp;axis({min: 0.0, max: 3.0}),
+    #y_axis: &amp;axis({min: 0.0, max: 9.0}),
+    &amp;[ds]
+)
+</code></pre>
+<h3 id="real-time-data-visualization"><a class="header" href="#real-time-data-visualization">Real-time Data Visualization</a></h3>
+<pre><code class="language-graphix">let data: Array&lt;(f64, f64)&gt; = {
+    let clock = time::timer(duration:0.5s, true);
+    let x = 0.0;
+    x &lt;- (clock ~ x) + 1.0;
+    let y = rand::rand(#clock, #start: f64:0., #end: f64:100.);
+    let a = [];
+    a &lt;- array::window(#n: 32, clock ~ a, (x, y));
+    a
+};
+
+let ds = dataset(
+    #style: &amp;style(#fg: `Cyan),
+    #graph_type: &amp;`Line,
+    #marker: &amp;`Dot,
+    &amp;data
+);
+
+let label_style = style(#fg: `Yellow);
+
+chart(
+    #style: &amp;style(#bg: `Rgb({r: 20, g: 20, b: 20})),
+    #x_axis: &amp;axis(
+        #title: line(#style: label_style, "Time (s)"),
+        #labels: [
+            line(#style: label_style, "[(data[0]$).0]"),
+            line(#style: label_style, "[(data[-1]$).0]")
+        ],
+        {min: (data[0]$).0, max: (data[-1]$).0}
+    ),
+    #y_axis: &amp;axis(
+        #title: line(#style: label_style, "Value"),
+        #labels: [
+            line("0"), line("50"), line("100")
+        ],
+        {min: 0.0, max: 100.0}
+    ),
+    &amp;[ds]
+)
+</code></pre>
+<h3 id="multiple-datasets"><a class="header" href="#multiple-datasets">Multiple Datasets</a></h3>
+<pre><code class="language-graphix">let temp_ds = dataset(
+    #style: &amp;style(#fg: `Red),
+    #name: &amp;line("Temperature"),
+    &amp;temp_data
+);
+
+let humidity_ds = dataset(
+    #style: &amp;style(#fg: `Blue),
+    #name: &amp;line("Humidity"),
+    &amp;humidity_data
+);
+
+chart(
+    #x_axis: &amp;x_axis,
+    #y_axis: &amp;y_axis,
+    &amp;[temp_ds, humidity_ds]
+)
+</code></pre>
+<h3 id="scatter-plot"><a class="header" href="#scatter-plot">Scatter Plot</a></h3>
+<pre><code class="language-graphix">let scatter_ds = dataset(
+    #graph_type: &amp;`Scatter,
+    #marker: &amp;`Dot,
+    #style: &amp;style(#fg: `Yellow),
+    &amp;data
+);
+
+chart(#x_axis: &amp;x_axis, #y_axis: &amp;y_axis, &amp;[scatter_ds])
+</code></pre>
+<h2 id="marker-comparison"><a class="header" href="#marker-comparison">Marker Comparison</a></h2>
+<ul>
+<li><strong>Dot</strong>: Fastest, lowest resolution, good for dense data</li>
+<li><strong>Braille</strong>: Smoothest curves, medium performance, best visual quality</li>
+<li><strong>Block</strong>: High contrast, medium performance</li>
+</ul>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="barchart.html">barchart</a> - For categorical data visualization</li>
+<li><a href="sparkline.html">sparkline</a> - For compact inline charts</li>
+<li><a href="canvas.html">canvas</a> - For custom graphics</li>
+</ul>
 
                     </main>
 

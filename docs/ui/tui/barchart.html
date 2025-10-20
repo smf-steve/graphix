@@ -176,6 +176,117 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="barchart"><a class="header" href="#barchart">barchart</a></h1>
+<p>The <code>barchart</code> widget displays categorical data as vertical bars, supporting grouped bars, custom styling, and dynamic updates. It's ideal for comparing values across categories, showing rankings, or displaying resource usage.</p>
+<h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
+<pre><code>/// Creates a bar chart from bar groups
+val bar_chart: fn(
+    ?#max: &amp;i64,
+    ?#bar_width: &amp;i64,
+    ?#bar_gap: &amp;i64,
+    ?#group_gap: &amp;i64,
+    ?#style: &amp;Style,
+    Array&lt;BarGroup&gt;
+) -&gt; Widget;
+
+/// Creates a group of bars
+val bar_group: fn(?#label: Line, Array&lt;Bar&gt;) -&gt; BarGroup;
+
+/// Creates an individual bar
+val bar: fn(
+    ?#style: &amp;Style,
+    ?#label: &amp;Line,
+    ?#text_value: &amp;Line,
+    i64
+) -&gt; Bar;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<h3 id="bar_chart"><a class="header" href="#bar_chart">bar_chart</a></h3>
+<ul>
+<li><strong>max</strong> - Maximum value for chart scale (auto-scales if not specified)</li>
+<li><strong>bar_width</strong> - Width of each bar in characters</li>
+<li><strong>bar_gap</strong> - Space between bars within a group</li>
+<li><strong>group_gap</strong> - Space between bar groups</li>
+<li><strong>style</strong> - Base style for the chart</li>
+</ul>
+<h3 id="bar_group"><a class="header" href="#bar_group">bar_group</a></h3>
+<ul>
+<li><strong>label</strong> - Line labeling the group (displayed below bars)</li>
+</ul>
+<h3 id="bar"><a class="header" href="#bar">bar</a></h3>
+<ul>
+<li><strong>style</strong> - Style for the bar</li>
+<li><strong>label</strong> - Line labeling the bar</li>
+<li><strong>text_value</strong> - Line displayed above bar (defaults to numeric value)</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::barchart;
+
+let bar1 = bar(
+    #style: &amp;style(#fg: `Cyan),
+    #label: &amp;line("Sales"),
+    &amp;42
+);
+
+bar_chart(&amp;[bar_group(#label: line("Q1"), [bar1])])
+</code></pre>
+<h3 id="grouped-bars-with-dynamic-data"><a class="header" href="#grouped-bars-with-dynamic-data">Grouped Bars with Dynamic Data</a></h3>
+<pre><code class="language-graphix">let clock = time::timer(duration:0.7s, true);
+
+let group0 = [
+    bar(#style: &amp;style(#fg: `Red), #label: &amp;line("CPU"), &amp;rand(#start:0, #end:100, #clock)),
+    bar(#style: &amp;style(#fg: `Yellow), #label: &amp;line("Memory"), &amp;rand(#start:25, #end:200, #clock))
+];
+
+let group1 = [
+    bar(#style: &amp;style(#fg: `Cyan), #label: &amp;line("Network"), &amp;rand(#start:0, #end:50, #clock)),
+    bar(#style: &amp;style(#fg: `Magenta), #label: &amp;line("Disk"), &amp;rand(#start:1, #end:25, #clock))
+];
+
+let chart = bar_chart(
+    #bar_gap: &amp;2,
+    #bar_width: &amp;8,
+    #max: &amp;200,
+    &amp;[
+        bar_group(#label: line("Server 1"), group0),
+        bar_group(#label: line("Server 2"), group1)
+    ]
+);
+
+block(#border: &amp;`All, #title: &amp;line("Resource Usage"), &amp;chart)
+</code></pre>
+<h3 id="color-coded-values"><a class="header" href="#color-coded-values">Color-coded Values</a></h3>
+<pre><code class="language-graphix">let make_colored_bar = |label, value| {
+    let color = select value {
+        v if v &gt; 80 =&gt; `Red,
+        v if v &gt; 50 =&gt; `Yellow,
+        _ =&gt; `Green
+    };
+    bar(#style: &amp;style(#fg: color), #label: &amp;line(label), &amp;value)
+};
+
+let bars = [
+    make_colored_bar("Service A", 35),
+    make_colored_bar("Service B", 65),
+    make_colored_bar("Service C", 92)
+];
+
+bar_chart(&amp;[bar_group(bars)])
+</code></pre>
+<h3 id="centered-chart"><a class="header" href="#centered-chart">Centered Chart</a></h3>
+<pre><code class="language-graphix">layout(
+    #direction: &amp;`Horizontal,
+    #flex: &amp;`Center,
+    &amp;[child(#constraint: `Max(40), bar_chart(&amp;groups))]
+)
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="chart.html">chart</a> - For continuous data visualization</li>
+<li><a href="sparkline.html">sparkline</a> - For compact trend display</li>
+<li><a href="gauge.html">gauge</a> - For single value display</li>
+</ul>
 
                     </main>
 

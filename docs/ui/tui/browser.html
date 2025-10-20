@@ -176,6 +176,69 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="browser"><a class="header" href="#browser">browser</a></h1>
+<p>The <code>browser</code> widget provides a specialized interface for browsing and interacting with netidx hierarchies. It displays netidx paths in a tree structure with keyboard navigation, selection, and cursor movement support.</p>
+<h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
+<pre><code>type MoveCursor = [`Left(i64), `Right(i64), `Up(i64), `Down(i64)];
+
+/// Creates a browser widget for navigating netidx hierarchies
+val browser: fn(
+    ?#cursor: MoveCursor,
+    ?#selected_row: &amp;string,
+    #selected_path: &amp;string,
+    ?#size: &amp;Size,
+    string
+) -&gt; Widget;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<ul>
+<li><strong>cursor</strong> - Programmatic cursor movement: <code>Left(n)</code>, <code>Right(n)</code>, <code>Up(n)</code>, <code>Down(n)</code></li>
+<li><strong>selected_row</strong> (output) - Display name of the selected row</li>
+<li><strong>selected_path</strong> (output, required) - Full path of the currently selected item</li>
+<li><strong>size</strong> (output) - Rendered size of the browser</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::browser;
+
+let selected_path: string = never();
+
+browser(
+    #selected_path: &amp;selected_path,
+    "/"  // Start browsing from root
+)
+</code></pre>
+<h3 id="basic-navigation"><a class="header" href="#basic-navigation">Basic Navigation</a></h3>
+<pre><code class="language-graphix">let path = "/";
+let selected_path: string = never();
+let cursor: MoveCursor = never();
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            e@ `Up =&gt; { cursor &lt;- e ~ `Up(1); `Stop },
+            e@ `Down =&gt; { cursor &lt;- e ~ `Down(1); `Stop },
+            e@ `Left =&gt; { cursor &lt;- e ~ `Left(1); `Stop },
+            e@ `Right =&gt; { cursor &lt;- e ~ `Right(1); `Stop },
+            e@ `Enter =&gt; { path &lt;- e ~ selected_row; `Stop },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;browser(#cursor, #selected_path: &amp;selected_path, path)
+)
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="list.html">list</a> - For simpler selection interfaces</li>
+<li><a href="table.html">table</a> - For tabular data display</li>
+<li><a href="block.html">block</a> - For containing browsers with borders</li>
+</ul>
 
                     </main>
 

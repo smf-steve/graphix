@@ -175,7 +175,156 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="scroll"><a class="header" href="#scroll">scroll</a></h1>
+                        <h1 id="scrollbar"><a class="header" href="#scrollbar">scrollbar</a></h1>
+<p>The <code>scrollbar</code> widget adds a visual scrollbar indicator to scrollable content, making it clear when content extends beyond the visible area and showing the current scroll position.</p>
+<h2 id="function-signature"><a class="header" href="#function-signature">Function Signature</a></h2>
+<pre><code>/// Wraps a widget with a scrollbar indicator
+val scrollbar: fn(
+    #position: &amp;i64,
+    ?#content_length: &amp;i64,
+    ?#size: &amp;Size,
+    Widget
+) -&gt; Widget;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<ul>
+<li><strong>position</strong> (required) - Current scroll position (typically the Y offset)</li>
+<li><strong>content_length</strong> - Total length of the content (auto-detected if not specified)</li>
+<li><strong>size</strong> (output) - Rendered size of the scrollbar area</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::paragraph;
+
+let position = 0;
+let content = paragraph(
+    #scroll: &amp;{x: 0, y: position},
+    &amp;long_text
+);
+
+scrollbar(
+    #position: &amp;position,
+    &amp;content
+)
+</code></pre>
+<h3 id="scrollable-paragraph"><a class="header" href="#scrollable-paragraph">Scrollable Paragraph</a></h3>
+<pre><code class="language-graphix">let long_text = "Very long text content...";
+let position = 0;
+let max_position = 100;
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Up if position &gt; 0 =&gt; {
+                position &lt;- (k ~ position) - 1;
+                `Stop
+            },
+            k@`Down if position &lt; max_position =&gt; {
+                position &lt;- (k ~ position) + 1;
+                `Stop
+            },
+            k@`PageUp if position &gt; 10 =&gt; {
+                position &lt;- (k ~ position) - 10;
+                `Stop
+            },
+            k@`PageDown if position &lt; (max_position - 10) =&gt; {
+                position &lt;- (k ~ position) + 10;
+                `Stop
+            },
+            k@`Home =&gt; { position &lt;- k ~ 0; `Stop },
+            k@`End =&gt; { position &lt;- k ~ max_position; `Stop },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("Scrollable Content"),
+        &amp;scrollbar(
+            #position: &amp;position,
+            #content_length: &amp;max_position,
+            &amp;paragraph(#scroll: &amp;{x: 0, y: position}, &amp;long_text)
+        )
+    )
+)
+</code></pre>
+<h3 id="scrollable-list"><a class="header" href="#scrollable-list">Scrollable List</a></h3>
+<pre><code class="language-graphix">let items = [...];  // Large array
+let selected = 0;
+let scroll_pos = 0;
+let visible = 10;
+
+// Auto-scroll to keep selection visible
+scroll_pos &lt;- select selected {
+    s if s &lt; scroll_pos =&gt; s,
+    s if s &gt;= (scroll_pos + visible) =&gt; s - visible + 1,
+    _ =&gt; never()
+};
+
+scrollbar(
+    #position: &amp;scroll_pos,
+    &amp;list(
+        #scroll: &amp;scroll_pos,
+        #selected: &amp;selected,
+        &amp;items
+    )
+)
+</code></pre>
+<h3 id="auto-scroll-to-bottom"><a class="header" href="#auto-scroll-to-bottom">Auto-scroll to Bottom</a></h3>
+<pre><code class="language-graphix">let lines = [];
+let new_line = net::subscribe("/logs/app")?;
+
+lines &lt;- array::window(#n: 100, new_line ~ lines, cast&lt;string&gt;(new_line)?);
+
+let line_count = array::len(lines);
+let visible_lines = 20;
+let scroll_pos = max(0, line_count - visible_lines);
+
+scrollbar(
+    #position: &amp;scroll_pos,
+    #content_length: &amp;line_count,
+    &amp;paragraph(
+        #scroll: &amp;{x: 0, y: scroll_pos},
+        &amp;array::fold(lines, "", |acc, l| "[acc]\n[l]")
+    )
+)
+</code></pre>
+<h2 id="common-mistake"><a class="header" href="#common-mistake">Common Mistake</a></h2>
+<p>Remember to apply the scroll position to both the scrollbar and the content:</p>
+<pre><code class="language-graphix">// Wrong - scroll position not applied to content
+scrollbar(
+    #position: &amp;position,
+    &amp;paragraph(&amp;text)  // Missing #scroll parameter!
+)
+
+// Correct - scroll position applied to both
+scrollbar(
+    #position: &amp;position,
+    &amp;paragraph(#scroll: &amp;{x: 0, y: position}, &amp;text)
+)
+</code></pre>
+<h2 id="scroll-behavior"><a class="header" href="#scroll-behavior">Scroll Behavior</a></h2>
+<p>Standard scroll keys:</p>
+<ul>
+<li><code>Up</code>/<code>Down</code> - Scroll one line</li>
+<li><code>PageUp</code>/<code>PageDown</code> - Scroll one page (typically 10-20 lines)</li>
+<li><code>Home</code> - Scroll to top</li>
+<li><code>End</code> - Scroll to bottom</li>
+</ul>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="paragraph.html">paragraph</a> - For scrollable text content</li>
+<li><a href="list.html">list</a> - For scrollable lists</li>
+<li><a href="table.html">table</a> - For scrollable tables</li>
+<li><a href="block.html">block</a> - For containing scrollable content</li>
+</ul>
 
                     </main>
 

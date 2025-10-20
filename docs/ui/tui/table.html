@@ -176,6 +176,170 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="table"><a class="header" href="#table">table</a></h1>
+<p>The <code>table</code> widget displays structured data in rows and columns with support for selection, scrolling, and custom styling. It's ideal for data grids, process monitors, file listings, and any tabular data display.</p>
+<h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
+<pre><code>type HighlightSpacing = [`Always, `WhenSelected, `Never];
+
+/// Creates a table widget from an array of row references
+val table: fn(
+    ?#header: &amp;Row,
+    ?#selected: &amp;i64,
+    ?#row_highlight_style: &amp;Style,
+    ?#highlight_symbol: &amp;string,
+    ?#highlight_spacing: &amp;HighlightSpacing,
+    ?#widths: &amp;Array&lt;Constraint&gt;,
+    ?#column_spacing: &amp;i64,
+    ?#style: &amp;Style,
+    Array&lt;&amp;Row&gt;
+) -&gt; Widget;
+
+/// Creates a table row from cells
+val row: fn(?#style: Style, Array&lt;Cell&gt;) -&gt; Row;
+
+/// Creates a table cell from a line
+val cell: fn(?#style: Style, Line) -&gt; Cell;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<ul>
+<li><strong>header</strong> - Row object for the table header</li>
+<li><strong>selected</strong> - Index of the currently selected row</li>
+<li><strong>row_highlight_style</strong> - Style for the selected row</li>
+<li><strong>highlight_symbol</strong> - String before selected row</li>
+<li><strong>highlight_spacing</strong> - When to show highlight symbol: <code>Always</code>, <code>WhenSelected</code>, <code>Never</code></li>
+<li><strong>widths</strong> - Array of column width constraints</li>
+<li><strong>column_spacing</strong> - Number of spaces between columns</li>
+<li><strong>style</strong> - Base style for the table</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::table;
+
+let header = row([
+    cell(line("Name")),
+    cell(line("Age")),
+    cell(line("City"))
+]);
+
+let row1 = row([
+    cell(line("Alice")),
+    cell(line("28")),
+    cell(line("New York"))
+]);
+
+let row2 = row([
+    cell(line("Bob")),
+    cell(line("32")),
+    cell(line("San Francisco"))
+]);
+
+table(
+    #header: &amp;header,
+    #selected: &amp;0,
+    &amp;[&amp;row1, &amp;row2]
+)
+</code></pre>
+<h3 id="interactive-table"><a class="header" href="#interactive-table">Interactive Table</a></h3>
+<pre><code class="language-graphix">type User = {name: string, age: i64, city: string};
+
+let users: Array&lt;User&gt; = [
+    {name: "Alice", age: 28, city: "New York"},
+    {name: "Bob", age: 32, city: "San Francisco"},
+    {name: "Charlie", age: 25, city: "Chicago"}
+];
+
+let header = row(
+    #style: style(#fg: `Yellow, #add_modifier: `Bold),
+    [cell(line("Name")), cell(line("Age")), cell(line("City"))]
+);
+
+let rows: Array&lt;&amp;Row&gt; = array::map(users, |u: User| -&gt; &amp;Row {
+    &amp;row([
+        cell(line(u.name)),
+        cell(line("[u.age]")),
+        cell(line(u.city))
+    ])
+});
+
+let selected = 0;
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Up if selected &gt; 0 =&gt; {
+                selected &lt;- (k ~ selected) - 1;
+                `Stop
+            },
+            k@`Down if selected &lt; 2 =&gt; {
+                selected &lt;- (k ~ selected) + 1;
+                `Stop
+            },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("User Directory"),
+        &amp;table(
+            #header: &amp;header,
+            #row_highlight_style: &amp;style(#bg: `Yellow, #fg: `Black),
+            #selected: &amp;selected,
+            #column_spacing: &amp;2,
+            #widths: &amp;[`Percentage(30), `Percentage(20), `Percentage(50)],
+            &amp;rows
+        )
+    )
+)
+</code></pre>
+<h3 id="conditional-cell-styling"><a class="header" href="#conditional-cell-styling">Conditional Cell Styling</a></h3>
+<pre><code class="language-graphix">let make_cpu_cell = |cpu: i64| -&gt; Cell {
+    let style = select cpu {
+        c if c &gt; 80 =&gt; style(#fg: `Red),
+        c if c &gt; 50 =&gt; style(#fg: `Yellow),
+        _ =&gt; style(#fg: `Green)
+    };
+    cell(#style, line("[cpu]%"))
+};
+
+let row = row([
+    cell(line("process-1")),
+    make_cpu_cell(85)  // Red
+]);
+</code></pre>
+<h3 id="real-time-updates"><a class="header" href="#real-time-updates">Real-time Updates</a></h3>
+<pre><code class="language-graphix">type Process = {pid: i64, name: string, cpu: i64};
+
+let processes: Array&lt;Process&gt; = [...];
+let clock = time::timer(duration:1.s, true);
+
+let rows: Array&lt;&amp;Row&gt; = array::map(processes, |p: Process| -&gt; &amp;Row {
+    let cpu_val = p.cpu;
+    cpu_val &lt;- {
+        let v = clock ~ cpu_val;
+        v + rand::rand(#clock, #start: -5, #end: 5)
+    };
+    
+    &amp;row([
+        cell(line("[p.pid]")),
+        cell(line(p.name)),
+        cell(line("[cpu_val]%"))
+    ])
+});
+
+table(#header: &amp;header, &amp;rows)
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="list.html">list</a> - For simpler single-column selection</li>
+<li><a href="scroll.html">scrollbar</a> - For adding scrollbars</li>
+<li><a href="block.html">block</a> - For containing tables with borders</li>
+</ul>
 
                     </main>
 

@@ -176,6 +176,95 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="calendar"><a class="header" href="#calendar">calendar</a></h1>
+<p>The <code>calendar</code> widget displays a monthly calendar view with support for highlighting specific dates and displaying events. It's perfect for date pickers, event schedulers, and time-based visualizations.</p>
+<h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
+<pre><code>/// Creates a calendar widget displaying a month
+val calendar: fn(
+    ?#show_month: &amp;Style,
+    ?#show_weekday: &amp;Style,
+    ?#show_surrounding: &amp;Style,
+    ?#events: &amp;Array&lt;CalendarEvent&gt;,
+    Date
+) -&gt; Widget;
+
+/// Creates an event marker for a specific date
+val calendar_event: fn(Style, Date) -&gt; CalendarEvent;
+
+/// Creates a date object
+val date: fn(i64, i64, i64) -&gt; Date;  // (year, month, day)
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<h3 id="calendar-1"><a class="header" href="#calendar-1">calendar</a></h3>
+<ul>
+<li><strong>show_month</strong> - Style for the month header</li>
+<li><strong>show_weekday</strong> - Style for weekday headers (Mon, Tue, etc.)</li>
+<li><strong>show_surrounding</strong> - Style for dates from surrounding months</li>
+<li><strong>events</strong> - Array of CalendarEvent objects to highlight dates</li>
+</ul>
+<h3 id="calendar_event"><a class="header" href="#calendar_event">calendar_event</a></h3>
+<p>Takes a style and a date to create an event marker.</p>
+<h3 id="date"><a class="header" href="#date">date</a></h3>
+<p>Creates a date with year, month (1-12), and day (1-31).</p>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::calendar;
+
+let current_date = date(2024, 5, 15);
+
+calendar(&amp;current_date)
+</code></pre>
+<h3 id="event-calendar"><a class="header" href="#event-calendar">Event Calendar</a></h3>
+<pre><code class="language-graphix">let today = date(2024, 5, 15);
+
+let events = [
+    calendar_event(style(#fg: `Red), date(2024, 5, 5)),
+    calendar_event(style(#fg: `Green), date(2024, 5, 15)),
+    calendar_event(style(#fg: `Yellow), date(2024, 5, 20)),
+    calendar_event(style(#fg: `Cyan), date(2024, 5, 28))
+];
+
+block(
+    #border: &amp;`All,
+    #title: &amp;line("May 2024"),
+    &amp;calendar(
+        #show_month: &amp;style(#fg: `Yellow, #add_modifier: `Bold),
+        #show_weekday: &amp;style(#fg: `Cyan),
+        #show_surrounding: &amp;style(#fg: `DarkGray),
+        #events: &amp;events,
+        &amp;today
+    )
+)
+</code></pre>
+<h3 id="color-coded-events-by-type"><a class="header" href="#color-coded-events-by-type">Color-coded Events by Type</a></h3>
+<pre><code class="language-graphix">type EventType = [`Meeting, `Deadline, `Holiday, `Birthday];
+type CalendarEntry = {date: Date, event_type: EventType};
+
+let entries = [
+    {date: date(2024, 5, 5), event_type: `Meeting},
+    {date: date(2024, 5, 10), event_type: `Deadline},
+    {date: date(2024, 5, 15), event_type: `Holiday},
+    {date: date(2024, 5, 25), event_type: `Birthday}
+];
+
+let events = array::map(entries, |e| {
+    let color = select e.event_type {
+        `Meeting =&gt; `Blue,
+        `Deadline =&gt; `Red,
+        `Holiday =&gt; `Green,
+        `Birthday =&gt; `Magenta
+    };
+    calendar_event(style(#fg: color), e.date)
+});
+
+calendar(#events: &amp;events, &amp;date(2024, 5, 1))
+</code></pre>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="table.html">table</a> - For tabular date-based data</li>
+<li><a href="list.html">list</a> - For event lists</li>
+<li><a href="block.html">block</a> - For containing calendars with borders</li>
+</ul>
 
                     </main>
 

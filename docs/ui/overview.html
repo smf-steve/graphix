@@ -176,6 +176,26 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="building-uis-with-graphix"><a class="header" href="#building-uis-with-graphix">Building UIs With Graphix</a></h1>
+<p>Graphix excels at building user interfaces thanks to its reactive dataflow nature. Changes in data automatically propagate through the UI graph, updating only the components that need to change. This makes building complex, interactive applications surprisingly straightforward.</p>
+<h2 id="why-graphix-for-uis"><a class="header" href="#why-graphix-for-uis">Why Graphix for UIs?</a></h2>
+<p>Traditional UI frameworks require you to manually manage state changes, update DOM elements, and coordinate between different parts of your application. Graphix eliminates this complexity by treating your entire UI as a reactive graph where:</p>
+<ul>
+<li><strong>Data flows automatically</strong>: When underlying data changes, dependent UI components update automatically</li>
+<li><strong>State is declarative</strong>: You describe what the UI should look like, not how to update it</li>
+<li><strong>Composition is natural</strong>: Complex UIs are built by composing simple, reusable components</li>
+<li><strong>Performance is built-in</strong>: Only components that depend on changed data will re-render</li>
+</ul>
+<h2 id="future-ui-targets"><a class="header" href="#future-ui-targets">Future UI Targets</a></h2>
+<p>While Graphix currently implements supprot for building TUIs, the reactive architecture makes it well-suited for other UI paradigms:</p>
+<ul>
+<li><strong>Desktop Applications</strong>: Native desktop applications with reactive updates. Support for this is planned.</li>
+<li><strong>Web UIs</strong>: The dataflow model maps naturally to modern web frameworks</li>
+<li><strong>Mobile UIs</strong>: Touch-based interfaces with gesture handling</li>
+</ul>
+<p>The core concepts of reactive data flow, component composition, and declarative styling will apply across all UI targets.</p>
+<h2 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h2>
+<p>The Graphix shell will automatically build a UI if the last value in your module has type <code>tui::Widget</code> (or in the future <code>gui::Widget</code>). You can try out the examples in this book by pasting them in a file, or even typing (the short ones) into the interactive REPL. Each TUI component has detailed documentation in the following sections, including complete API references and practical examples.</p>
+<p>You can also study and run the examples in <code>graphix-shell/examples/</code>. Start with simple components like <code>text.gx</code> and <code>block.gx</code>, then work your way up to more complex examples like <code>browser.gx</code> and <code>table-advanced.gx</code>.</p>
 
                     </main>
 

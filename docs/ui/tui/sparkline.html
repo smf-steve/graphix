@@ -176,6 +176,113 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="sparkline"><a class="header" href="#sparkline">sparkline</a></h1>
+<p>The <code>sparkline</code> widget renders compact inline charts perfect for dashboards and status displays. It shows data trends in minimal space, with support for color-coded bars based on thresholds.</p>
+<h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
+<pre><code>type Direction = [`LeftToRight, `RightToLeft];
+
+/// Creates a sparkline widget from data values
+val sparkline: fn(
+    ?#max: &amp;i64,
+    ?#style: &amp;Style,
+    ?#direction: &amp;Direction,
+    Array&lt;[SparklineBar, f64]&gt;
+) -&gt; Widget;
+
+/// Creates a sparkline bar with custom styling
+val sparkline_bar: fn(?#style: Style, f64) -&gt; SparklineBar;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<h3 id="sparkline-1"><a class="header" href="#sparkline-1">sparkline</a></h3>
+<ul>
+<li><strong>max</strong> - Maximum value for scaling (auto-scales if not specified)</li>
+<li><strong>style</strong> - Default style for bars</li>
+<li><strong>direction</strong> - <code>LeftToRight</code> (default) or <code>RightToLeft</code></li>
+</ul>
+<h3 id="sparkline_bar"><a class="header" href="#sparkline_bar">sparkline_bar</a></h3>
+<ul>
+<li><strong>style</strong> - Style for this specific bar</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::sparkline;
+
+let data = [10.0, 25.0, 40.0, 55.0, 70.0, 85.0, 100.0];
+
+sparkline(#max: &amp;100, &amp;data)
+</code></pre>
+<h3 id="threshold-based-coloring"><a class="header" href="#threshold-based-coloring">Threshold-based Coloring</a></h3>
+<pre><code class="language-graphix">let data: Array&lt;[SparklineBar, f64]&gt; = {
+    let clock = time::timer(duration:0.3s, true);
+    let v = select rand::rand(#clock, #start:0., #end:100.) {
+        x if (x &gt; 50.) &amp;&amp; (x &lt; 75.) =&gt; sparkline_bar(#style: style(#fg:`Yellow), x),
+        x if x &gt; 75. =&gt; sparkline_bar(#style: style(#fg:`Red), x),
+        x =&gt; x  // Use default style
+    };
+    let d = [];
+    d &lt;- array::window(#n:80, clock ~ d, v);
+    d
+};
+
+block(
+    #border: &amp;`All,
+    #title: &amp;line("Network Traffic Rate"),
+    &amp;sparkline(
+        #style: &amp;style(#fg: `Green),
+        #max: &amp;100,
+        &amp;data
+    )
+)
+</code></pre>
+<h3 id="multi-metric-dashboard"><a class="header" href="#multi-metric-dashboard">Multi-metric Dashboard</a></h3>
+<pre><code class="language-graphix">let cpu_data = [...];
+let mem_data = [...];
+let net_data = [...];
+
+layout(
+    #direction: &amp;`Vertical,
+    &amp;[
+        child(#constraint: `Length(3), block(
+            #title: &amp;line("CPU"),
+            &amp;sparkline(#style: &amp;style(#fg: `Red), #max: &amp;100, &amp;cpu_data)
+        )),
+        child(#constraint: `Length(3), block(
+            #title: &amp;line("Memory"),
+            &amp;sparkline(#style: &amp;style(#fg: `Yellow), #max: &amp;100, &amp;mem_data)
+        )),
+        child(#constraint: `Length(3), block(
+            #title: &amp;line("Network"),
+            &amp;sparkline(#style: &amp;style(#fg: `Cyan), &amp;net_data)
+        ))
+    ]
+)
+</code></pre>
+<h3 id="rolling-window"><a class="header" href="#rolling-window">Rolling Window</a></h3>
+<pre><code class="language-graphix">let data: Array&lt;f64&gt; = [];
+let new_value = net::subscribe("/metrics/cpu")?;
+
+data &lt;- array::window(
+    #n: 60,
+    new_value ~ data,
+    cast&lt;f64&gt;(new_value)?
+);
+
+sparkline(#max: &amp;100, &amp;data)
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<p>Sparklines are ideal for:</p>
+<ul>
+<li>System resource monitoring (CPU, memory, network)</li>
+<li>Real-time metrics dashboards</li>
+<li>Compact data visualization in lists or tables</li>
+<li>Rate of change visualization</li>
+</ul>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="chart.html">chart</a> - For detailed charts with axes</li>
+<li><a href="gauge.html">gauge</a> - For single current value display</li>
+<li><a href="linegauge.html">linegauge</a> - For horizontal progress bars</li>
+</ul>
 
                     </main>
 

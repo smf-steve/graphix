@@ -176,6 +176,121 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="linegauge"><a class="header" href="#linegauge">linegauge</a></h1>
+<p>The <code>line_gauge</code> widget displays a horizontal progress indicator using line-drawing characters. It's more compact than <code>gauge</code> and ideal for dashboards where vertical space is limited.</p>
+<h2 id="function-signature"><a class="header" href="#function-signature">Function Signature</a></h2>
+<pre><code>type LineSet = [`Thin, `Thick, `Double];
+
+/// Creates a line gauge widget showing progress from 0.0 to 1.0
+val line_gauge: fn(
+    ?#filled_style: &amp;Style,
+    ?#unfilled_style: &amp;Style,
+    ?#line_set: &amp;LineSet,
+    ?#label: &amp;Line,
+    ?#style: &amp;Style,
+    f64
+) -&gt; Widget;
+</code></pre>
+<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
+<ul>
+<li><strong>filled_style</strong> - Style for the filled portion</li>
+<li><strong>unfilled_style</strong> - Style for the unfilled portion</li>
+<li><strong>line_set</strong> - Character set: <code>Thin</code>, <code>Thick</code> (default), or <code>Double</code></li>
+<li><strong>label</strong> - Line or span displayed within the gauge</li>
+<li><strong>style</strong> - Base style for the widget</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::line_gauge;
+
+let progress = 0.75;  // 75%
+
+line_gauge(
+    #filled_style: &amp;style(#fg: `Green),
+    &amp;progress
+)
+</code></pre>
+<h3 id="color-coded-status"><a class="header" href="#color-coded-status">Color-coded Status</a></h3>
+<pre><code class="language-graphix">let clock = time::timer(duration:0.5s, true);
+let power = 0.0;
+power &lt;- min(1.0, (clock ~ power) + 0.01);
+
+let color = select power {
+    x if x &lt; 0.10 =&gt; `Red,
+    x if x &lt; 0.25 =&gt; `Yellow,
+    x =&gt; `Green
+};
+
+let percentage = cast&lt;i64&gt;(power * 100.0)?;
+
+block(
+    #border: &amp;`All,
+    #title: &amp;line("Power"),
+    &amp;line_gauge(
+        #filled_style: &amp;style(#fg: color),
+        #line_set: &amp;`Thick,
+        #label: &amp;line("[percentage]%"),
+        &amp;power
+    )
+)
+</code></pre>
+<h3 id="compact-multi-metric-display"><a class="header" href="#compact-multi-metric-display">Compact Multi-metric Display</a></h3>
+<pre><code class="language-graphix">layout(
+    #direction: &amp;`Vertical,
+    &amp;[
+        child(#constraint: `Length(1), line_gauge(
+            #filled_style: &amp;style(#fg: `Red),
+            #label: &amp;line("CPU 45%"),
+            &amp;0.45
+        )),
+        child(#constraint: `Length(1), line_gauge(
+            #filled_style: &amp;style(#fg: `Yellow),
+            #label: &amp;line("MEM 67%"),
+            &amp;0.67
+        )),
+        child(#constraint: `Length(1), line_gauge(
+            #filled_style: &amp;style(#fg: `Green),
+            #label: &amp;line("DSK 23%"),
+            &amp;0.23
+        ))
+    ]
+)
+</code></pre>
+<h3 id="line-set-styles"><a class="header" href="#line-set-styles">Line Set Styles</a></h3>
+<pre><code class="language-graphix">// Thin lines - subtle
+line_gauge(#line_set: &amp;`Thin, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+
+// Thick lines - bold (default)
+line_gauge(#line_set: &amp;`Thick, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+
+// Double lines - distinctive
+line_gauge(#line_set: &amp;`Double, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<ul>
+<li>System resource monitors (CPU, RAM, disk, network)</li>
+<li>Download/upload progress indicators</li>
+<li>Compact status dashboards</li>
+<li>Progress tracking in limited space</li>
+</ul>
+<h2 id="comparison-with-gauge"><a class="header" href="#comparison-with-gauge">Comparison with gauge</a></h2>
+<p>Use <code>line_gauge</code> when:</p>
+<ul>
+<li>You need compact, single-line displays</li>
+<li>Vertical space is limited</li>
+<li>You want a more technical/modern look</li>
+</ul>
+<p>Use <code>gauge</code> when:</p>
+<ul>
+<li>You have more vertical space available</li>
+<li>You want larger, more prominent indicators</li>
+</ul>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="gauge.html">gauge</a> - For block-style progress indicators</li>
+<li><a href="sparkline.html">sparkline</a> - For historical trend display</li>
+<li><a href="barchart.html">barchart</a> - For categorical value comparison</li>
+</ul>
 
                     </main>
 
