@@ -3,12 +3,12 @@ use arcstr::{literal, ArcStr};
 use derive_builder::Builder;
 use enumflags2::BitFlags;
 use graphix_compiler::{
-    expr::{ExprId, ModPath, ModuleResolver},
+    expr::{CouldNotResolve, ExprId, ModPath, ModuleResolver},
     format_with_flags,
     typ::{TVal, Type},
     CFlag, ExecCtx, PrintFlag,
 };
-use graphix_rt::{CompExp, CouldNotResolve, GXConfig, GXEvent, GXExt, GXHandle, GXRt};
+use graphix_rt::{CompExp, GXConfig, GXEvent, GXExt, GXHandle, GXRt};
 use graphix_stdlib::Module;
 use input::InputReader;
 use netidx::{

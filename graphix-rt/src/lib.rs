@@ -116,15 +116,6 @@ type UpdateBatch = GPooled<Vec<(SubId, subscriber::Event)>>;
 type WriteBatch = GPooled<Vec<WriteRequest>>;
 
 #[derive(Debug)]
-pub struct CouldNotResolve;
-
-impl fmt::Display for CouldNotResolve {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "could not resolve module")
-    }
-}
-
-#[derive(Debug)]
 pub struct CompExp<X: GXExt> {
     pub id: ExprId,
     pub typ: Type,

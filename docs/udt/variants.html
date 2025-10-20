@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Recursive Types - The Graphix Programming Language</title>
+        <title>Variants - The Graphix Programming Language</title>
 
 
         <!-- Custom HTML head -->
@@ -175,87 +175,55 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="recursive-types"><a class="header" href="#recursive-types">Recursive Types</a></h1>
-<p>Type aliases can be used to define recursive types, and this is a very powerful
-modeling tool for repeating structure. If you want to see an advanced example
-look no further than the <code>Tui</code> type in <code>graphix-shell</code>. Tui's are a set of
-mutually recursive types that define the tree structure of a ui. For a less
-overwelming example consider a classic,</p>
-<pre><code>type List&lt;'a&gt; = [
-  `Cons('a, List&lt;'a&gt;),
-  `Nil
-]
+                        <h1 id="variants"><a class="header" href="#variants">Variants</a></h1>
+<p>Variants allow you to define a case that belongs to a set of possible cases a
+value is allowed to be. For example we might categorize foods,</p>
+<pre><code>[`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]
 </code></pre>
-<p>This defines a singly linked list as a set of two variant cases. Either the list
-is empty (nil), or it is a cons cell with a <code>'a</code> and a list, which itself could
-be either a cons cell or nil. If you've never heard the term "cons" and "nil"
-they come from lisp, the original functional programming language from the late
-1950s. Anyway, lets define some functions to work on our new list type,</p>
-<pre><code>type List&lt;'a&gt; = [
-  `Cons('a, List&lt;'a&gt;),
-  `Nil
-];
-
-/// cons a new item on the head of the list
-let cons = |l: List&lt;'a&gt;, v: 'a| -&gt; List&lt;'a&gt; `Cons(v, l);
-
-/// compute the length of the list
-let len = |l: List&lt;'a&gt;| {
-  let rec len_int = |l: List&lt;'a&gt;, n: i64| select l {
-    `Cons(_, tl) =&gt; len_int(tl, n + 1),
-    `Nil =&gt; n
-  };
-  len_int(l, 0)
+<p>Here we've defined a set of variants that together cover all the cases we want
+to model. We can write a function that will only accept a member of this set,</p>
+<pre><code>let f = |food: [`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]| ...
+</code></pre>
+<p>and the type checker will ensure that it is an error caught at compile time to
+pass any other type of value to this function. The most interesting variant in this set is probably</p>
+<pre><code>`Other(string)
+</code></pre>
+<p>Because it carries data with it. Variant cases can carry an zero or more values
+with them (types separated by commas, e.g. `Other(string, i64)). We can use
+pattern matching to extract these values at run time. Lets write the body of our
+food consuming function,</p>
+<pre><code>let f = |food: [`Vegetable, `Fruit, `Meat, `Grain, `Other(string)]| select food {
+  `Vegetable =&gt; "it's a vegetable",
+  `Fruit =&gt; "it's a fruit",
+  `Meat =&gt; "it's meat",
+  `Grain =&gt; "it's grain",
+  `Other(s) =&gt; "it's a [s]"
 };
-
-/// map f over the list
-let rec map = |l: List&lt;'a&gt;, f: fn('a) -&gt; 'b| -&gt; List&lt;'b&gt; select l {
-  `Cons(v, tl) =&gt; `Cons(f(v), map(tl, f)),
-  `Nil =&gt; `Nil
-};
-
-/// fold f over the list
-let rec fold = |l: List&lt;'a&gt;, init: 'b, f: fn('b, 'a) -&gt; 'b| -&gt; 'b select l {
-  `Cons(v, tl) =&gt; fold(tl, f(init, v), f),
-  `Nil =&gt; init
-}
+f(`Other("foo"))
 </code></pre>
-<p>You can probably see where functional programming gets it's (partly deserved)
-reputation for being elegant and simple. Lets try them out,</p>
-<pre><code>let l = cons(cons(cons(cons(`Nil, 1), 2), 3), 4);
-l
-</code></pre>
-<p>running this we get,</p>
+<p>If we copy the above into a file and run it we will get,</p>
 <pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
-`Cons(4, `Cons(3, `Cons(2, `Cons(1, `Nil))))
+"it's a foo"
 </code></pre>
-<p>Lets try something more complex,</p>
-<pre><code>map(l, |x| x * x)
-</code></pre>
-<p>results in</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
-`Cons(16, `Cons(9, `Cons(4, `Cons(1, `Nil))))
-</code></pre>
-<p>as expected. Finally lets sum the list with fold,</p>
-<pre><code>fold(l, 0, |acc, v| acc + v)
-</code></pre>
-<p>and as expected we get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
-10
-</code></pre>
-<p>So with recursive types and recursive functions you can do some really powerful
-things. When you add these capabilities to the data flow nature of Graphix, it
-only multiplies the power even further.</p>
+<p>In this example the type checker will ensure that,</p>
+<ul>
+<li>every item in the set is matched by a non guarded arm of the select (see the section on select)</li>
+<li>no extra items that can't exist in the set are matched</li>
+<li>you can't pass anything to f that isn't in the set</li>
+</ul>
+<p>Singleton variant cases like `Other(string) are actually a perfectly valid type
+in Graphix, although they are much more useful in sets. Once we start naming
+types (in a later section), they will become even more useful.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../udf/polymorphic.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../udt/structs.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../udf/references.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../udt/tuples.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -265,11 +233,11 @@ only multiplies the power even further.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../udf/polymorphic.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../udt/structs.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../udf/references.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../udt/tuples.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

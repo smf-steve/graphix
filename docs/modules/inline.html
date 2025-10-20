@@ -176,6 +176,15 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="inline-modules"><a class="header" href="#inline-modules">Inline Modules</a></h1>
+<p>In a file, you can define modules inline using the following syntax,</p>
+<pre><code>mod m {
+  let name = value;
+  expr
+}
+</code></pre>
+<p>Expressions in modules are semi colon separated. At the moment everything in a
+module is public, and can be referred to either directly <code>m::name</code> or by
+bringing the module into scope with <code>use m</code>.</p>
 
                     </main>
 

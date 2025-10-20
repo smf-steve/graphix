@@ -41,8 +41,8 @@ use tokio::{
 use triomphe::Arc;
 
 use crate::{
-    Callable, CallableId, CompExp, CompRes, CouldNotResolve, GXConfig, GXEvent, GXExt,
-    GXHandle, GXRt, Ref, ToGX, UpdateBatch, WriteBatch,
+    Callable, CallableId, CompExp, CompRes, GXConfig, GXEvent, GXExt, GXHandle, GXRt,
+    Ref, ToGX, UpdateBatch, WriteBatch,
 };
 
 fn is_output<X: GXExt>(n: &Node<GXRt<X>, X::UserEvent>) -> bool {
@@ -331,8 +331,7 @@ impl<X: GXExt> GX<X> {
             expr::parser::parse(ori.clone()).context("parsing the root module")?;
         let exprs =
             try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
-                .await
-                .context(CouldNotResolve)?;
+                .await?;
         let mut nodes = exprs
             .iter()
             .map(|e| {
@@ -354,8 +353,7 @@ impl<X: GXExt> GX<X> {
         let exprs = expr::parser::parse(ori.clone())?;
         let exprs =
             try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
-                .await
-                .context(CouldNotResolve)?;
+                .await?;
         let mut nodes = exprs
             .iter()
             .map(|e| compile(&mut self.ctx, self.flags, &scope, e.clone()))
@@ -443,8 +441,7 @@ impl<X: GXExt> GX<X> {
         let st = Instant::now();
         let exprs =
             try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
-                .await
-                .context(CouldNotResolve)?;
+                .await?;
         info!("resolve time: {:?}", st.elapsed());
         let mut res = smallvec![];
         for e in exprs.iter() {

@@ -176,6 +176,19 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="external-modules"><a class="header" href="#external-modules">External Modules</a></h1>
+<p>External modules are defined by creating a file <code>m.gx</code> containing Graphix
+expressions. Expressions in <code>m.gx</code> are treated the same as if they were defined
+in an inline module <code>mod m { ... }</code>.</p>
+<p>Module hierarchies can be created using directories, for example to create
+<code>m::n</code> you would create a directory <code>m</code> and in it a file called <code>mod.gx</code> and a
+file called <code>n.gx</code></p>
+<pre><code>m/mod.gx
+-------------
+mod n
+
+m/n.gx
+let name = expr
+</code></pre>
 
                     </main>
 

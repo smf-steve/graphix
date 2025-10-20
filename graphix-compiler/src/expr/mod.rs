@@ -56,6 +56,15 @@ pub(crate) fn get_origin() -> Arc<Origin> {
     })
 }
 
+#[derive(Debug)]
+pub struct CouldNotResolve(ArcStr);
+
+impl fmt::Display for CouldNotResolve {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "could not resolve module {}", self.0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Arg {
     pub labeled: Option<Option<Expr>>,

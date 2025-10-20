@@ -82,8 +82,8 @@ Consider,
 ```
 let f = |x: &i64| *x <- once(*x) + 1;
 let v = 0;
-println("[v]");
-f(&v)
+f(&v);
+println("[v]")
 ```
 
 Running this program will output,

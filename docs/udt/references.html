@@ -238,8 +238,8 @@ can do that with,</p>
 <p>Consider,</p>
 <pre><code>let f = |x: &amp;i64| *x &lt;- once(*x) + 1;
 let v = 0;
-println("[v]");
-f(&amp;v)
+f(&amp;v);
+println("[v]")
 </code></pre>
 <p>Running this program will output,</p>
 <pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
@@ -253,7 +253,7 @@ even though the original bind of <code>v</code> isn't even in a scope that <code
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../udf/recursive.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../udt/recursive.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -267,7 +267,7 @@ even though the original bind of <code>v</code> isn't even in a scope that <code
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../udf/recursive.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../udt/recursive.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

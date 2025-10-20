@@ -1,7 +1,7 @@
 use crate::{
     expr::{
-        parser, Bind, Expr, ExprId, ExprKind, Lambda, ModPath, ModuleKind, Origin,
-        Pattern, Source, TryCatch,
+        parser, Bind, CouldNotResolve, Expr, ExprId, ExprKind, Lambda, ModPath,
+        ModuleKind, Origin, Pattern, Source, TryCatch,
     },
     format_with_flags, PrintFlag,
 };
@@ -71,26 +71,27 @@ async fn resolve(
 ) -> Result<Expr> {
     let jh = task::spawn(async move {
         let ts = Instant::now();
-        let name_rel = name.trim_start_matches(Path::SEP);
-        let name_mod = Path::from(name.clone()).append("mod.gx");
-        let name_mod = name_mod.trim_start_matches(Path::SEP);
+        let name = Path::from(name);
         let mut errors = vec![];
         for r in prepend.iter().map(|r| r.as_ref()).chain(resolvers.iter()) {
             let ori = match r {
                 ModuleResolver::VFS(vfs) => {
-                    let scoped = scope.append(&*name);
+                    let scoped = scope.append(&name);
                     match vfs.get(&scoped) {
                         Some(s) => Origin {
                             parent: Some(parent.clone()),
-                            source: Source::Internal(name.clone()),
+                            source: Source::Internal(name.clone().into()),
                             text: s.clone(),
                         },
                         None => continue,
                     }
                 }
                 ModuleResolver::Files(base) => {
-                    let full_path =
-                        base.join(name_rel).with_extension("gx").canonicalize()?;
+                    let mut full_path = base.clone();
+                    for part in Path::parts(&name) {
+                        full_path.push(part);
+                    }
+                    full_path.set_extension("gx");
                     match tokio::fs::read_to_string(&full_path).await {
                         Ok(s) => Origin {
                             parent: Some(parent.clone()),
@@ -98,7 +99,8 @@ async fn resolve(
                             text: ArcStr::from(s),
                         },
                         Err(_) => {
-                            let full_path = base.join(name_mod).canonicalize()?;
+                            full_path.set_extension("");
+                            full_path.push("mod.gx");
                             match tokio::fs::read_to_string(&full_path).await {
                                 Ok(s) => Origin {
                                     parent: Some(parent.clone()),
@@ -114,7 +116,7 @@ async fn resolve(
                     }
                 }
                 ModuleResolver::Netidx { subscriber, base, timeout } => {
-                    let full_path = base.append(name_rel);
+                    let full_path = base.append(&name);
                     let source = Source::Netidx(full_path.clone());
                     let sub =
                         subscriber.subscribe_nondurable_one(full_path, *timeout).await;
@@ -139,7 +141,7 @@ async fn resolve(
                 parser::parse(ori.clone())
                     .with_context(|| format!("parsing file {ori:?}"))?,
             );
-            let kind = ExprKind::Module { name, export, value };
+            let kind = ExprKind::Module { name: name.clone().into(), export, value };
             format_with_flags(PrintFlag::NoSource | PrintFlag::NoParents, || {
                 info!("load and parse {ori} {:?}", ts.elapsed())
             });
@@ -256,7 +258,8 @@ impl Expr {
                         export,
                         name.clone(),
                     )
-                    .await?;
+                    .await
+                    .with_context(|| CouldNotResolve(name.clone()))?;
                     let scope = ModPath(scope.append(&*name));
                     e.resolve_modules_int(&scope, &prepend, &resolvers).await
                 })
