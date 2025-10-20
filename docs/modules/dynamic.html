@@ -251,10 +251,9 @@ come from. It's type must be a string.</li>
 <p><code>[null, Error&lt;`DynamicLoadError(string)&gt;]</code></p>
 <p>The runtime will try to load the module every time the source updates. If it
 succeeds it will update with <code>null</code>, if it fails it will update with an error
-indicating what went wrong, and the previous loaded module (if any) will still
-be accessible. If compilation succeeds the previous loaded module will be
-deleted and replaced with the new one, and the new module will be initialized,
-possibly causing values it exports to update.</p>
+indicating what went wrong. Regardless of the outcome the previous loaded
+module, if any, will be deleted. If compilation succeeded the new module will be
+initialized, possibly causing values it exports to update.</p>
 <p>Obviously the loaded module must match the type signature defined in the dynamic
 mod statement. However, the signature checking only cares that every item
 mentioned in the signature is present in the dynamic module and that the types

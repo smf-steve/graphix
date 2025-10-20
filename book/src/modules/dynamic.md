@@ -80,10 +80,9 @@ The `mod foo dynamic ...` expression returns a value of type,
 
 The runtime will try to load the module every time the source updates. If it
 succeeds it will update with `null`, if it fails it will update with an error
-indicating what went wrong, and the previous loaded module (if any) will still
-be accessible. If compilation succeeds the previous loaded module will be
-deleted and replaced with the new one, and the new module will be initialized,
-possibly causing values it exports to update.
+indicating what went wrong. Regardless of the outcome the previous loaded
+module, if any, will be deleted. If compilation succeeded the new module will be
+initialized, possibly causing values it exports to update.
 
 Obviously the loaded module must match the type signature defined in the dynamic
 mod statement. However, the signature checking only cares that every item
