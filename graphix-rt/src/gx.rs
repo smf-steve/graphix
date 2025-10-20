@@ -117,11 +117,8 @@ pub(super) struct GX<X: GXExt> {
 impl<X: GXExt> GX<X> {
     pub(super) async fn new(mut cfg: GXConfig<X>) -> Result<Self> {
         let resolvers_default = |r: &mut Vec<ModuleResolver>| match dirs::data_dir() {
-            None => r.push(ModuleResolver::Files("".into())),
-            Some(dd) => {
-                r.push(ModuleResolver::Files("".into()));
-                r.push(ModuleResolver::Files(dd.join("graphix")));
-            }
+            None => (),
+            Some(dd) => r.push(ModuleResolver::Files(dd.join("graphix"))),
         };
         match std::env::var("GRAPHIX_MODPATH") {
             Err(_) => resolvers_default(&mut cfg.resolvers),

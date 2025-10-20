@@ -1774,38 +1774,241 @@ even though the original bind of <code>v</code> isn't even in a scope that <code
 <p>Graphix has a simple module system, with the minimal required functionality
 necessary to organize code into a project.</p>
 <p>The module system should be considered a work in progress, more features may be
-added in the future. In particular there are a few unfinished parts of the
-module system,</p>
+added in the future. In particular there are a few unfinished parts,</p>
 <ul>
-<li>no forward declarations, modules may only refer to modules already declared in
-their scope</li>
+<li>no module renaming on use</li>
 <li>no access control, everything in a module is currently public</li>
 </ul>
+<p>These shortcomings may be fixed in a future release. Current features include,</p>
+<ul>
+<li>module hierarchies</li>
+<li>inline modules (defined in the same file)</li>
+<li>modules defined in external files</li>
+<li>modules defined in netidx</li>
+<li>modules dynamically loadable at runtime</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="inline-modules"><a class="header" href="#inline-modules">Inline Modules</a></h1>
-<p>In a file, you can define modules inline using the following syntax,</p>
+<p>In a single file, you can define modules inline. Expressions in modules are semi
+colon separated. expressions defined in a module may be referred to directly
+e.g. <code>m::name</code> or by bringing the module into scope with <code>use m</code>.</p>
 <pre><code>mod m {
-  let name = value;
-  expr
-}
+  let hello = "hello world";
+  let goodbye = "goodbye world"
+};
+
+"we say [m::hello] followed by [m::goodbye]"
 </code></pre>
-<p>Expressions in modules are semi colon separated. At the moment everything in a
-module is public, and can be referred to either directly <code>m::name</code> or by
-bringing the module into scope with <code>use m</code>.</p>
+<p>running this we get,</p>
+<pre><code>eric@katana ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+"we say hello world followed by goodbye world"
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="external-modules"><a class="header" href="#external-modules">External Modules</a></h1>
-<p>External modules are defined by creating a file <code>m.gx</code> containing Graphix
-expressions. Expressions in <code>m.gx</code> are treated the same as if they were defined
-in an inline module <code>mod m { ... }</code>.</p>
+<p>A simple external module may be defined in either a file or by a value in
+netidx. In the case of a file, the file name must end in <code>.gx</code> and the part
+before that is the name of the module. For example a file <code>m.gx</code> contains the
+expressions defining the module <code>m</code>. Expressions in the file do not need to be
+surrounded by a <code>mod m { ... }</code>, the name of the module is taken from the
+filename.</p>
+<p>In netidx, a string value containing Graphix source is published, and the final
+name in the path is the name of the module, no <code>.gx</code> is required for netidx
+modules. For example we might publish <code>/libs/graphix/strops</code>, the name of the
+module would be <code>strops</code>, and the resolver expects it to be a string containing
+valid Graphix code, just like a file.</p>
+<p>Here is a simple example with file modules,</p>
+<pre><code>eric@katana ~/t/ex&gt; ls
+m.gx  test.gx
+</code></pre>
+<p><code>test.gx</code> is the program that we will run, <code>m.gx</code> is a module it will load.</p>
+<p><code>test.gx</code></p>
+<pre><code>mod m;
+
+m::hello
+</code></pre>
+<p><code>m.gx</code></p>
+<pre><code>let hello = "hello world"
+</code></pre>
+<p>running this we get,</p>
+<pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/tmp/ex/test.gx
+"hello world"
+</code></pre>
+<h2 id="module-load-path"><a class="header" href="#module-load-path">Module Load Path</a></h2>
+<p>The graphix shell reads the <code>GRAPHIX_MODPATH</code> environment variable at startup
+and appends it's contents to the built in list of module paths. The syntax is a
+comma separated list of paths. Paths that start with <code>netidx:</code> are netidx paths,
+otherwise file paths are expected. The comma separator can be escaped with <code>\</code>.
+For example,</p>
+<pre><code>GRAPHIX_MODPATH=netidx:/foo,/home/eric/graphix-modules,/very/str\,ange/path
+</code></pre>
+<p>would add</p>
+<ul>
+<li>netidx:/foo</li>
+<li>/home/eric/graphix-modules</li>
+<li>/very/str,ange/path</li>
+</ul>
+<p>to the Graphix module path</p>
+<h3 id="default-module-path"><a class="header" href="#default-module-path">Default Module Path</a></h3>
+<p>By default the module resolve path has several entries,</p>
+<ul>
+<li>
+<p>the parent directory of the program file passed on the command line. e.g. if
+we are running <code>/home/eric/test.gx</code> then Graphix will look for modules in
+<code>/home/eric</code></p>
+</li>
+<li>
+<p>the Graphix init directory. This is a platform specific directory where you
+can put Graphix modules.</p>
+<ul>
+<li>On Linux <code>~/.local/share/graphix</code></li>
+<li>On Windows <code>%APPDATA%\Roaming\graphix</code></li>
+<li>On Mac OS <code>~/Library/Application Support/graphix</code></li>
+</ul>
+</li>
+</ul>
+<p>In REPL mode, which is when it's given no argument, the <code>graphix</code> command will
+try to load the module <code>init</code>. If no such module exists it will silently carry
+on. You can use this to load commonly used utilities in the repl automatically.</p>
+<h2 id="modules-in-netidx"><a class="header" href="#modules-in-netidx">Modules in Netidx</a></h2>
+<p>We can publish the same code as the files example in netidx and use it in
+Graphix directly, but we have to run it in a slightly different way, first lets
+publish it,</p>
+<pre><code>eric@katana ~/t/ex&gt; printf \
+  "/local/graphix/test|string|%s\n/local/graphix/m|string|%s" \
+  "$(tr \n ' ' &lt;test.gx)" "$(tr \n ' ' &lt;m.gx)" \
+  | netidx publisher
+</code></pre>
+<p>Graphix doesn't care about whitespaces like newline, so we can just translate
+them to spaces to avoid confusing the command line publisher. Lets see if we
+published successfully.</p>
+<pre><code>eric@katana ~&gt; netidx subscriber /local/graphix/test
+/local/graphix/test|string|"mod m;  m::hello"
+</code></pre>
+<p>Looks good, now lets run the code. In order to do this we need to add to the
+resolve path to tell the Graphix shell where it should look for modules. We also
+don't pass a <code>.gx</code> extension, so we are telling Graphix to look for a module
+named <code>test</code> in it's configured module paths and run that.</p>
+<pre><code>eric@katana ~/p/graphix (main)&gt; GRAPHIX_MODPATH=netidx:/local/graphix \
+  target/debug/graphix test
+"hello world"
+</code></pre>
+<h2 id="module-hierarchies"><a class="header" href="#module-hierarchies">Module Hierarchies</a></h2>
 <p>Module hierarchies can be created using directories, for example to create
 <code>m::n</code> you would create a directory <code>m</code> and in it a file called <code>mod.gx</code> and a
 file called <code>n.gx</code></p>
-<pre><code>m/mod.gx
--------------
-mod n
+<pre><code>eric@katana ~/t/ex1&gt; find .
+.
+./m
+./m/mod.gx
+./m/n.gx
+./test.gx
+</code></pre>
+<p><code>test.gx</code> is the root of the hierarchy</p>
+<pre><code>mod m;
 
-m/n.gx
-let name = expr
+m::n::hello
+</code></pre>
+<p><code>m/mod.gx</code> is the root of module <code>m</code></p>
+<pre><code>mod n
+</code></pre>
+<p><code>m/n.gx</code> is the <code>m::n</code> module</p>
+<pre><code>let hello = "hello world"
+</code></pre>
+<p>if we run the program we get,</p>
+<pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/tmp/ex1/test.gx
+"hello world"
+</code></pre>
+<h2 id="module-hierarchies-in-netidx"><a class="header" href="#module-hierarchies-in-netidx">Module Hierarchies in Netidx</a></h2>
+<p>Module hierarchies in netidx work the same as in the file system except that
+<code>mod.gx</code> is never needed because in <code>netidx</code> a value can also be a container. So
+to replicate the above example we'd publish,</p>
+<pre><code>/lib/graphix/test &lt;- the contents of test.gx
+/lib/graphix/m    &lt;- the contents of m/mod.gx
+/lib/graphix/m/n  &lt;- the contents of m/n.gx
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="dynamic-modules"><a class="header" href="#dynamic-modules">Dynamic Modules</a></h1>
+<p>Graphix programs can dynamically load modules at runtime. The loaded code will
+be compiled, type checked, and the loader will return an error indicating any
+failure in that process. Because Graphix is a statically typed language we must
+know ahead of time what interface the dynamically loaded module will have. We do
+this by defining a module signature. We can also define what the dynamically
+loaded module is allowed to reference, in order to prevent it from just calling
+any function it likes (aka it's sandboxed). Lets dive right in with an example,</p>
+<pre><code>// the module source, which we will publish in netidx
+let path = "/local/foo";
+let source = "
+    let add = |x| x + 1;
+    let sub = |x| x - 1;
+    let cfg = \[1, 2, 3, 4, 5\];
+    let hidden = 42
+";
+net::publish(path, source)$;
+
+// now load the module
+let status = mod foo dynamic {
+    sandbox whitelist [core];
+    sig {
+        val add: fn(i64) -&gt; i64;
+        val sub: fn(i64) -&gt; i64;
+        val cfg: Array&lt;i64&gt;
+    };
+    source cast&lt;string&gt;(net::subscribe(path)$)$
+};
+select status {
+    error as e =&gt; never(dbg(e)),
+    null as _ =&gt; foo::add(foo::cfg[0]$)
+}
+</code></pre>
+<p>running this we get,</p>
+<pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+2
+</code></pre>
+<p>In the first part of this program we just publish a string containing the source
+code of the module we want to ultimatly load. The second part is where it gets
+interesting, lets break it down.</p>
+<p><code>mod foo dynamic</code> declares a dynamically loaded module named <code>foo</code>. In the rest
+of our code we can refer (statically) to <code>foo</code> as if it was a normal module that
+we loaded at compile time. There are three sections required to define a dynamic
+module, they are required to be defined in order, sandbox, sig, and source,</p>
+<ul>
+<li>a <code>sandbox</code> statement, of which there are three types
+<ul>
+<li><code>sandbox unrestricted;</code> no sandboxing, the dynamic module can access
+anything in it's scope</li>
+<li><code>sandbox whitelist [item0, item1, ...]</code> the dynamic module may access ONLY
+the names explicitly listed. e.g. <code>sandbox whitelist [core::array];</code> would
+allow the dynamic module to access only <code>core::array</code> and nothing else.</li>
+<li><code>sandbox blacklist [item0, item1, ...]</code> the dynamic module may access
+anything except the names listed. <code>sandbox blacklist [super::secret::module];</code> everything except super secret module would be
+accessible</li>
+</ul>
+</li>
+<li>a <code>sig</code> statement is the type signature of the module. This is a special
+syntax for writing module type signatures. There are three possible statements,
+<ul>
+<li>a val statement defines a value and it's type, <code>val add: fn(i64) -&gt; i64</code> is
+an example of a val statement, it need not be a function it can be any type</li>
+<li>a type statement defines a type in the loaded module, e.g. <code>type T = { foo: string, bar: string }</code> val statements that come after a type statement may
+use the defined type. The type statement is identical to the normal type
+statement in Graphix (so it can be polymorphic, recursive, etc).</li>
+<li>a mod statement defines a sub module of the dynamically loaded module. A sub
+module must have a sig. <code>mod m: sig { ... }</code> defines a sub module.</li>
+</ul>
+</li>
+<li>a <code>source</code> statement defines where the source code for the dynamic module will
+come from. It's type must be a string.</li>
+</ul>
+<p>The <code>mod foo dynamic ...</code> expression returns a value of type,</p>
+<p><code>[null, Error&lt;`DynamicLoadError(string)&gt;]</code></p>
+<p>The runtime will try to load the module every time the source updates. If it
+succeeds it will update with <code>null</code>, if it fails it will update with an error
+indicating what went wrong, and the previous loaded module (if any) will still
+be accessible. If compilation succeeds the previous loaded module will be
+deleted and replaced with the new one, and the new module will be initialized,
+possibly causing values it exports to update.</p>
+<p>Obviously the loaded module must match the type signature defined in the dynamic
+mod statement. However, the signature checking only cares that every item
+mentioned in the signature is present in the dynamic module and that the types
+match. If extra items are present in the dynamic module they will simply be
+ignored, and will be inaccessible to the loading program.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-standard-library"><a class="header" href="#the-standard-library">The Standard Library</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="core"><a class="header" href="#core">core</a></h1>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="net"><a class="header" href="#net">net</a></h1>

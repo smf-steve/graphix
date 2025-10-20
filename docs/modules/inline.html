@@ -176,15 +176,20 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="inline-modules"><a class="header" href="#inline-modules">Inline Modules</a></h1>
-<p>In a file, you can define modules inline using the following syntax,</p>
+<p>In a single file, you can define modules inline. Expressions in modules are semi
+colon separated. expressions defined in a module may be referred to directly
+e.g. <code>m::name</code> or by bringing the module into scope with <code>use m</code>.</p>
 <pre><code>mod m {
-  let name = value;
-  expr
-}
+  let hello = "hello world";
+  let goodbye = "goodbye world"
+};
+
+"we say [m::hello] followed by [m::goodbye]"
 </code></pre>
-<p>Expressions in modules are semi colon separated. At the moment everything in a
-module is public, and can be referred to either directly <code>m::name</code> or by
-bringing the module into scope with <code>use m</code>.</p>
+<p>running this we get,</p>
+<pre><code>eric@katana ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+"we say hello world followed by goodbye world"
+</code></pre>
 
                     </main>
 

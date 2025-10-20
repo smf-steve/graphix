@@ -1547,7 +1547,7 @@ const DYNAMIC_MODULE0: &str = r#"
             val sub: fn(i64) -> i64;
             val cfg: Array<i64>
         };
-        source cast<string>(net::subscribe("/local/foo"))
+        source cast<string>(net::subscribe("/local/foo")$)$
     };
     select status {
         error as e => never(dbg(e)),

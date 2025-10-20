@@ -1,14 +1,21 @@
 # Inline Modules
 
-In a file, you can define modules inline using the following syntax,
+In a single file, you can define modules inline. Expressions in modules are semi
+colon separated. expressions defined in a module may be referred to directly
+e.g. `m::name` or by bringing the module into scope with `use m`.
 
 ```
 mod m {
-  let name = value;
-  expr
-}
+  let hello = "hello world";
+  let goodbye = "goodbye world"
+};
+
+"we say [m::hello] followed by [m::goodbye]"
 ```
 
-Expressions in modules are semi colon separated. At the moment everything in a
-module is public, and can be referred to either directly `m::name` or by
-bringing the module into scope with `use m`.
+running this we get,
+
+```
+eric@katana ~/p/graphix (main) [1]> target/debug/graphix ~/test.gx
+"we say hello world followed by goodbye world"
+```

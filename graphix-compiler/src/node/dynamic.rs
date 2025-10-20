@@ -221,12 +221,12 @@ impl<R: Rt, E: UserEvent> Update<R, E> for DynamicModule<R, E> {
     ) -> Option<netidx_value::Value> {
         let mut compiled = false;
         if let Some(v) = self.source.update(ctx, event) {
-            self.clear_compiled(ctx);
             match v {
                 Value::String(s) => {
                     if let Err(e) = self.compile_inner(ctx, s) {
                         return Some(errf!(ERR_TAG, "compile error {e:?}"));
                     }
+                    self.clear_compiled(ctx);
                 }
                 v => return Some(errf!(ERR_TAG, "unexpected {v}")),
             }

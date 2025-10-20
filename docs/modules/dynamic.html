@@ -176,6 +176,90 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="dynamic-modules"><a class="header" href="#dynamic-modules">Dynamic Modules</a></h1>
+<p>Graphix programs can dynamically load modules at runtime. The loaded code will
+be compiled, type checked, and the loader will return an error indicating any
+failure in that process. Because Graphix is a statically typed language we must
+know ahead of time what interface the dynamically loaded module will have. We do
+this by defining a module signature. We can also define what the dynamically
+loaded module is allowed to reference, in order to prevent it from just calling
+any function it likes (aka it's sandboxed). Lets dive right in with an example,</p>
+<pre><code>// the module source, which we will publish in netidx
+let path = "/local/foo";
+let source = "
+    let add = |x| x + 1;
+    let sub = |x| x - 1;
+    let cfg = \[1, 2, 3, 4, 5\];
+    let hidden = 42
+";
+net::publish(path, source)$;
+
+// now load the module
+let status = mod foo dynamic {
+    sandbox whitelist [core];
+    sig {
+        val add: fn(i64) -&gt; i64;
+        val sub: fn(i64) -&gt; i64;
+        val cfg: Array&lt;i64&gt;
+    };
+    source cast&lt;string&gt;(net::subscribe(path)$)$
+};
+select status {
+    error as e =&gt; never(dbg(e)),
+    null as _ =&gt; foo::add(foo::cfg[0]$)
+}
+</code></pre>
+<p>running this we get,</p>
+<pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+2
+</code></pre>
+<p>In the first part of this program we just publish a string containing the source
+code of the module we want to ultimatly load. The second part is where it gets
+interesting, lets break it down.</p>
+<p><code>mod foo dynamic</code> declares a dynamically loaded module named <code>foo</code>. In the rest
+of our code we can refer (statically) to <code>foo</code> as if it was a normal module that
+we loaded at compile time. There are three sections required to define a dynamic
+module, they are required to be defined in order, sandbox, sig, and source,</p>
+<ul>
+<li>a <code>sandbox</code> statement, of which there are three types
+<ul>
+<li><code>sandbox unrestricted;</code> no sandboxing, the dynamic module can access
+anything in it's scope</li>
+<li><code>sandbox whitelist [item0, item1, ...]</code> the dynamic module may access ONLY
+the names explicitly listed. e.g. <code>sandbox whitelist [core::array];</code> would
+allow the dynamic module to access only <code>core::array</code> and nothing else.</li>
+<li><code>sandbox blacklist [item0, item1, ...]</code> the dynamic module may access
+anything except the names listed. <code>sandbox blacklist [super::secret::module];</code> everything except super secret module would be
+accessible</li>
+</ul>
+</li>
+<li>a <code>sig</code> statement is the type signature of the module. This is a special
+syntax for writing module type signatures. There are three possible statements,
+<ul>
+<li>a val statement defines a value and it's type, <code>val add: fn(i64) -&gt; i64</code> is
+an example of a val statement, it need not be a function it can be any type</li>
+<li>a type statement defines a type in the loaded module, e.g. <code>type T = { foo: string, bar: string }</code> val statements that come after a type statement may
+use the defined type. The type statement is identical to the normal type
+statement in Graphix (so it can be polymorphic, recursive, etc).</li>
+<li>a mod statement defines a sub module of the dynamically loaded module. A sub
+module must have a sig. <code>mod m: sig { ... }</code> defines a sub module.</li>
+</ul>
+</li>
+<li>a <code>source</code> statement defines where the source code for the dynamic module will
+come from. It's type must be a string.</li>
+</ul>
+<p>The <code>mod foo dynamic ...</code> expression returns a value of type,</p>
+<p><code>[null, Error&lt;`DynamicLoadError(string)&gt;]</code></p>
+<p>The runtime will try to load the module every time the source updates. If it
+succeeds it will update with <code>null</code>, if it fails it will update with an error
+indicating what went wrong, and the previous loaded module (if any) will still
+be accessible. If compilation succeeds the previous loaded module will be
+deleted and replaced with the new one, and the new module will be initialized,
+possibly causing values it exports to update.</p>
+<p>Obviously the loaded module must match the type signature defined in the dynamic
+mod statement. However, the signature checking only cares that every item
+mentioned in the signature is present in the dynamic module and that the types
+match. If extra items are present in the dynamic module they will simply be
+ignored, and will be inaccessible to the loading program.</p>
 
                     </main>
 
