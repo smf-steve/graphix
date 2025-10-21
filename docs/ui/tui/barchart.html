@@ -232,7 +232,12 @@ let bar1 = bar(
 bar_chart(&amp;[bar_group(#label: line("Q1"), [bar1])])
 </code></pre>
 <h3 id="grouped-bars-with-dynamic-data"><a class="header" href="#grouped-bars-with-dynamic-data">Grouped Bars with Dynamic Data</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.7s, true);
+<pre><code class="language-graphix">use tui;
+use tui::barchart;
+use tui::block;
+use rand;
+
+let clock = time::timer(duration:0.7s, true);
 
 let group0 = [
     bar(#style: &amp;style(#fg: `Red), #label: &amp;line("CPU"), &amp;rand(#start:0, #end:100, #clock)),
@@ -257,7 +262,10 @@ let chart = bar_chart(
 block(#border: &amp;`All, #title: &amp;line("Resource Usage"), &amp;chart)
 </code></pre>
 <h3 id="color-coded-values"><a class="header" href="#color-coded-values">Color-coded Values</a></h3>
-<pre><code class="language-graphix">let make_colored_bar = |label, value| {
+<pre><code class="language-graphix">use tui;
+use tui::barchart;
+
+let make_colored_bar = |label, value| {
     let color = select value {
         v if v &gt; 80 =&gt; `Red,
         v if v &gt; 50 =&gt; `Yellow,
@@ -273,13 +281,6 @@ let bars = [
 ];
 
 bar_chart(&amp;[bar_group(bars)])
-</code></pre>
-<h3 id="centered-chart"><a class="header" href="#centered-chart">Centered Chart</a></h3>
-<pre><code class="language-graphix">layout(
-    #direction: &amp;`Horizontal,
-    #flex: &amp;`Center,
-    &amp;[child(#constraint: `Max(40), bar_chart(&amp;groups))]
-)
 </code></pre>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>

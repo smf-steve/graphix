@@ -2,33 +2,8 @@
 
 The `text` widget renders styled text in the terminal. It's a fundamental building block for displaying formatted content with colors, modifiers, and multiple lines. Text is built from `Line` objects, which are in turn composed of `Span` objects.
 
-## FunctionFunction SignaturesSignatures
+## Function Signatures
 
-```
-type Alignment = [`Left, `Center, `Right];
-type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
-type Color = [
-    `Red, `Green, `Yellow, `Blue, `Magenta, `Cyan, `Gray, `DarkGray,
-    `LightRed, `LightGreen, `LightYellow, `LightBlue, `LightMagenta, `LightCyan,
-    `White, `Black,
-    `Indexed(i64),
-    `Rgb({r: i64, g: i64, b: i64})
-];
-
-/// Creates styled text from a string or array of lines
-val text: fn([string, Array<Line>]) -> Widget;
-
-/// Creates a line of text from a string or array of spans
-val line: fn(?#style: Style, ?#alignment: Alignment, [string, Array<Span>]) -> Line;
-
-/// Creates a styled text span
-val span: fn(?#style: Style, string) -> Span;
-
-/// Creates a text style
-val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -> Style;
-```
-
-## Text Hierarchy
 ```
 type Alignment = [`Left, `Center, `Right];
 type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
@@ -59,77 +34,30 @@ val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -> Style;
 - **Line**: A collection of spans forming one line
 - **Text**: A collection of lines forming multi-line content
 
-## BasicExamplesBasicUsage
+## Examples
+
+### Basic Usage
 
 ```graphix
-use tui;
-use tui::text;
-
-// Simple text
-text(&"Hello, World!")
-
-//// Multi-line
-text(&[
-    line("First line"),
-    line("Second line")
-    line("Second line")
-])
-
-// Styled
-let error = spanlet error = span(#style: style(#fg: `Red, #add_modifier: `BoldRed, #add_modifier: `Bold),  "Error:Error:");
-text(&[line([error, span(" Something went wrong")])])
+{{#include ../../examples/tui/text_basic.gx}}
 ```
 
 ### Status Messages
 
 ```graphix
-let make_status = |level, msg| select level {
-    `Error => line([
-        span(#style: style(#fg: `Red, #add_modifier: `Bold), "ERROR: "),
-        span(msg)
-    ]),
-    `Warning => line([
-        span(#style: style(#fg: `Yellow, #add_modifier: `Bold), "WARNING: "),
-        span(msg)
-    ]),
-    `Info => line([
-        span(#style: style(#fg: `Cyan), "INFO: "),
-        span(msg)
-    ])
-};
-
-text(&[
-    make_status(`Info, "Application started"),
-    make_status(`Warning, "Cache miss"),
-    make_status(`Error, "Connection failed")
-])
+{{#include ../../examples/tui/text_status.gx}}
 ```
 
-### DynamicDynamic ColorsColors
+### Dynamic Colors
 
 ```graphix
-let countcount = 00;
-let timer = time::timer(duration:1.s, true);
-countcount <- timer ~ (count(count + 1);
-
-let colorscolors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
-let color =[`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
-let color = colors[count % array::len(colors)count % array::len(colors)]$;
-
-line([
-    span(#style: style(#fg: `White)style(#fg: `White), "Count: Count: "),
-    span(#style:#style: style(#fg: color, #add_modifier: `Bold), "[count]style(#fg: color, #add_modifier: `Bold), "[count]")
-])
+{{#include ../../examples/tui/text_dynamic.gx}}
 ```
 
 ### Alignment
 
 ```graphix
-text(&[
-    line(#alignment: `Left, "Left aligned"),
-    line(#alignment: `Center, "Centered"),
-    line(#alignment: `Right, "Right aligned")
-])
+{{#include ../../examples/tui/text_alignment.gx}}
 ```
 
 ## Color Support

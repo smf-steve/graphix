@@ -27,47 +27,13 @@ val paragraph: fn(
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::paragraph;
-
-paragraph(&"This is a simple paragraph. It will automatically wrap to fit the available width.")
+{{#include ../../examples/tui/paragraph_basic.gx}}
 ```
 
 ### Scrollable Content
 
 ```graphix
-let long_text = "I've got a lovely bunch of coconuts... [very long text continues]";
-let scroll_y = 0;
-
-let handle_event = |e: Event| -> [`Stop, `Continue] select e {
-    `Key(k) => select k.kind {
-        `Press => select k.code {
-            k@`Up if scroll_y > 0 => {
-                scroll_y <- (k ~ scroll_y) - 1;
-                `Stop
-            },
-            k@`Down if scroll_y < 100 => {
-                scroll_y <- (k ~ scroll_y) + 1;
-                `Stop
-            },
-            _ => `Continue
-        },
-        _ => `Continue
-    },
-    _ => `Continue
-};
-
-input_handler(
-    #handle: &handle_event,
-    &block(
-        #border: &`All,
-        #title: &line("Scrollable Text"),
-        &paragraph(
-            #scroll: &{x: 0, y: scroll_y},
-            &long_text
-        )
-    )
-)
+{{#include ../../examples/tui/paragraph_scrollable.gx}}
 ```
 
 ### Live Log Viewer
@@ -75,32 +41,13 @@ input_handler(
 Display real-time updating content:
 
 ```graphix
-let log_entries = [];
-let new_entry = net::subscribe("/logs/application")?;
-
-log_entries <- array::window(
-    #n: 100,
-    new_entry ~ log_entries,
-    cast<string>(new_entry)?
-);
-
-let log_text = array::fold(log_entries, "", |acc, entry| "[acc]\n[entry]");
-
-paragraph(&log_text)
+{{#include ../../examples/tui/paragraph_log_viewer.gx}}
 ```
 
 ### Centered Message
 
 ```graphix
-paragraph(
-    #alignment: &`Center,
-    &text(&[
-        line(""),
-        line(#style: style(#fg: `Yellow, #add_modifier: `Bold), "Welcome"),
-        line(""),
-        line("Press any key to continue")
-    ])
-)
+{{#include ../../examples/tui/paragraph_centered.gx}}
 ```
 
 ## Word Wrapping

@@ -33,17 +33,7 @@ val block: fn(
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::block;
-use tui::paragraph;
-
-let content = paragraph(&"Hello, World!");
-
-block(
-    #border: &`All,
-    #title: &line("My Block"),
-    &content
-)
+{{#include ../../examples/tui/block_basic.gx}}
 ```
 
 ### Focus Indication
@@ -51,19 +41,7 @@ block(
 Use dynamic styling to show which block has focus:
 
 ```graphix
-let focused_block = 0;
-
-block(
-    #border: &`All,
-    #border_style: &style(
-        #fg: select focused_block {
-            0 => `Red,
-            _ => `Yellow
-        }
-    ),
-    #title: &line("Block 1"),
-    &content
-)
+{{#include ../../examples/tui/block_focus.gx}}
 ```
 
 ### Dynamic Titles
@@ -71,15 +49,7 @@ block(
 Titles can contain reactive values that update automatically:
 
 ```graphix
-let count = 0;
-let timer = time::timer(duration:1.s, true);
-count <- timer ~ (count + 1);
-
-block(
-    #border: &`All,
-    #title: &line("Counter: [count]"),
-    &content
-)
+{{#include ../../examples/tui/block_dynamic_title.gx}}
 ```
 
 ## See Also

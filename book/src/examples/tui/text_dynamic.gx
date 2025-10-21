@@ -1,0 +1,16 @@
+use tui;
+use tui::text;
+
+{
+    let count = 0;
+    let timer = time::timer(duration:1.s, true);
+    count <- timer ~ (count + 1);
+
+    let colors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
+    let color = colors[count % array::len(colors)]$;
+
+    line([
+        span(#style: style(#fg: `White), "Count: "),
+        span(#style: style(#fg: color, #add_modifier: [`Bold]), "[count]")
+    ])
+}

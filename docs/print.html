@@ -2695,7 +2695,12 @@ let bar1 = bar(
 bar_chart(&amp;[bar_group(#label: line("Q1"), [bar1])])
 </code></pre>
 <h3 id="grouped-bars-with-dynamic-data"><a class="header" href="#grouped-bars-with-dynamic-data">Grouped Bars with Dynamic Data</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.7s, true);
+<pre><code class="language-graphix">use tui;
+use tui::barchart;
+use tui::block;
+use rand;
+
+let clock = time::timer(duration:0.7s, true);
 
 let group0 = [
     bar(#style: &amp;style(#fg: `Red), #label: &amp;line("CPU"), &amp;rand(#start:0, #end:100, #clock)),
@@ -2720,7 +2725,10 @@ let chart = bar_chart(
 block(#border: &amp;`All, #title: &amp;line("Resource Usage"), &amp;chart)
 </code></pre>
 <h3 id="color-coded-values"><a class="header" href="#color-coded-values">Color-coded Values</a></h3>
-<pre><code class="language-graphix">let make_colored_bar = |label, value| {
+<pre><code class="language-graphix">use tui;
+use tui::barchart;
+
+let make_colored_bar = |label, value| {
     let color = select value {
         v if v &gt; 80 =&gt; `Red,
         v if v &gt; 50 =&gt; `Yellow,
@@ -2736,13 +2744,6 @@ let bars = [
 ];
 
 bar_chart(&amp;[bar_group(bars)])
-</code></pre>
-<h3 id="centered-chart"><a class="header" href="#centered-chart">Centered Chart</a></h3>
-<pre><code class="language-graphix">layout(
-    #direction: &amp;`Horizontal,
-    #flex: &amp;`Center,
-    &amp;[child(#constraint: `Max(40), bar_chart(&amp;groups))]
-)
 </code></pre>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>
@@ -3260,7 +3261,7 @@ chart(#x_axis: &amp;x_axis, #y_axis: &amp;y_axis, &amp;[scatter_ds])
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="text"><a class="header" href="#text">text</a></h1>
 <p>The <code>text</code> widget renders styled text in the terminal. It's a fundamental building block for displaying formatted content with colors, modifiers, and multiple lines. Text is built from <code>Line</code> objects, which are in turn composed of <code>Span</code> objects.</p>
-<h2 id="functionfunction-signaturessignatures"><a class="header" href="#functionfunction-signaturessignatures">FunctionFunction SignaturesSignatures</a></h2>
+<h2 id="function-signatures-5"><a class="header" href="#function-signatures-5">Function Signatures</a></h2>
 <pre><code>type Alignment = [`Left, `Center, `Right];
 type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
 type Color = [
@@ -3284,50 +3285,27 @@ val span: fn(?#style: Style, string) -&gt; Span;
 val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -&gt; Style;
 </code></pre>
 <h2 id="text-hierarchy"><a class="header" href="#text-hierarchy">Text Hierarchy</a></h2>
-<pre><code>type Alignment = [`Left, `Center, `Right];
-type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
-type Color = [
-    `Red, `Green, `Yellow, `Blue, `Magenta, `Cyan, `Gray, `DarkGray,
-    `LightRed, `LightGreen, `LightYellow, `LightBlue, `LightMagenta, `LightCyan,
-    `White, `Black,
-    `Indexed(i64),
-    `Rgb({r: i64, g: i64, b: i64})
-];
-
-/// Creates styled text from a string or array of lines
-val text: fn([string, Array&lt;Line&gt;]) -&gt; Widget;
-
-/// Creates a line of text from a string or array of spans
-val line: fn(?#style: Style, ?#alignment: Alignment, [string, Array&lt;Span&gt;]) -&gt; Line;
-
-/// Creates a styled text span
-val span: fn(?#style: Style, string) -&gt; Span;
-
-/// Creates a text style
-val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -&gt; Style;
-</code></pre>
-<h2 id="text-hierarchy-1"><a class="header" href="#text-hierarchy-1">Text Hierarchy</a></h2>
 <ul>
 <li><strong>Span</strong>: A single segment of text with a single style</li>
 <li><strong>Line</strong>: A collection of spans forming one line</li>
 <li><strong>Text</strong>: A collection of lines forming multi-line content</li>
 </ul>
-<h2 id="basicexamplesbasicusage"><a class="header" href="#basicexamplesbasicusage">BasicExamplesBasicUsage</a></h2>
+<h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
+<h3 id="basic-usage-6"><a class="header" href="#basic-usage-6">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::text;
 
 // Simple text
 text(&amp;"Hello, World!")
 
-//// Multi-line
+// Multi-line
 text(&amp;[
     line("First line"),
-    line("Second line")
     line("Second line")
 ])
 
 // Styled
-let error = spanlet error = span(#style: style(#fg: `Red, #add_modifier: `BoldRed, #add_modifier: `Bold),  "Error:Error:");
+let error = span(#style: style(#fg: `Red, #add_modifier: `Bold), "Error:");
 text(&amp;[line([error, span(" Something went wrong")])])
 </code></pre>
 <h3 id="status-messages"><a class="header" href="#status-messages">Status Messages</a></h3>
@@ -3352,18 +3330,17 @@ text(&amp;[
     make_status(`Error, "Connection failed")
 ])
 </code></pre>
-<h3 id="dynamicdynamic-colorscolors"><a class="header" href="#dynamicdynamic-colorscolors">DynamicDynamic ColorsColors</a></h3>
-<pre><code class="language-graphix">let countcount = 00;
+<h3 id="dynamic-colors"><a class="header" href="#dynamic-colors">Dynamic Colors</a></h3>
+<pre><code class="language-graphix">let count = 0;
 let timer = time::timer(duration:1.s, true);
-countcount &lt;- timer ~ (count(count + 1);
+count &lt;- timer ~ (count + 1);
 
-let colorscolors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
-let color =[`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
-let color = colors[count % array::len(colors)count % array::len(colors)]$;
+let colors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
+let color = colors[count % array::len(colors)]$;
 
 line([
-    span(#style: style(#fg: `White)style(#fg: `White), "Count: Count: "),
-    span(#style:#style: style(#fg: color, #add_modifier: `Bold), "[count]style(#fg: color, #add_modifier: `Bold), "[count]")
+    span(#style: style(#fg: `White), "Count: "),
+    span(#style: style(#fg: color, #add_modifier: `Bold), "[count]")
 ])
 </code></pre>
 <h3 id="alignment"><a class="header" href="#alignment">Alignment</a></h3>
@@ -3410,8 +3387,8 @@ val paragraph: fn(
 <li><strong>alignment</strong> - <code>Left</code>, <code>Center</code>, or <code>Right</code></li>
 <li><strong>wrap</strong> - Enable/disable word wrapping (default: true)</li>
 </ul>
-<h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
-<h3 id="basic-usage-6"><a class="header" href="#basic-usage-6">Basic Usage</a></h3>
+<h2 id="examples-7"><a class="header" href="#examples-7">Examples</a></h2>
+<h3 id="basic-usage-7"><a class="header" href="#basic-usage-7">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::paragraph;
 
@@ -3505,8 +3482,8 @@ val gauge: fn(
 <li><strong>use_unicode</strong> - Use Unicode block characters for smoother rendering</li>
 <li><strong>style</strong> - Style for the unfilled portion</li>
 </ul>
-<h2 id="examples-7"><a class="header" href="#examples-7">Examples</a></h2>
-<h3 id="basic-usage-7"><a class="header" href="#basic-usage-7">Basic Usage</a></h3>
+<h2 id="examples-8"><a class="header" href="#examples-8">Examples</a></h2>
+<h3 id="basic-usage-8"><a class="header" href="#basic-usage-8">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::gauge;
 
@@ -3608,8 +3585,8 @@ val line_gauge: fn(
 <li><strong>label</strong> - Line or span displayed within the gauge</li>
 <li><strong>style</strong> - Base style for the widget</li>
 </ul>
-<h2 id="examples-8"><a class="header" href="#examples-8">Examples</a></h2>
-<h3 id="basic-usage-8"><a class="header" href="#basic-usage-8">Basic Usage</a></h3>
+<h2 id="examples-9"><a class="header" href="#examples-9">Examples</a></h2>
+<h3 id="basic-usage-9"><a class="header" href="#basic-usage-9">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::line_gauge;
 
@@ -3703,7 +3680,7 @@ line_gauge(#line_set: &amp;`Double, #filled_style: &amp;style(#fg: `Cyan), &amp;
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="layout"><a class="header" href="#layout">layout</a></h1>
 <p>The <code>layout</code> widget arranges child widgets in horizontal or vertical layouts with flexible sizing constraints. It's the primary tool for organizing complex TUI interfaces and supports focus management for interactive applications.</p>
-<h2 id="function-signatures-5"><a class="header" href="#function-signatures-5">Function Signatures</a></h2>
+<h2 id="function-signatures-6"><a class="header" href="#function-signatures-6">Function Signatures</a></h2>
 <pre><code>type Direction = [`Horizontal, `Vertical];
 type Flex = [`Start, `Center, `End, `SpaceAround, `SpaceBetween];
 type Constraint = [
@@ -3741,7 +3718,7 @@ val child: fn(?#constraint: Constraint, Widget) -&gt; Child;
 <li><strong>Ratio(num, den)</strong> - Fractional allocation (num/den)</li>
 <li><strong>Fill(n)</strong> - Takes remaining space after other constraints</li>
 </ul>
-<h2 id="examples-9"><a class="header" href="#examples-9">Examples</a></h2>
+<h2 id="examples-10"><a class="header" href="#examples-10">Examples</a></h2>
 <h3 id="basic-layout"><a class="header" href="#basic-layout">Basic Layout</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::layout;
@@ -3843,8 +3820,8 @@ val list: fn(
 <li><strong>repeat_highlight_symbol</strong> - Whether to repeat symbol on wrapped lines</li>
 <li><strong>style</strong> - Base style for all list items</li>
 </ul>
-<h2 id="examples-10"><a class="header" href="#examples-10">Examples</a></h2>
-<h3 id="basic-usage-9"><a class="header" href="#basic-usage-9">Basic Usage</a></h3>
+<h2 id="examples-11"><a class="header" href="#examples-11">Examples</a></h2>
+<h3 id="basic-usage-10"><a class="header" href="#basic-usage-10">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::list;
 
@@ -3992,8 +3969,8 @@ val scrollbar: fn(
 <li><strong>content_length</strong> - Total length of the content (auto-detected if not specified)</li>
 <li><strong>size</strong> (output) - Rendered size of the scrollbar area</li>
 </ul>
-<h2 id="examples-11"><a class="header" href="#examples-11">Examples</a></h2>
-<h3 id="basic-usage-10"><a class="header" href="#basic-usage-10">Basic Usage</a></h3>
+<h2 id="examples-12"><a class="header" href="#examples-12">Examples</a></h2>
+<h3 id="basic-usage-11"><a class="header" href="#basic-usage-11">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::scrollbar;
 use tui::paragraph;
@@ -4127,7 +4104,7 @@ scrollbar(
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="sparkline"><a class="header" href="#sparkline">sparkline</a></h1>
 <p>The <code>sparkline</code> widget renders compact inline charts perfect for dashboards and status displays. It shows data trends in minimal space, with support for color-coded bars based on thresholds.</p>
-<h2 id="function-signatures-6"><a class="header" href="#function-signatures-6">Function Signatures</a></h2>
+<h2 id="function-signatures-7"><a class="header" href="#function-signatures-7">Function Signatures</a></h2>
 <pre><code>type Direction = [`LeftToRight, `RightToLeft];
 
 /// Creates a sparkline widget from data values
@@ -4152,8 +4129,8 @@ val sparkline_bar: fn(?#style: Style, f64) -&gt; SparklineBar;
 <ul>
 <li><strong>style</strong> - Style for this specific bar</li>
 </ul>
-<h2 id="examples-12"><a class="header" href="#examples-12">Examples</a></h2>
-<h3 id="basic-usage-11"><a class="header" href="#basic-usage-11">Basic Usage</a></h3>
+<h2 id="examples-13"><a class="header" href="#examples-13">Examples</a></h2>
+<h3 id="basic-usage-12"><a class="header" href="#basic-usage-12">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::sparkline;
 
@@ -4235,7 +4212,7 @@ sparkline(#max: &amp;100, &amp;data)
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="table"><a class="header" href="#table">table</a></h1>
 <p>The <code>table</code> widget displays structured data in rows and columns with support for selection, scrolling, and custom styling. It's ideal for data grids, process monitors, file listings, and any tabular data display.</p>
-<h2 id="function-signatures-7"><a class="header" href="#function-signatures-7">Function Signatures</a></h2>
+<h2 id="function-signatures-8"><a class="header" href="#function-signatures-8">Function Signatures</a></h2>
 <pre><code>type HighlightSpacing = [`Always, `WhenSelected, `Never];
 
 /// Creates a table widget from an array of row references
@@ -4268,8 +4245,8 @@ val cell: fn(?#style: Style, Line) -&gt; Cell;
 <li><strong>column_spacing</strong> - Number of spaces between columns</li>
 <li><strong>style</strong> - Base style for the table</li>
 </ul>
-<h2 id="examples-13"><a class="header" href="#examples-13">Examples</a></h2>
-<h3 id="basic-usage-12"><a class="header" href="#basic-usage-12">Basic Usage</a></h3>
+<h2 id="examples-14"><a class="header" href="#examples-14">Examples</a></h2>
+<h3 id="basic-usage-13"><a class="header" href="#basic-usage-13">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::table;
 
@@ -4417,8 +4394,8 @@ val tabs: fn(
 <li><strong>style</strong> - Base style for unselected tab titles</li>
 <li><strong>divider</strong> - String or span separating tab titles</li>
 </ul>
-<h2 id="examples-14"><a class="header" href="#examples-14">Examples</a></h2>
-<h3 id="basic-usage-13"><a class="header" href="#basic-usage-13">Basic Usage</a></h3>
+<h2 id="examples-15"><a class="header" href="#examples-15">Examples</a></h2>
+<h3 id="basic-usage-14"><a class="header" href="#basic-usage-14">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::tabs;
 use tui::paragraph;

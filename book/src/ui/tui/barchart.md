@@ -49,75 +49,19 @@ val bar: fn(
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::barchart;
-
-let bar1 = bar(
-    #style: &style(#fg: `Cyan),
-    #label: &line("Sales"),
-    &42
-);
-
-bar_chart(&[bar_group(#label: line("Q1"), [bar1])])
+{{#include ../../examples/tui/barchart_basic.gx}}
 ```
 
 ### Grouped Bars with Dynamic Data
 
 ```graphix
-let clock = time::timer(duration:0.7s, true);
-
-let group0 = [
-    bar(#style: &style(#fg: `Red), #label: &line("CPU"), &rand(#start:0, #end:100, #clock)),
-    bar(#style: &style(#fg: `Yellow), #label: &line("Memory"), &rand(#start:25, #end:200, #clock))
-];
-
-let group1 = [
-    bar(#style: &style(#fg: `Cyan), #label: &line("Network"), &rand(#start:0, #end:50, #clock)),
-    bar(#style: &style(#fg: `Magenta), #label: &line("Disk"), &rand(#start:1, #end:25, #clock))
-];
-
-let chart = bar_chart(
-    #bar_gap: &2,
-    #bar_width: &8,
-    #max: &200,
-    &[
-        bar_group(#label: line("Server 1"), group0),
-        bar_group(#label: line("Server 2"), group1)
-    ]
-);
-
-block(#border: &`All, #title: &line("Resource Usage"), &chart)
+{{#include ../../examples/tui/barchart_grouped.gx}}
 ```
 
 ### Color-coded Values
 
 ```graphix
-let make_colored_bar = |label, value| {
-    let color = select value {
-        v if v > 80 => `Red,
-        v if v > 50 => `Yellow,
-        _ => `Green
-    };
-    bar(#style: &style(#fg: color), #label: &line(label), &value)
-};
-
-let bars = [
-    make_colored_bar("Service A", 35),
-    make_colored_bar("Service B", 65),
-    make_colored_bar("Service C", 92)
-];
-
-bar_chart(&[bar_group(bars)])
-```
-
-### Centered Chart
-
-```graphix
-layout(
-    #direction: &`Horizontal,
-    #flex: &`Center,
-    &[child(#constraint: `Max(40), bar_chart(&groups))]
-)
+{{#include ../../examples/tui/barchart_colored.gx}}
 ```
 
 ## See Also

@@ -1,0 +1,26 @@
+use tui;
+use tui::tabs;
+use tui::text;
+
+{
+    let completed_content = text(&"Completed");
+    let progress_content = text(&"In Progress");
+    let failed_content = text(&"Failed");
+
+    let tab_list = [
+        (line([
+            span(#style: style(#fg: `Green), "✓ "),
+            span("Completed")
+        ]), completed_content),
+        (line([
+            span(#style: style(#fg: `Yellow), "⚠ "),
+            span("In Progress")
+        ]), progress_content),
+        (line([
+            span(#style: style(#fg: `Red), "✗ "),
+            span("Failed")
+        ]), failed_content)
+    ];
+
+    tabs(&tab_list)
+}

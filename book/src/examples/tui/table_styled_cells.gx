@@ -1,0 +1,19 @@
+use tui;
+use tui::table;
+use tui::text;
+
+{
+    let make_cpu_cell = |cpu| {
+        let s = select cpu {
+            c if c > 80 => style(#fg: `Red),
+            c if c > 50 => style(#fg: `Yellow),
+            _ => style(#fg: `Green)
+        };
+        cell(#style: s, line("[cpu]%"))
+    };
+
+    row([
+        cell(line("process-1")),
+        make_cpu_cell(85)  // Red
+    ])
+}

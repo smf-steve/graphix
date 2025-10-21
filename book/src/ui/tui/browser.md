@@ -29,43 +29,13 @@ val browser: fn(
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::browser;
-
-let selected_path: string = never();
-
-browser(
-    #selected_path: &selected_path,
-    "/"  // Start browsing from root
-)
+{{#include ../../examples/tui/browser_basic.gx}}
 ```
 
 ### Basic Navigation
 
 ```graphix
-let path = "/";
-let selected_path: string = never();
-let cursor: MoveCursor = never();
-
-let handle_event = |e: Event| -> [`Stop, `Continue] select e {
-    `Key(k) => select k.kind {
-        `Press => select k.code {
-            e@ `Up => { cursor <- e ~ `Up(1); `Stop },
-            e@ `Down => { cursor <- e ~ `Down(1); `Stop },
-            e@ `Left => { cursor <- e ~ `Left(1); `Stop },
-            e@ `Right => { cursor <- e ~ `Right(1); `Stop },
-            e@ `Enter => { path <- e ~ selected_row; `Stop },
-            _ => `Continue
-        },
-        _ => `Continue
-    },
-    _ => `Continue
-};
-
-input_handler(
-    #handle: &handle_event,
-    &browser(#cursor, #selected_path: &selected_path, path)
-)
+{{#include ../../examples/tui/browser_navigation.gx}}
 ```
 
 ## See Also

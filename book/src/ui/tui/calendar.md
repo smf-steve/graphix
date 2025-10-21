@@ -40,63 +40,19 @@ Creates a date with year, month (1-12), and day (1-31).
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::calendar;
-
-let current_date = date(2024, 5, 15);
-
-calendar(&current_date)
+{{#include ../../examples/tui/calendar_basic.gx}}
 ```
 
 ### Event Calendar
 
 ```graphix
-let today = date(2024, 5, 15);
-
-let events = [
-    calendar_event(style(#fg: `Red), date(2024, 5, 5)),
-    calendar_event(style(#fg: `Green), date(2024, 5, 15)),
-    calendar_event(style(#fg: `Yellow), date(2024, 5, 20)),
-    calendar_event(style(#fg: `Cyan), date(2024, 5, 28))
-];
-
-block(
-    #border: &`All,
-    #title: &line("May 2024"),
-    &calendar(
-        #show_month: &style(#fg: `Yellow, #add_modifier: `Bold),
-        #show_weekday: &style(#fg: `Cyan),
-        #show_surrounding: &style(#fg: `DarkGray),
-        #events: &events,
-        &today
-    )
-)
+{{#include ../../examples/tui/calendar_events.gx}}
 ```
 
 ### Color-coded Events by Type
 
 ```graphix
-type EventType = [`Meeting, `Deadline, `Holiday, `Birthday];
-type CalendarEntry = {date: Date, event_type: EventType};
-
-let entries = [
-    {date: date(2024, 5, 5), event_type: `Meeting},
-    {date: date(2024, 5, 10), event_type: `Deadline},
-    {date: date(2024, 5, 15), event_type: `Holiday},
-    {date: date(2024, 5, 25), event_type: `Birthday}
-];
-
-let events = array::map(entries, |e| {
-    let color = select e.event_type {
-        `Meeting => `Blue,
-        `Deadline => `Red,
-        `Holiday => `Green,
-        `Birthday => `Magenta
-    };
-    calendar_event(style(#fg: color), e.date)
-});
-
-calendar(#events: &events, &date(2024, 5, 1))
+{{#include ../../examples/tui/calendar_typed.gx}}
 ```
 
 ## See Also

@@ -1,0 +1,17 @@
+use tui;
+use tui::text;
+
+{
+    // Simple text
+    let simple = text(&"Hello, World!");
+
+    // Multi-line
+    let multiline = text(&[
+        line("First line"),
+        line("Second line")
+    ]);
+
+    // Styled
+    let error = span(#style: style(#fg: `Red, #add_modifier: [`Bold]), "Error:");
+    text(&[line([error, span(" Something went wrong")])])
+}

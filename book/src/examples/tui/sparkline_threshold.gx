@@ -1,0 +1,24 @@
+use tui;
+use tui::sparkline;
+use tui::block;
+use tui::text;
+
+{
+    let data: Array<f64> = {
+        let clock = time::timer(duration:0.3s, true);
+        let v = rand::rand(#clock, #start:0., #end:100.);
+        let d = [];
+        d <- array::window(#n:80, clock ~ d, v);
+        d
+    };
+
+    block(
+        #border: &`All,
+        #title: &line("Network Traffic Rate"),
+        &sparkline(
+            #style: &style(#fg: `Green),
+            #max: &100,
+            &data
+        )
+    )
+}

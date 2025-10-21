@@ -46,15 +46,17 @@ cargo test pattern                   # Run tests matching name
 
 Run the Graphix shell:
 ```bash
-cargo run --bin graphix              # Start REPL
-cargo run --bin graphix -- file.gx   # Execute file
-cargo run --bin graphix -- --help    # See all options
+cargo run --bin graphix                    # Start REPL
+cargo run --bin graphix file.gx         # Execute file
+cargo run --bin graphix --check file.gx # check that a file compiles and type checks
+cargo run --bin graphix --help          # See all options
 ```
 
 Build documentation:
+from the graphix/book directory
 ```bash
-mdbook build book                    # Build language docs to docs/
-mdbook serve book                    # Serve docs locally
+mdbook build -d ../docs              # Build language docs to docs/
+mdbook serve ../docs                    # Serve docs locally
 ```
 
 ## Architecture

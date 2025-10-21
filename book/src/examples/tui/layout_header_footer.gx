@@ -1,0 +1,18 @@
+use tui;
+use tui::layout;
+use tui::text;
+
+{
+    let header = text(&"Header");
+    let content = text(&"Main Content");
+    let footer = text(&"Footer");
+
+    layout(
+        #direction: &`Vertical,
+        &[
+            child(#constraint: `Length(3), header),
+            child(#constraint: `Fill(1), content),
+            child(#constraint: `Length(1), footer)
+        ]
+    )
+}

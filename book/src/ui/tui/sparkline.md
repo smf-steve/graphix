@@ -34,79 +34,25 @@ val sparkline_bar: fn(?#style: Style, f64) -> SparklineBar;
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::sparkline;
-
-let data = [10.0, 25.0, 40.0, 55.0, 70.0, 85.0, 100.0];
-
-sparkline(#max: &100, &data)
+{{#include ../../examples/tui/sparkline_basic.gx}}
 ```
 
 ### Threshold-based Coloring
 
 ```graphix
-let data: Array<[SparklineBar, f64]> = {
-    let clock = time::timer(duration:0.3s, true);
-    let v = select rand::rand(#clock, #start:0., #end:100.) {
-        x if (x > 50.) && (x < 75.) => sparkline_bar(#style: style(#fg:`Yellow), x),
-        x if x > 75. => sparkline_bar(#style: style(#fg:`Red), x),
-        x => x  // Use default style
-    };
-    let d = [];
-    d <- array::window(#n:80, clock ~ d, v);
-    d
-};
-
-block(
-    #border: &`All,
-    #title: &line("Network Traffic Rate"),
-    &sparkline(
-        #style: &style(#fg: `Green),
-        #max: &100,
-        &data
-    )
-)
+{{#include ../../examples/tui/sparkline_threshold.gx}}
 ```
 
 ### Multi-metric Dashboard
 
 ```graphix
-let cpu_data = [...];
-let mem_data = [...];
-let net_data = [...];
-
-layout(
-    #direction: &`Vertical,
-    &[
-        child(#constraint: `Length(3), block(
-            #title: &line("CPU"),
-            &sparkline(#style: &style(#fg: `Red), #max: &100, &cpu_data)
-        )),
-        child(#constraint: `Length(3), block(
-            #title: &line("Memory"),
-            &sparkline(#style: &style(#fg: `Yellow), #max: &100, &mem_data)
-        )),
-        child(#constraint: `Length(3), block(
-            #title: &line("Network"),
-            &sparkline(#style: &style(#fg: `Cyan), &net_data)
-        ))
-    ]
-)
+{{#include ../../examples/tui/sparkline_dashboard.gx}}
 ```
 
 ### Rolling Window
 
 ```graphix
-let data: Array<f64> = [];
-let new_value = net::subscribe("/metrics/cpu")?;
-
-data <- array::window(
-    #n: 60,
-    new_value ~ data,
-    cast<f64>(new_value)?
-);
-
-sparkline(#max: &100, &data)
+{{#include ../../examples/tui/sparkline_rolling.gx}}
 ```
 
 ## Use Cases

@@ -1,0 +1,6 @@
+use tui;
+use tui::calendar;
+
+let current_date = date(2024, 5, 15);
+
+calendar(&current_date)

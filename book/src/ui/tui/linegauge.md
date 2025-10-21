@@ -31,80 +31,25 @@ val line_gauge: fn(
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::line_gauge;
-
-let progress = 0.75;  // 75%
-
-line_gauge(
-    #filled_style: &style(#fg: `Green),
-    &progress
-)
+{{#include ../../examples/tui/linegauge_basic.gx}}
 ```
 
 ### Color-coded Status
 
 ```graphix
-let clock = time::timer(duration:0.5s, true);
-let power = 0.0;
-power <- min(1.0, (clock ~ power) + 0.01);
-
-let color = select power {
-    x if x < 0.10 => `Red,
-    x if x < 0.25 => `Yellow,
-    x => `Green
-};
-
-let percentage = cast<i64>(power * 100.0)?;
-
-block(
-    #border: &`All,
-    #title: &line("Power"),
-    &line_gauge(
-        #filled_style: &style(#fg: color),
-        #line_set: &`Thick,
-        #label: &line("[percentage]%"),
-        &power
-    )
-)
+{{#include ../../examples/tui/linegauge_colored.gx}}
 ```
 
 ### Compact Multi-metric Display
 
 ```graphix
-layout(
-    #direction: &`Vertical,
-    &[
-        child(#constraint: `Length(1), line_gauge(
-            #filled_style: &style(#fg: `Red),
-            #label: &line("CPU 45%"),
-            &0.45
-        )),
-        child(#constraint: `Length(1), line_gauge(
-            #filled_style: &style(#fg: `Yellow),
-            #label: &line("MEM 67%"),
-            &0.67
-        )),
-        child(#constraint: `Length(1), line_gauge(
-            #filled_style: &style(#fg: `Green),
-            #label: &line("DSK 23%"),
-            &0.23
-        ))
-    ]
-)
+{{#include ../../examples/tui/linegauge_multi.gx}}
 ```
 
 ### Line Set Styles
 
 ```graphix
-// Thin lines - subtle
-line_gauge(#line_set: &`Thin, #filled_style: &style(#fg: `Cyan), &0.75)
-
-// Thick lines - bold (default)
-line_gauge(#line_set: &`Thick, #filled_style: &style(#fg: `Cyan), &0.75)
-
-// Double lines - distinctive
-line_gauge(#line_set: &`Double, #filled_style: &style(#fg: `Cyan), &0.75)
+{{#include ../../examples/tui/linegauge_styles.gx}}
 ```
 
 ## Use Cases

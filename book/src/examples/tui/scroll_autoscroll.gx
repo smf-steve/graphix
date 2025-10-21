@@ -1,0 +1,23 @@
+use tui;
+use tui::scrollbar;
+use tui::paragraph;
+
+{
+    let lines = [];
+    let new_line = net::subscribe("/logs/app")?;
+
+    lines <- array::window(#n: 100, new_line ~ lines, cast<string>(new_line)?);
+
+    let line_count = array::len(lines);
+    let visible_lines = 20;
+    let scroll_pos = max(0, line_count - visible_lines);
+
+    scrollbar(
+        #position: &scroll_pos,
+        #content_length: &line_count,
+        &paragraph(
+            #scroll: &{x: 0, y: scroll_pos},
+            &array::fold(lines, "", |acc, l| "[acc]\n[l]")
+        )
+    )
+}

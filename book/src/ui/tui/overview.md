@@ -31,18 +31,8 @@ The TUI library provides all the essential building blocks:
 
 Interactive components use Graphix's event system for keyboard and mouse input:
 
-```graphix/book/src/ui/overview.md#L45-55
-let handle_event = |e: Event| -> [`Stop, `Continue] select e {
-    `Key(k) => select k.kind {
-        `Press => select k.code {
-            `Up => { position <- position - 1; `Stop },
-            `Down => { position <- position + 1; `Stop },
-            _ => `Continue
-        },
-        _ => `Continue
-    },
-    _ => `Continue
-};
+```graphix
+{{#include ../../examples/tui/overview_input.gx}}
 ```
 
 Events flow through the component tree, allowing parent components to handle unprocessed events from children.
@@ -51,24 +41,8 @@ Events flow through the component tree, allowing parent components to handle unp
 
 Here's a simple example that demonstrates the core concepts:
 
-```graphix/book/src/ui/overview.md#L65-85
-use tui;
-use tui::block;
-use tui::text;
-use tui::layout;
-
-let counter = 0;
-let clock = time::timer(duration:1.s, true);
-counter <- clock ~ (counter + 1);
-
-let content = text(&"Counter: [counter]");
-
-block(
-  #border: &`All,
-  #title: &line("My First TUI"),
-  #style: &style(#fg: `Green),
-  &content
-)
+```graphix
+{{#include ../../examples/tui/overview_first.gx}}
 ```
 
 This creates a bordered block with a counter that increments every second. The key insight is that when `counter` changes, the text automatically updates because of Graphix's reactive nature.
@@ -82,12 +56,8 @@ Graphix TUIs support rich styling with:
 - **Background Colors**: Set background colors for any component
 - **Conditional Styling**: Use `select` expressions to change styles based on state
 
-```graphix/book/src/ui/overview.md#L91-98
-let style = style(
-  #fg: select is_selected { true => `Yellow, false => `White },
-  #bg: `DarkGray,
-  #add_modifier: `Bold
-);
+```graphix
+{{#include ../../examples/tui/overview_styling.gx}}
 ```
 
 ## Layout System
@@ -99,15 +69,8 @@ The layout system provides flexible component arrangement:
 - **Alignment**: `Left`, `Center`, `Right` for horizontal; `Top`, `Center`, `Bottom` for vertical
 - **Focus Management**: Built-in focus handling for interactive components
 
-```graphix/book/src/ui/overview.md#L106-115
-layout(
-  #direction: &`Horizontal,
-  #focused: &selected_pane,
-  &[
-    child(#constraint: `Percentage(30), sidebar),
-    child(#constraint: `Percentage(70), main_content)
-  ]
-)
+```graphix
+{{#include ../../examples/tui/overview_layout.gx}}
 ```
 
 ## State Management
@@ -121,30 +84,14 @@ In Graphix, UI state is just regular program state. Use variables to track:
 
 State changes automatically trigger UI updates:
 
-```graphix/book/src/ui/overview.md#L122-130
-let selected_item = 0;
-let items = ["Item 1", "Item 2", "Item 3"];
-
-// When user presses down arrow assume the event is handled as
-// shown above and arrow_pressed is set using connect
-selected_item <- arrow_pressed ~ ((selected_item + 1) % array::len(items));
-
-// UI automatically reflects the change
-list(#selected: &selected_item, &items)
+```graphix
+{{#include ../../examples/tui/overview_state.gx}}
 ```
 
 ## Real-time Data Integration
 
 Graphix TUIs excel at displaying real-time data. Connect to data sources via netidx and the UI updates automatically:
 
-```graphix/book/src/ui/overview.md#L135-145
-// Subscribe to live data
-let temperature = cast<f64>(net::subscribe("/sensors/temperature")?)?;
-
-// Display automatically updates when data changes
-gauge(
-  #title: &line("Temperature"),
-  #ratio: &(temperature / 100.0),
-  #style: &style(#fg: `Red)
-)
+```graphix
+{{#include ../../examples/tui/overview_realtime.gx}}
 ```

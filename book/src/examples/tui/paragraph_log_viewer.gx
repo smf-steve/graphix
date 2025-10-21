@@ -1,0 +1,17 @@
+use tui;
+use tui::paragraph;
+
+{
+    let log_entries = [];
+    let new_entry = net::subscribe("/logs/application")?;
+
+    log_entries <- array::window(
+        #n: 100,
+        new_entry ~ log_entries,
+        cast<string>(new_entry)?
+    );
+
+    let log_text = array::fold(log_entries, "", |acc, entry| "[acc]\n[entry]");
+
+    paragraph(&log_text)
+}

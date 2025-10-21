@@ -177,7 +177,7 @@
                     <main>
                         <h1 id="text"><a class="header" href="#text">text</a></h1>
 <p>The <code>text</code> widget renders styled text in the terminal. It's a fundamental building block for displaying formatted content with colors, modifiers, and multiple lines. Text is built from <code>Line</code> objects, which are in turn composed of <code>Span</code> objects.</p>
-<h2 id="functionfunction-signaturessignatures"><a class="header" href="#functionfunction-signaturessignatures">FunctionFunction SignaturesSignatures</a></h2>
+<h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
 <pre><code>type Alignment = [`Left, `Center, `Right];
 type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
 type Color = [
@@ -201,50 +201,27 @@ val span: fn(?#style: Style, string) -&gt; Span;
 val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -&gt; Style;
 </code></pre>
 <h2 id="text-hierarchy"><a class="header" href="#text-hierarchy">Text Hierarchy</a></h2>
-<pre><code>type Alignment = [`Left, `Center, `Right];
-type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
-type Color = [
-    `Red, `Green, `Yellow, `Blue, `Magenta, `Cyan, `Gray, `DarkGray,
-    `LightRed, `LightGreen, `LightYellow, `LightBlue, `LightMagenta, `LightCyan,
-    `White, `Black,
-    `Indexed(i64),
-    `Rgb({r: i64, g: i64, b: i64})
-];
-
-/// Creates styled text from a string or array of lines
-val text: fn([string, Array&lt;Line&gt;]) -&gt; Widget;
-
-/// Creates a line of text from a string or array of spans
-val line: fn(?#style: Style, ?#alignment: Alignment, [string, Array&lt;Span&gt;]) -&gt; Line;
-
-/// Creates a styled text span
-val span: fn(?#style: Style, string) -&gt; Span;
-
-/// Creates a text style
-val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -&gt; Style;
-</code></pre>
-<h2 id="text-hierarchy-1"><a class="header" href="#text-hierarchy-1">Text Hierarchy</a></h2>
 <ul>
 <li><strong>Span</strong>: A single segment of text with a single style</li>
 <li><strong>Line</strong>: A collection of spans forming one line</li>
 <li><strong>Text</strong>: A collection of lines forming multi-line content</li>
 </ul>
-<h2 id="basicexamplesbasicusage"><a class="header" href="#basicexamplesbasicusage">BasicExamplesBasicUsage</a></h2>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::text;
 
 // Simple text
 text(&amp;"Hello, World!")
 
-//// Multi-line
+// Multi-line
 text(&amp;[
     line("First line"),
-    line("Second line")
     line("Second line")
 ])
 
 // Styled
-let error = spanlet error = span(#style: style(#fg: `Red, #add_modifier: `BoldRed, #add_modifier: `Bold),  "Error:Error:");
+let error = span(#style: style(#fg: `Red, #add_modifier: `Bold), "Error:");
 text(&amp;[line([error, span(" Something went wrong")])])
 </code></pre>
 <h3 id="status-messages"><a class="header" href="#status-messages">Status Messages</a></h3>
@@ -269,18 +246,17 @@ text(&amp;[
     make_status(`Error, "Connection failed")
 ])
 </code></pre>
-<h3 id="dynamicdynamic-colorscolors"><a class="header" href="#dynamicdynamic-colorscolors">DynamicDynamic ColorsColors</a></h3>
-<pre><code class="language-graphix">let countcount = 00;
+<h3 id="dynamic-colors"><a class="header" href="#dynamic-colors">Dynamic Colors</a></h3>
+<pre><code class="language-graphix">let count = 0;
 let timer = time::timer(duration:1.s, true);
-countcount &lt;- timer ~ (count(count + 1);
+count &lt;- timer ~ (count + 1);
 
-let colorscolors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
-let color =[`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
-let color = colors[count % array::len(colors)count % array::len(colors)]$;
+let colors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
+let color = colors[count % array::len(colors)]$;
 
 line([
-    span(#style: style(#fg: `White)style(#fg: `White), "Count: Count: "),
-    span(#style:#style: style(#fg: color, #add_modifier: `Bold), "[count]style(#fg: color, #add_modifier: `Bold), "[count]")
+    span(#style: style(#fg: `White), "Count: "),
+    span(#style: style(#fg: color, #add_modifier: `Bold), "[count]")
 ])
 </code></pre>
 <h3 id="alignment"><a class="header" href="#alignment">Alignment</a></h3>

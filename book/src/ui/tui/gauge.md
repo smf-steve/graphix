@@ -27,61 +27,19 @@ val gauge: fn(
 ### Basic Usage
 
 ```graphix
-use tui;
-use tui::gauge;
-
-let progress = 0.75;  // 75%
-
-gauge(
-    #gauge_style: &style(#fg: `Green),
-    &progress
-)
+{{#include ../../examples/tui/gauge_basic.gx}}
 ```
 
 ### Progress with Color Thresholds
 
 ```graphix
-let clock = time::timer(duration:0.5s, true);
-let power = 0.0;
-power <- min(1.0, (clock ~ power) + 0.01);
-
-let color = select power {
-    x if x < 0.10 => `Red,
-    x if x < 0.25 => `Yellow,
-    x => `Green
-};
-
-let percentage = cast<i64>(power * 100.0)?;
-
-block(
-    #border: &`All,
-    #title: &line("Power Level"),
-    &gauge(
-        #gauge_style: &style(#fg: color),
-        #label: &line("[percentage]%"),
-        &power
-    )
-)
+{{#include ../../examples/tui/gauge_threshold.gx}}
 ```
 
 ### Resource Usage
 
 ```graphix
-let used_memory = 6.5;  // GB
-let total_memory = 16.0;  // GB
-let usage_ratio = used_memory / total_memory;
-
-let color = select usage_ratio {
-    x if x > 0.9 => `Red,
-    x if x > 0.7 => `Yellow,
-    _ => `Green
-};
-
-gauge(
-    #gauge_style: &style(#fg: color),
-    #label: &line("[used_memory] GB / [total_memory] GB"),
-    &usage_ratio
-)
+{{#include ../../examples/tui/gauge_resource.gx}}
 ```
 
 ### Multi-gauge Dashboard
