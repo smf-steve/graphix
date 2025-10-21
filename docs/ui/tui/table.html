@@ -240,30 +240,46 @@ table(
 )
 </code></pre>
 <h3 id="interactive-table"><a class="header" href="#interactive-table">Interactive Table</a></h3>
-<pre><code class="language-graphix">type User = {name: string, age: i64, city: string};
+<pre><code class="language-graphix">use tui;
+use tui::table;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let users: Array&lt;User&gt; = [
-    {name: "Alice", age: 28, city: "New York"},
-    {name: "Bob", age: 32, city: "San Francisco"},
-    {name: "Charlie", age: 25, city: "Chicago"}
-];
+{
+    type User = {name: string, age: i64, city: string};
 
-let header = row(
-    #style: style(#fg: `Yellow, #add_modifier: `Bold),
-    [cell(line("Name")), cell(line("Age")), cell(line("City"))]
-);
+    let users: Array&lt;User&gt; = [
+        {name: "Alice", age: 28, city: "New York"},
+        {name: "Bob", age: 32, city: "San Francisco"},
+        {name: "Charlie", age: 25, city: "Chicago"}
+    ];
 
-let rows: Array&lt;&amp;Row&gt; = array::map(users, |u: User| -&gt; &amp;Row {
-    &amp;row([
-        cell(line(u.name)),
-        cell(line("[u.age]")),
-        cell(line(u.city))
-    ])
-});
+    let header = row(
+        #style: style(#fg: `Yellow, #add_modifier: [`Bold]),
+        [cell(line("Name")), cell(line("Age")), cell(line("City"))]
+    );
 
-let selected = 0;
+    let row1 = row([
+        cell(line("Alice")),
+        cell(line("28")),
+        cell(line("New York"))
+    ]);
+    let row2 = row([
+        cell(line("Bob")),
+        cell(line("32")),
+        cell(line("San Francisco"))
+    ]);
+    let row3 = row([
+        cell(line("Charlie")),
+        cell(line("25")),
+        cell(line("Chicago"))
+    ]);
+    let rows = [&amp;row1, &amp;row2, &amp;row3];
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    let selected = 0;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if selected &gt; 0 =&gt; {
@@ -278,61 +294,83 @@ let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
         },
         _ =&gt; `Continue
     },
-    _ =&gt; `Continue
-};
+        _ =&gt; `Continue
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("User Directory"),
-        &amp;table(
-            #header: &amp;header,
-            #row_highlight_style: &amp;style(#bg: `Yellow, #fg: `Black),
-            #selected: &amp;selected,
-            #column_spacing: &amp;2,
-            #widths: &amp;[`Percentage(30), `Percentage(20), `Percentage(50)],
-            &amp;rows
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("User Directory"),
+            &amp;table(
+                #header: &amp;header,
+                #row_highlight_style: &amp;style(#bg: `Yellow, #fg: `Black),
+                #selected: &amp;selected,
+                #column_spacing: &amp;2,
+                #widths: &amp;[`Percentage(30), `Percentage(20), `Percentage(50)],
+                &amp;rows
+            )
         )
     )
-)
+}
 </code></pre>
 <h3 id="conditional-cell-styling"><a class="header" href="#conditional-cell-styling">Conditional Cell Styling</a></h3>
-<pre><code class="language-graphix">let make_cpu_cell = |cpu: i64| -&gt; Cell {
-    let style = select cpu {
-        c if c &gt; 80 =&gt; style(#fg: `Red),
-        c if c &gt; 50 =&gt; style(#fg: `Yellow),
-        _ =&gt; style(#fg: `Green)
-    };
-    cell(#style, line("[cpu]%"))
-};
+<pre><code class="language-graphix">use tui;
+use tui::table;
+use tui::text;
 
-let row = row([
-    cell(line("process-1")),
-    make_cpu_cell(85)  // Red
-]);
+{
+    let make_cpu_cell = |cpu| {
+        let s = select cpu {
+            c if c &gt; 80 =&gt; style(#fg: `Red),
+            c if c &gt; 50 =&gt; style(#fg: `Yellow),
+            _ =&gt; style(#fg: `Green)
+        };
+        cell(#style: s, line("[cpu]%"))
+    };
+
+    row([
+        cell(line("process-1")),
+        make_cpu_cell(85)  // Red
+    ])
+}
 </code></pre>
 <h3 id="real-time-updates"><a class="header" href="#real-time-updates">Real-time Updates</a></h3>
-<pre><code class="language-graphix">type Process = {pid: i64, name: string, cpu: i64};
+<pre><code class="language-graphix">use tui;
+use tui::table;
+use tui::text;
 
-let processes: Array&lt;Process&gt; = [...];
-let clock = time::timer(duration:1.s, true);
+{
+    type Process = {pid: i64, name: string, cpu: i64};
 
-let rows: Array&lt;&amp;Row&gt; = array::map(processes, |p: Process| -&gt; &amp;Row {
-    let cpu_val = p.cpu;
+    let processes: Array&lt;Process&gt; = [
+        {pid: 1, name: "init", cpu: 5},
+        {pid: 2, name: "kthreadd", cpu: 0},
+        {pid: 3, name: "rcu_gp", cpu: 0}
+    ];
+    let clock = time::timer(duration:1.s, true);
+
+    let cpu_val = 5;
     cpu_val &lt;- {
         let v = clock ~ cpu_val;
         v + rand::rand(#clock, #start: -5, #end: 5)
     };
-    
-    &amp;row([
-        cell(line("[p.pid]")),
-        cell(line(p.name)),
-        cell(line("[cpu_val]%"))
-    ])
-});
 
-table(#header: &amp;header, &amp;rows)
+    let row1 = row([
+        cell(line("1")),
+        cell(line("init")),
+        cell(line("[cpu_val]%"))
+    ]);
+    let row2 = row([
+        cell(line("2")),
+        cell(line("kthreadd")),
+        cell(line("0%"))
+    ]);
+    let rows = [&amp;row1, &amp;row2];
+
+    let header = row([cell(line("PID")), cell(line("Name")), cell(line("CPU"))]);
+    table(#header: &amp;header, &amp;rows)
+}
 </code></pre>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>

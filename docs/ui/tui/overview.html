@@ -203,22 +203,20 @@
 </ul>
 <h3 id="input-handling"><a class="header" href="#input-handling">Input Handling</a></h3>
 <p>Interactive components use Graphix's event system for keyboard and mouse input:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L45-55">let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-    `Key(k) =&gt; select k.kind {
-        `Press =&gt; select k.code {
-            `Up =&gt; { position &lt;- position - 1; `Stop },
-            `Down =&gt; { position &lt;- position + 1; `Stop },
-            _ =&gt; `Continue
-        },
-        _ =&gt; `Continue
-    },
-    _ =&gt; `Continue
-};
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+{
+    let position = 0;
+
+    // Example showing input handling structure - returns dummy text widget
+    text(&amp;"Input handler example")
+}
 </code></pre>
 <p>Events flow through the component tree, allowing parent components to handle unprocessed events from children.</p>
 <h2 id="building-your-first-tui"><a class="header" href="#building-your-first-tui">Building Your First TUI</a></h2>
 <p>Here's a simple example that demonstrates the core concepts:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L65-85">use tui;
+<pre><code class="language-graphix">use tui;
 use tui::block;
 use tui::text;
 use tui::layout;
@@ -245,11 +243,17 @@ block(
 <li><strong>Background Colors</strong>: Set background colors for any component</li>
 <li><strong>Conditional Styling</strong>: Use <code>select</code> expressions to change styles based on state</li>
 </ul>
-<pre><code class="language-graphix/book/src/ui/overview.md#L91-98">let style = style(
-  #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
-  #bg: `DarkGray,
-  #add_modifier: `Bold
-);
+<pre><code class="language-graphix">use tui;
+
+{
+    let is_selected = true;
+
+    style(
+      #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
+      #bg: `DarkGray,
+      #add_modifier: [`Bold]
+    )
+}
 </code></pre>
 <h2 id="layout-system"><a class="header" href="#layout-system">Layout System</a></h2>
 <p>The layout system provides flexible component arrangement:</p>
@@ -259,14 +263,24 @@ block(
 <li><strong>Alignment</strong>: <code>Left</code>, <code>Center</code>, <code>Right</code> for horizontal; <code>Top</code>, <code>Center</code>, <code>Bottom</code> for vertical</li>
 <li><strong>Focus Management</strong>: Built-in focus handling for interactive components</li>
 </ul>
-<pre><code class="language-graphix/book/src/ui/overview.md#L106-115">layout(
-  #direction: &amp;`Horizontal,
-  #focused: &amp;selected_pane,
-  &amp;[
-    child(#constraint: `Percentage(30), sidebar),
-    child(#constraint: `Percentage(70), main_content)
-  ]
-)
+<pre><code class="language-graphix">use tui;
+use tui::layout;
+use tui::text;
+
+{
+    let selected_pane = 0;
+    let sidebar = text(&amp;"Sidebar");
+    let main_content = text(&amp;"Main");
+
+    layout(
+      #direction: &amp;`Horizontal,
+      #focused: &amp;selected_pane,
+      &amp;[
+        child(#constraint: `Percentage(30), sidebar),
+        child(#constraint: `Percentage(70), main_content)
+      ]
+    )
+}
 </code></pre>
 <h2 id="state-management"><a class="header" href="#state-management">State Management</a></h2>
 <p>In Graphix, UI state is just regular program state. Use variables to track:</p>
@@ -277,27 +291,40 @@ block(
 <li>Application modes (normal, edit, command)</li>
 </ul>
 <p>State changes automatically trigger UI updates:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L122-130">let selected_item = 0;
-let items = ["Item 1", "Item 2", "Item 3"];
+<pre><code class="language-graphix">use tui;
+use tui::list;
+use tui::text;
 
-// When user presses down arrow assume the event is handled as
-// shown above and arrow_pressed is set using connect
-selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
+{
+    let selected_item = 0;
+    let items = [line("Item 1"), line("Item 2"), line("Item 3")];
+    let arrow_pressed = never();
 
-// UI automatically reflects the change
-list(#selected: &amp;selected_item, &amp;items)
+    // When user presses down arrow assume the event is handled as
+    // shown above and arrow_pressed is set using connect
+    selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
+
+    // UI automatically reflects the change
+    list(#selected: &amp;selected_item, &amp;items)
+}
 </code></pre>
 <h2 id="real-time-data-integration"><a class="header" href="#real-time-data-integration">Real-time Data Integration</a></h2>
 <p>Graphix TUIs excel at displaying real-time data. Connect to data sources via netidx and the UI updates automatically:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L135-145">// Subscribe to live data
-let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
+<pre><code class="language-graphix">use tui;
+use tui::gauge;
+use tui::text;
 
-// Display automatically updates when data changes
-gauge(
-  #title: &amp;line("Temperature"),
-  #ratio: &amp;(temperature / 100.0),
-  #style: &amp;style(#fg: `Red)
-)
+{
+    // Subscribe to live data
+    let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
+
+    // Display automatically updates when data changes
+    gauge(
+      #gauge_style: &amp;style(#fg: `Red),
+      #label: &amp;span("Temperature"),
+      &amp;(temperature / 100.0)
+    )
+}
 </code></pre>
 
                     </main>

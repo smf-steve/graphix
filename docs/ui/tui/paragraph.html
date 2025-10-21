@@ -185,7 +185,7 @@ val paragraph: fn(
     ?#scroll: &amp;ScrollPosition,
     ?#alignment: &amp;Alignment,
     ?#wrap: &amp;bool,
-    [string, Text]
+    &amp;[string, Text]
 ) -&gt; Widget;
 </code></pre>
 <h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
@@ -201,11 +201,19 @@ use tui::paragraph;
 
 paragraph(&amp;"This is a simple paragraph. It will automatically wrap to fit the available width.")
 </code></pre>
+<p><img src="./media/paragraph_basic.png" alt="Basic Paragraph" /></p>
 <h3 id="scrollable-content"><a class="header" href="#scrollable-content">Scrollable Content</a></h3>
-<pre><code class="language-graphix">let long_text = "I've got a lovely bunch of coconuts... [very long text continues]";
-let scroll_y = 0;
+<pre><code class="language-graphix">use tui;
+use tui::paragraph;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+{
+    let long_text = "I have got a lovely bunch of coconuts. Very long text continues here. More text. Even more text. This is a very long paragraph that will need scrolling to see all of it.";
+    let scroll_y = 0;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if scroll_y &gt; 0 =&gt; {
@@ -220,47 +228,57 @@ let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
         },
         _ =&gt; `Continue
     },
-    _ =&gt; `Continue
-};
+        _ =&gt; `Continue
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("Scrollable Text"),
-        &amp;paragraph(
-            #scroll: &amp;{x: 0, y: scroll_y},
-            &amp;long_text
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("Scrollable Text"),
+            &amp;paragraph(
+                #scroll: &amp;{x: 0, y: scroll_y},
+                &amp;long_text
+            )
         )
     )
-)
+}
 </code></pre>
+<p><img src="./media/paragraph_scrollable.gif" alt="Scrollable Paragraph" /></p>
 <h3 id="live-log-viewer"><a class="header" href="#live-log-viewer">Live Log Viewer</a></h3>
 <p>Display real-time updating content:</p>
-<pre><code class="language-graphix">let log_entries = [];
-let new_entry = net::subscribe("/logs/application")?;
+<pre><code class="language-graphix">use tui;
+use tui::paragraph;
+use tui::text;
+
+let log_entries = [];
+let new_entry = net::subscribe("/local/logs/application")?;
 
 log_entries &lt;- array::window(
     #n: 100,
     new_entry ~ log_entries,
-    cast&lt;string&gt;(new_entry)?
+    line(cast&lt;string&gt;(new_entry)?)
 );
 
-let log_text = array::fold(log_entries, "", |acc, entry| "[acc]\n[entry]");
-
-paragraph(&amp;log_text)
+paragraph(&amp;log_entries)
 </code></pre>
+<p><img src="./media/paragraph_log_viewer.gif" alt="Log Viewer" /></p>
 <h3 id="centered-message"><a class="header" href="#centered-message">Centered Message</a></h3>
-<pre><code class="language-graphix">paragraph(
+<pre><code class="language-graphix">use tui;
+use tui::paragraph;
+use tui::text;
+
+paragraph(
     #alignment: &amp;`Center,
-    &amp;text(&amp;[
+    &amp;[
         line(""),
-        line(#style: style(#fg: `Yellow, #add_modifier: `Bold), "Welcome"),
+        line(#style: style(#fg: `Yellow, #add_modifier: [`Bold]), "Welcome"),
         line(""),
         line("Press any key to continue")
-    ])
+    ]
 )
 </code></pre>
+<p><img src="./media/paragraph_centered.png" alt="Paragraph Centered" /></p>
 <h2 id="word-wrapping"><a class="header" href="#word-wrapping">Word Wrapping</a></h2>
 <p>The paragraph widget automatically wraps long lines to fit the available width. Word boundaries are respected, so words won't be split in the middle unless they're longer than the available width.</p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>

@@ -1,0 +1,25 @@
+use tui;
+use tui::layout;
+use tui::text;
+
+{
+    let widget1 = text(&"Widget 1");
+    let widget2 = text(&"Widget 2");
+    let bottom_widget = text(&"Bottom");
+
+    let top_row = layout(
+        #direction: &`Horizontal,
+        &[
+            child(#constraint: `Percentage(50), widget1),
+            child(#constraint: `Percentage(50), widget2)
+        ]
+    );
+
+    layout(
+        #direction: &`Vertical,
+        &[
+            child(#constraint: `Percentage(50), top_row),
+            child(#constraint: `Percentage(50), bottom_widget)
+        ]
+    )
+}

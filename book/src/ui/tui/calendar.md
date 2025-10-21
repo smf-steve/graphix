@@ -43,17 +43,24 @@ Creates a date with year, month (1-12), and day (1-31).
 {{#include ../../examples/tui/calendar_basic.gx}}
 ```
 
+![Basic Calendar](media/calendar_basic.png)
+
 ### Event Calendar
 
 ```graphix
 {{#include ../../examples/tui/calendar_events.gx}}
 ```
 
+![Calendar With Events](media/calendar_events.png)
+
 ### Color-coded Events by Type
 
 ```graphix
 {{#include ../../examples/tui/calendar_typed.gx}}
 ```
+
+![Calendar Typed](media/calendar_typed.png)
+
 
 ## See Also
 

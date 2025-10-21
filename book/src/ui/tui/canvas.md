@@ -66,11 +66,15 @@ val canvas: fn(
 {{#include ../../examples/tui/canvas_basic.gx}}
 ```
 
+![Basic Canvas](./media/canvas_basic.png)
+
 ### Function Plotting
 
 ```graphix
 {{#include ../../examples/tui/canvas_plot.gx}}
 ```
+
+![Scatter Plot](./media/canvas_plot.png)
 
 ### Network Diagram
 
@@ -78,11 +82,15 @@ val canvas: fn(
 {{#include ../../examples/tui/canvas_network.gx}}
 ```
 
+![Network Diagram](./media/canvas_network.png)
+
 ### Animated Graphics
 
 ```graphix
 {{#include ../../examples/tui/canvas_animated.gx}}
 ```
+
+![Animated Canvas](./media/canvas_animated.gif)
 
 ## Marker Comparison
 

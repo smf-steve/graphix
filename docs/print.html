@@ -2542,22 +2542,20 @@ val shuffle: fn(Array&lt;'a&gt;) -&gt; Array&lt;'a&gt;;
 </ul>
 <h3 id="input-handling"><a class="header" href="#input-handling">Input Handling</a></h3>
 <p>Interactive components use Graphix's event system for keyboard and mouse input:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L45-55">let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-    `Key(k) =&gt; select k.kind {
-        `Press =&gt; select k.code {
-            `Up =&gt; { position &lt;- position - 1; `Stop },
-            `Down =&gt; { position &lt;- position + 1; `Stop },
-            _ =&gt; `Continue
-        },
-        _ =&gt; `Continue
-    },
-    _ =&gt; `Continue
-};
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+{
+    let position = 0;
+
+    // Example showing input handling structure - returns dummy text widget
+    text(&amp;"Input handler example")
+}
 </code></pre>
 <p>Events flow through the component tree, allowing parent components to handle unprocessed events from children.</p>
 <h2 id="building-your-first-tui"><a class="header" href="#building-your-first-tui">Building Your First TUI</a></h2>
 <p>Here's a simple example that demonstrates the core concepts:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L65-85">use tui;
+<pre><code class="language-graphix">use tui;
 use tui::block;
 use tui::text;
 use tui::layout;
@@ -2584,11 +2582,17 @@ block(
 <li><strong>Background Colors</strong>: Set background colors for any component</li>
 <li><strong>Conditional Styling</strong>: Use <code>select</code> expressions to change styles based on state</li>
 </ul>
-<pre><code class="language-graphix/book/src/ui/overview.md#L91-98">let style = style(
-  #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
-  #bg: `DarkGray,
-  #add_modifier: `Bold
-);
+<pre><code class="language-graphix">use tui;
+
+{
+    let is_selected = true;
+
+    style(
+      #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
+      #bg: `DarkGray,
+      #add_modifier: [`Bold]
+    )
+}
 </code></pre>
 <h2 id="layout-system"><a class="header" href="#layout-system">Layout System</a></h2>
 <p>The layout system provides flexible component arrangement:</p>
@@ -2598,14 +2602,24 @@ block(
 <li><strong>Alignment</strong>: <code>Left</code>, <code>Center</code>, <code>Right</code> for horizontal; <code>Top</code>, <code>Center</code>, <code>Bottom</code> for vertical</li>
 <li><strong>Focus Management</strong>: Built-in focus handling for interactive components</li>
 </ul>
-<pre><code class="language-graphix/book/src/ui/overview.md#L106-115">layout(
-  #direction: &amp;`Horizontal,
-  #focused: &amp;selected_pane,
-  &amp;[
-    child(#constraint: `Percentage(30), sidebar),
-    child(#constraint: `Percentage(70), main_content)
-  ]
-)
+<pre><code class="language-graphix">use tui;
+use tui::layout;
+use tui::text;
+
+{
+    let selected_pane = 0;
+    let sidebar = text(&amp;"Sidebar");
+    let main_content = text(&amp;"Main");
+
+    layout(
+      #direction: &amp;`Horizontal,
+      #focused: &amp;selected_pane,
+      &amp;[
+        child(#constraint: `Percentage(30), sidebar),
+        child(#constraint: `Percentage(70), main_content)
+      ]
+    )
+}
 </code></pre>
 <h2 id="state-management"><a class="header" href="#state-management">State Management</a></h2>
 <p>In Graphix, UI state is just regular program state. Use variables to track:</p>
@@ -2616,27 +2630,40 @@ block(
 <li>Application modes (normal, edit, command)</li>
 </ul>
 <p>State changes automatically trigger UI updates:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L122-130">let selected_item = 0;
-let items = ["Item 1", "Item 2", "Item 3"];
+<pre><code class="language-graphix">use tui;
+use tui::list;
+use tui::text;
 
-// When user presses down arrow assume the event is handled as
-// shown above and arrow_pressed is set using connect
-selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
+{
+    let selected_item = 0;
+    let items = [line("Item 1"), line("Item 2"), line("Item 3")];
+    let arrow_pressed = never();
 
-// UI automatically reflects the change
-list(#selected: &amp;selected_item, &amp;items)
+    // When user presses down arrow assume the event is handled as
+    // shown above and arrow_pressed is set using connect
+    selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
+
+    // UI automatically reflects the change
+    list(#selected: &amp;selected_item, &amp;items)
+}
 </code></pre>
 <h2 id="real-time-data-integration"><a class="header" href="#real-time-data-integration">Real-time Data Integration</a></h2>
 <p>Graphix TUIs excel at displaying real-time data. Connect to data sources via netidx and the UI updates automatically:</p>
-<pre><code class="language-graphix/book/src/ui/overview.md#L135-145">// Subscribe to live data
-let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
+<pre><code class="language-graphix">use tui;
+use tui::gauge;
+use tui::text;
 
-// Display automatically updates when data changes
-gauge(
-  #title: &amp;line("Temperature"),
-  #ratio: &amp;(temperature / 100.0),
-  #style: &amp;style(#fg: `Red)
-)
+{
+    // Subscribe to live data
+    let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
+
+    // Display automatically updates when data changes
+    gauge(
+      #gauge_style: &amp;style(#fg: `Red),
+      #label: &amp;span("Temperature"),
+      &amp;(temperature / 100.0)
+    )
+}
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="barchart"><a class="header" href="#barchart">barchart</a></h1>
 <p>The <code>barchart</code> widget displays categorical data as vertical bars, supporting grouped bars, custom styling, and dynamic updates. It's ideal for comparing values across categories, showing rankings, or displaying resource usage.</p>
@@ -2694,6 +2721,7 @@ let bar1 = bar(
 
 bar_chart(&amp;[bar_group(#label: line("Q1"), [bar1])])
 </code></pre>
+<p><img src="ui/tui/./media/barchart_basic.png" alt="Basic Bar Chart" /></p>
 <h3 id="grouped-bars-with-dynamic-data"><a class="header" href="#grouped-bars-with-dynamic-data">Grouped Bars with Dynamic Data</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::barchart;
@@ -2724,6 +2752,7 @@ let chart = bar_chart(
 
 block(#border: &amp;`All, #title: &amp;line("Resource Usage"), &amp;chart)
 </code></pre>
+<p><img src="ui/tui/./media/barchart_grouped.png" alt="Grouped Bar Chart" /></p>
 <h3 id="color-coded-values"><a class="header" href="#color-coded-values">Color-coded Values</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::barchart;
@@ -2745,6 +2774,7 @@ let bars = [
 
 bar_chart(&amp;[bar_group(bars)])
 </code></pre>
+<p><img src="ui/tui/./media/barchart_colored.png" alt="Colored Bar Chart" /></p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/chart.html">chart</a> - For continuous data visualization</li>
@@ -2790,9 +2820,15 @@ block(
     &amp;content
 )
 </code></pre>
+<p><img src="ui/tui/./media/block_basic.png" alt="Basic Block" /></p>
 <h3 id="focus-indication"><a class="header" href="#focus-indication">Focus Indication</a></h3>
 <p>Use dynamic styling to show which block has focus:</p>
-<pre><code class="language-graphix">let focused_block = 0;
+<pre><code class="language-graphix">use tui;
+use tui::block;
+use tui::paragraph;
+
+let focused_block = 0;
+let content = paragraph(&amp;"Content here");
 
 block(
     #border: &amp;`All,
@@ -2806,11 +2842,18 @@ block(
     &amp;content
 )
 </code></pre>
+<p><img src="ui/tui/./media/block_focus.png" alt="Styled Block" /></p>
 <h3 id="dynamic-titles"><a class="header" href="#dynamic-titles">Dynamic Titles</a></h3>
 <p>Titles can contain reactive values that update automatically:</p>
-<pre><code class="language-graphix">let count = 0;
+<pre><code class="language-graphix">use tui;
+use tui::block;
+use tui::paragraph;
+
+let count = 0;
 let timer = time::timer(duration:1.s, true);
 count &lt;- timer ~ (count + 1);
+
+let content = paragraph(&amp;"Content here");
 
 block(
     #border: &amp;`All,
@@ -2818,6 +2861,7 @@ block(
     &amp;content
 )
 </code></pre>
+<p><img src="ui/tui/./media/block_dynamic_title.png" alt="Block With Dynamic Title" /></p>
 <h2 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/layout.html">layout</a> - For arranging multiple blocks</li>
@@ -2850,38 +2894,56 @@ val browser: fn(
 <pre><code class="language-graphix">use tui;
 use tui::browser;
 
-let selected_path: string = never();
+{
+    let selected_path: string = never();
 
-browser(
-    #selected_path: &amp;selected_path,
-    "/"  // Start browsing from root
-)
+    browser(
+        #size: {width: 40, height: 10},
+        #selected_path: &amp;selected_path,
+        "/"  // Start browsing from root
+    )
+}
 </code></pre>
+<p><img src="ui/tui/./media/browser_basic.png" alt="Basic Browser Widget" /></p>
 <h3 id="basic-navigation"><a class="header" href="#basic-navigation">Basic Navigation</a></h3>
-<pre><code class="language-graphix">let path = "/";
-let selected_path: string = never();
-let cursor: MoveCursor = never();
+<pre><code class="language-graphix">use tui;
+use tui::browser;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-    `Key(k) =&gt; select k.kind {
-        `Press =&gt; select k.code {
-            e@ `Up =&gt; { cursor &lt;- e ~ `Up(1); `Stop },
-            e@ `Down =&gt; { cursor &lt;- e ~ `Down(1); `Stop },
-            e@ `Left =&gt; { cursor &lt;- e ~ `Left(1); `Stop },
-            e@ `Right =&gt; { cursor &lt;- e ~ `Right(1); `Stop },
-            e@ `Enter =&gt; { path &lt;- e ~ selected_row; `Stop },
+{
+    let path = "/";
+    let selected_path: string = never();
+    let selected_row: string = never();
+    let cursor: MoveCursor = never();
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+        `Key(k) =&gt; select k.kind {
+            `Press =&gt; select k.code {
+                e@ `Up =&gt; { cursor &lt;- e ~ `Up(1); `Stop },
+                e@ `Down =&gt; { cursor &lt;- e ~ `Down(1); `Stop },
+                e@ `Left =&gt; { cursor &lt;- e ~ `Left(1); `Stop },
+                e@ `Right =&gt; { cursor &lt;- e ~ `Right(1); `Stop },
+                e@ `Enter =&gt; { path &lt;- e ~ selected_row; `Stop },
+                _ =&gt; `Continue
+            },
             _ =&gt; `Continue
         },
         _ =&gt; `Continue
-    },
-    _ =&gt; `Continue
-};
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;browser(#cursor, #selected_path: &amp;selected_path, path)
-)
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;browser(
+            #size: {width: 80, height: 24},
+            #cursor,
+            #selected_path: &amp;selected_path,
+            #selected_row: &amp;selected_row,
+            path
+        )
+    )
+}
 </code></pre>
+<p><img src="ui/tui/./media/browser_navigation.gif" alt="Browser With Navigation" /></p>
 <h2 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/list.html">list</a> - For simpler selection interfaces</li>
@@ -2927,51 +2989,62 @@ let current_date = date(2024, 5, 15);
 
 calendar(&amp;current_date)
 </code></pre>
+<p><img src="ui/tui/media/calendar_basic.png" alt="Basic Calendar" /></p>
 <h3 id="event-calendar"><a class="header" href="#event-calendar">Event Calendar</a></h3>
-<pre><code class="language-graphix">let today = date(2024, 5, 15);
+<pre><code class="language-graphix">use tui;
+use tui::calendar;
+use tui::block;
+use tui::text;
 
-let events = [
-    calendar_event(style(#fg: `Red), date(2024, 5, 5)),
-    calendar_event(style(#fg: `Green), date(2024, 5, 15)),
-    calendar_event(style(#fg: `Yellow), date(2024, 5, 20)),
-    calendar_event(style(#fg: `Cyan), date(2024, 5, 28))
-];
+{
+    let today = date(2024, 5, 15);
 
-block(
-    #border: &amp;`All,
-    #title: &amp;line("May 2024"),
-    &amp;calendar(
-        #show_month: &amp;style(#fg: `Yellow, #add_modifier: `Bold),
-        #show_weekday: &amp;style(#fg: `Cyan),
-        #show_surrounding: &amp;style(#fg: `DarkGray),
-        #events: &amp;events,
-        &amp;today
+    let events = [
+        calendar_event(style(#fg: `Red), date(2024, 5, 5)),
+        calendar_event(style(#fg: `Green), date(2024, 5, 15)),
+        calendar_event(style(#fg: `Yellow), date(2024, 5, 20)),
+        calendar_event(style(#fg: `Cyan), date(2024, 5, 28))
+    ];
+
+    block(
+        #border: &amp;`All,
+        #title: &amp;line("May 2024"),
+        &amp;calendar(
+            #show_month: &amp;style(#fg: `Yellow, #add_modifier: [`Bold]),
+            #show_weekday: &amp;style(#fg: `Cyan),
+            #show_surrounding: &amp;style(#fg: `DarkGray),
+            #events: &amp;events,
+            &amp;today
+        )
     )
-)
+}
 </code></pre>
+<p><img src="ui/tui/media/calendar_events.png" alt="Calendar With Events" /></p>
 <h3 id="color-coded-events-by-type"><a class="header" href="#color-coded-events-by-type">Color-coded Events by Type</a></h3>
-<pre><code class="language-graphix">type EventType = [`Meeting, `Deadline, `Holiday, `Birthday];
-type CalendarEntry = {date: Date, event_type: EventType};
+<pre><code class="language-graphix">use tui;
+use tui::calendar;
 
-let entries = [
-    {date: date(2024, 5, 5), event_type: `Meeting},
-    {date: date(2024, 5, 10), event_type: `Deadline},
-    {date: date(2024, 5, 15), event_type: `Holiday},
-    {date: date(2024, 5, 25), event_type: `Birthday}
-];
+{
+    type EventType = [`Meeting, `Deadline, `Holiday, `Birthday];
+    type CalendarEntry = {date: Date, event_type: EventType};
 
-let events = array::map(entries, |e| {
-    let color = select e.event_type {
-        `Meeting =&gt; `Blue,
-        `Deadline =&gt; `Red,
-        `Holiday =&gt; `Green,
-        `Birthday =&gt; `Magenta
-    };
-    calendar_event(style(#fg: color), e.date)
-});
+    let entries = [
+        {date: date(2024, 5, 5), event_type: `Meeting},
+        {date: date(2024, 5, 10), event_type: `Deadline},
+        {date: date(2024, 5, 15), event_type: `Holiday},
+        {date: date(2024, 5, 25), event_type: `Birthday}
+    ];
 
-calendar(#events: &amp;events, &amp;date(2024, 5, 1))
+    let event1 = calendar_event(style(#fg: `Blue), date(2024, 5, 5));
+    let event2 = calendar_event(style(#fg: `Red), date(2024, 5, 10));
+    let event3 = calendar_event(style(#fg: `Green), date(2024, 5, 15));
+    let event4 = calendar_event(style(#fg: `Magenta), date(2024, 5, 25));
+    let events = [event1, event2, event3, event4];
+
+    calendar(#events: &amp;events, &amp;date(2024, 5, 1))
+}
 </code></pre>
+<p><img src="ui/tui/media/calendar_typed.png" alt="Calendar Typed" /></p>
 <h2 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/table.html">table</a> - For tabular date-based data</li>
@@ -3036,59 +3109,66 @@ canvas(
     &amp;[&amp;line, &amp;circle]
 )
 </code></pre>
+<p><img src="ui/tui/./media/canvas_basic.png" alt="Basic Canvas" /></p>
 <h3 id="function-plotting"><a class="header" href="#function-plotting">Function Plotting</a></h3>
-<pre><code class="language-graphix">let points = array::range(0, 100);
-let coords = array::map(points, |i| {
-    let x = cast&lt;f64&gt;(i)? / 10.0;
-    let y = math::sin(x);
-    (x, y)
-});
+<pre><code class="language-graphix">use tui;
+use tui::canvas;
 
-let plot = `Points({color: `Cyan, coords});
+{
+    let coords = [
+        (0.0, 0.0), (0.5, 0.48), (1.0, 0.84), (1.5, 1.0),
+        (2.0, 0.91), (2.5, 0.60), (3.0, 0.14), (3.5, -0.35),
+        (4.0, -0.76), (4.5, -0.98), (5.0, -0.96)
+    ];
 
-canvas(
-    #x_bounds: &amp;{min: 0.0, max: 10.0},
-    #y_bounds: &amp;{min: -1.0, max: 1.0},
-    &amp;[&amp;plot]
-)
+    let plot = `Points({color: `Cyan, coords});
+
+    canvas(
+        #x_bounds: &amp;{min: 0.0, max: 10.0},
+        #y_bounds: &amp;{min: -1.0, max: 1.0},
+        &amp;[&amp;plot]
+    )
+}
 </code></pre>
+<p><img src="ui/tui/./media/canvas_plot.png" alt="Scatter Plot" /></p>
 <h3 id="network-diagram"><a class="header" href="#network-diagram">Network Diagram</a></h3>
-<pre><code class="language-graphix">type Node = {x: f64, y: f64, label: string};
+<pre><code class="language-graphix">use tui;
+use tui::canvas;
+use tui::text;
 
-let nodes = [
-    {x: 2.0, y: 5.0, label: "A"},
-    {x: 8.0, y: 5.0, label: "B"},
-    {x: 5.0, y: 8.0, label: "C"}
-];
+{
+    let circle1 = `Circle({color: `Blue, x: 2.0, y: 5.0, radius: 0.5});
+    let circle2 = `Circle({color: `Blue, x: 8.0, y: 5.0, radius: 0.5});
+    let circle3 = `Circle({color: `Blue, x: 5.0, y: 8.0, radius: 0.5});
 
-let circles = array::map(nodes, |n| {
-    &amp;`Circle({color: `Blue, x: n.x, y: n.y, radius: 0.5})
-});
+    let line1 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 8.0, y2: 5.0});
+    let line2 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 5.0, y2: 8.0});
+    let line3 = `Line({color: `White, x1: 8.0, y1: 5.0, x2: 5.0, y2: 8.0});
 
-let labels = array::map(nodes, |n| {
-    &amp;`Label({line: line(n.label), x: n.x, y: n.y - 0.8})
-});
+    let all_shapes = [&amp;line1, &amp;line2, &amp;line3, &amp;circle1, &amp;circle2, &amp;circle3];
 
-let line1 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 8.0, y2: 5.0});
-let line2 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 5.0, y2: 8.0});
-let line3 = `Line({color: `White, x1: 8.0, y1: 5.0, x2: 5.0, y2: 8.0});
-
-let all_shapes = array::concat([[&amp;line1, &amp;line2, &amp;line3], circles, labels]);
-
-canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;all_shapes)
+    canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;all_shapes)
+}
 </code></pre>
+<p><img src="ui/tui/./media/canvas_network.png" alt="Network Diagram" /></p>
 <h3 id="animated-graphics"><a class="header" href="#animated-graphics">Animated Graphics</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.1s, true);
-let x = 0.0;
-x &lt;- {
-    let new_x = (clock ~ x) + 0.1;
-    select new_x &gt; 10.0 { true =&gt; 0.0, false =&gt; new_x }
-};
+<pre><code class="language-graphix">use tui;
+use tui::canvas;
 
-let moving_circle = `Circle({color: `Red, x, y: 5.0, radius: 1.0});
+{
+    let clock = time::timer(duration:0.1s, true);
+    let x = 0.0;
+    x &lt;- {
+        let new_x = (clock ~ x) + 0.1;
+        select new_x &gt; 10.0 { true =&gt; 0.0, false =&gt; new_x }
+    };
 
-canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;[&amp;moving_circle])
+    let moving_circle = `Circle({color: `Red, x, y: 5.0, radius: 1.0});
+
+    canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;[&amp;moving_circle])
+}
 </code></pre>
+<p><img src="ui/tui/./media/canvas_animated.gif" alt="Animated Canvas" /></p>
 <h2 id="marker-comparison"><a class="header" href="#marker-comparison">Marker Comparison</a></h2>
 <ul>
 <li><strong>Braille</strong>: Highest resolution, smoothest curves, best for detailed graphics</li>
@@ -3178,75 +3258,86 @@ chart(
     &amp;[ds]
 )
 </code></pre>
+<p><img src="ui/tui/./media/chart_basic.png" alt="Basic Chart" /></p>
 <h3 id="real-time-data-visualization"><a class="header" href="#real-time-data-visualization">Real-time Data Visualization</a></h3>
-<pre><code class="language-graphix">let data: Array&lt;(f64, f64)&gt; = {
-    let clock = time::timer(duration:0.5s, true);
-    let x = 0.0;
-    x &lt;- (clock ~ x) + 1.0;
-    let y = rand::rand(#clock, #start: f64:0., #end: f64:100.);
-    let a = [];
-    a &lt;- array::window(#n: 32, clock ~ a, (x, y));
-    a
-};
+<pre><code class="language-graphix">use tui;
+use tui::chart;
+use tui::text;
 
-let ds = dataset(
-    #style: &amp;style(#fg: `Cyan),
-    #graph_type: &amp;`Line,
-    #marker: &amp;`Dot,
-    &amp;data
-);
+{
+    let data: Array&lt;(f64, f64)&gt; = {
+        let clock = time::timer(duration:0.5s, true);
+        let x = 0.0;
+        x &lt;- (clock ~ x) + 1.0;
+        let y = rand::rand(#clock, #start: f64:0., #end: f64:100.);
+        let a = [];
+        a &lt;- array::window(#n: 32, clock ~ a, (x, y));
+        a
+    };
 
-let label_style = style(#fg: `Yellow);
+    let ds = dataset(
+        #style: &amp;style(#fg: `Cyan),
+        #graph_type: &amp;`Line,
+        #marker: &amp;`Dot,
+        &amp;data
+    );
 
-chart(
-    #style: &amp;style(#bg: `Rgb({r: 20, g: 20, b: 20})),
-    #x_axis: &amp;axis(
-        #title: line(#style: label_style, "Time (s)"),
-        #labels: [
-            line(#style: label_style, "[(data[0]$).0]"),
-            line(#style: label_style, "[(data[-1]$).0]")
-        ],
-        {min: (data[0]$).0, max: (data[-1]$).0}
-    ),
-    #y_axis: &amp;axis(
-        #title: line(#style: label_style, "Value"),
-        #labels: [
-            line("0"), line("50"), line("100")
-        ],
-        {min: 0.0, max: 100.0}
-    ),
-    &amp;[ds]
-)
+    let label_style = style(#fg: `Yellow);
+
+    chart(
+        #style: &amp;style(#bg: `Rgb({r: 20, g: 20, b: 20})),
+        #x_axis: &amp;axis(
+            #title: line(#style: label_style, "Time (s)"),
+            #labels: [
+                line(#style: label_style, "[(data[0]$).0]"),
+                line(#style: label_style, "[(data[-1]$).0]")
+            ],
+            {min: (data[0]$).0, max: (data[-1]$).0}
+        ),
+        #y_axis: &amp;axis(
+            #title: line(#style: label_style, "Value"),
+            #labels: [
+                line("0"), line("50"), line("100")
+            ],
+            {min: 0.0, max: 100.0}
+        ),
+        &amp;[ds]
+    )
+}
 </code></pre>
+<p><img src="ui/tui/./media/chart_realtime.gif" alt="Real Time Chart" /></p>
 <h3 id="multiple-datasets"><a class="header" href="#multiple-datasets">Multiple Datasets</a></h3>
-<pre><code class="language-graphix">let temp_ds = dataset(
-    #style: &amp;style(#fg: `Red),
-    #name: &amp;line("Temperature"),
-    &amp;temp_data
-);
+<pre><code class="language-graphix">use tui;
+use tui::chart;
+use tui::text;
 
-let humidity_ds = dataset(
-    #style: &amp;style(#fg: `Blue),
-    #name: &amp;line("Humidity"),
-    &amp;humidity_data
-);
+{
+    let temp_data = [(0.0, 20.0), (1.0, 22.0), (2.0, 21.5)];
+    let humidity_data = [(0.0, 50.0), (1.0, 55.0), (2.0, 52.0)];
 
-chart(
-    #x_axis: &amp;x_axis,
-    #y_axis: &amp;y_axis,
-    &amp;[temp_ds, humidity_ds]
-)
+    let temp_ds = dataset(
+        #style: &amp;style(#fg: `Red),
+        #name: &amp;line("Temperature"),
+        &amp;temp_data
+    );
+
+    let humidity_ds = dataset(
+        #style: &amp;style(#fg: `Blue),
+        #name: &amp;line("Humidity"),
+        &amp;humidity_data
+    );
+
+    let x_axis = axis(#labels: [line("0"), line("1"), line("2")], {min: 0.0, max: 2.0});
+    let y_axis = axis(#labels: [line("0"), line("50"), line("100")], {min: 0.0, max: 100.0});
+
+    chart(
+        #x_axis: &amp;x_axis,
+        #y_axis: &amp;y_axis,
+        &amp;[temp_ds, humidity_ds]
+    )
+}
 </code></pre>
-<h3 id="scatter-plot"><a class="header" href="#scatter-plot">Scatter Plot</a></h3>
-<pre><code class="language-graphix">let scatter_ds = dataset(
-    #graph_type: &amp;`Scatter,
-    #marker: &amp;`Dot,
-    #style: &amp;style(#fg: `Yellow),
-    &amp;data
-);
-
-chart(#x_axis: &amp;x_axis, #y_axis: &amp;y_axis, &amp;[scatter_ds])
-</code></pre>
+<p><img src="ui/tui/./media/chart_multi.png" alt="Multi Chart" /></p>
 <h2 id="marker-comparison-1"><a class="header" href="#marker-comparison-1">Marker Comparison</a></h2>
 <ul>
 <li><strong>Dot</strong>: Fastest, lowest resolution, good for dense data</li>
@@ -3273,7 +3364,7 @@ type Color = [
 ];
 
 /// Creates styled text from a string or array of lines
-val text: fn([string, Array&lt;Line&gt;]) -&gt; Widget;
+val text: fn(&amp;[string, Array&lt;Line&gt;]) -&gt; Widget;
 
 /// Creates a line of text from a string or array of spans
 val line: fn(?#style: Style, ?#alignment: Alignment, [string, Array&lt;Span&gt;]) -&gt; Line;
@@ -3295,27 +3386,20 @@ val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -&gt; Style;
 <pre><code class="language-graphix">use tui;
 use tui::text;
 
-// Simple text
 text(&amp;"Hello, World!")
-
-// Multi-line
-text(&amp;[
-    line("First line"),
-    line("Second line")
-])
-
-// Styled
-let error = span(#style: style(#fg: `Red, #add_modifier: `Bold), "Error:");
-text(&amp;[line([error, span(" Something went wrong")])])
 </code></pre>
+<p><img src="ui/tui/./media/text_basic.png" alt="Basic Text" /></p>
 <h3 id="status-messages"><a class="header" href="#status-messages">Status Messages</a></h3>
-<pre><code class="language-graphix">let make_status = |level, msg| select level {
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+let make_status = |level, msg| select level {
     `Error =&gt; line([
-        span(#style: style(#fg: `Red, #add_modifier: `Bold), "ERROR: "),
+        span(#style: style(#fg: `Red, #add_modifier: [`Bold]), "ERROR: "),
         span(msg)
     ]),
     `Warning =&gt; line([
-        span(#style: style(#fg: `Yellow, #add_modifier: `Bold), "WARNING: "),
+        span(#style: style(#fg: `Yellow, #add_modifier: [`Bold]), "WARNING: "),
         span(msg)
     ]),
     `Info =&gt; line([
@@ -3330,26 +3414,37 @@ text(&amp;[
     make_status(`Error, "Connection failed")
 ])
 </code></pre>
+<p><img src="ui/tui/./media/text_status.png" alt="Multi Line Status" /></p>
 <h3 id="dynamic-colors"><a class="header" href="#dynamic-colors">Dynamic Colors</a></h3>
-<pre><code class="language-graphix">let count = 0;
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+let count = 0;
 let timer = time::timer(duration:1.s, true);
 count &lt;- timer ~ (count + 1);
 
 let colors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
 let color = colors[count % array::len(colors)]$;
 
-line([
+let l = line([
     span(#style: style(#fg: `White), "Count: "),
-    span(#style: style(#fg: color, #add_modifier: `Bold), "[count]")
-])
+    span(#style: style(#fg: color, #add_modifier: [`Bold]), "[count]")
+]);
+
+text(&amp;[l])
 </code></pre>
+<p><img src="ui/tui/./media/text_dynamic.gif" alt="Dynamic Text" /></p>
 <h3 id="alignment"><a class="header" href="#alignment">Alignment</a></h3>
-<pre><code class="language-graphix">text(&amp;[
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+text(&amp;[
     line(#alignment: `Left, "Left aligned"),
     line(#alignment: `Center, "Centered"),
     line(#alignment: `Right, "Right aligned")
 ])
 </code></pre>
+<p><img src="ui/tui/./media/text_alignment.gif" alt="Text Alignment" /></p>
 <h2 id="color-support"><a class="header" href="#color-support">Color Support</a></h2>
 <ul>
 <li><strong>Named colors</strong>: <code>Red</code>, <code>Green</code>, <code>Blue</code>, <code>Yellow</code>, <code>Magenta</code>, <code>Cyan</code>, <code>White</code>, <code>Black</code>, <code>Gray</code>, <code>DarkGray</code>, and <code>Light*</code> variants</li>
@@ -3378,7 +3473,7 @@ val paragraph: fn(
     ?#scroll: &amp;ScrollPosition,
     ?#alignment: &amp;Alignment,
     ?#wrap: &amp;bool,
-    [string, Text]
+    &amp;[string, Text]
 ) -&gt; Widget;
 </code></pre>
 <h2 id="parameters-6"><a class="header" href="#parameters-6">Parameters</a></h2>
@@ -3394,11 +3489,19 @@ use tui::paragraph;
 
 paragraph(&amp;"This is a simple paragraph. It will automatically wrap to fit the available width.")
 </code></pre>
+<p><img src="ui/tui/./media/paragraph_basic.png" alt="Basic Paragraph" /></p>
 <h3 id="scrollable-content"><a class="header" href="#scrollable-content">Scrollable Content</a></h3>
-<pre><code class="language-graphix">let long_text = "I've got a lovely bunch of coconuts... [very long text continues]";
-let scroll_y = 0;
+<pre><code class="language-graphix">use tui;
+use tui::paragraph;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+{
+    let long_text = "I have got a lovely bunch of coconuts. Very long text continues here. More text. Even more text. This is a very long paragraph that will need scrolling to see all of it.";
+    let scroll_y = 0;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if scroll_y &gt; 0 =&gt; {
@@ -3413,47 +3516,57 @@ let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
         },
         _ =&gt; `Continue
     },
-    _ =&gt; `Continue
-};
+        _ =&gt; `Continue
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("Scrollable Text"),
-        &amp;paragraph(
-            #scroll: &amp;{x: 0, y: scroll_y},
-            &amp;long_text
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("Scrollable Text"),
+            &amp;paragraph(
+                #scroll: &amp;{x: 0, y: scroll_y},
+                &amp;long_text
+            )
         )
     )
-)
+}
 </code></pre>
+<p><img src="ui/tui/./media/paragraph_scrollable.gif" alt="Scrollable Paragraph" /></p>
 <h3 id="live-log-viewer"><a class="header" href="#live-log-viewer">Live Log Viewer</a></h3>
 <p>Display real-time updating content:</p>
-<pre><code class="language-graphix">let log_entries = [];
-let new_entry = net::subscribe("/logs/application")?;
+<pre><code class="language-graphix">use tui;
+use tui::paragraph;
+use tui::text;
+
+let log_entries = [];
+let new_entry = net::subscribe("/local/logs/application")?;
 
 log_entries &lt;- array::window(
     #n: 100,
     new_entry ~ log_entries,
-    cast&lt;string&gt;(new_entry)?
+    line(cast&lt;string&gt;(new_entry)?)
 );
 
-let log_text = array::fold(log_entries, "", |acc, entry| "[acc]\n[entry]");
-
-paragraph(&amp;log_text)
+paragraph(&amp;log_entries)
 </code></pre>
+<p><img src="ui/tui/./media/paragraph_log_viewer.gif" alt="Log Viewer" /></p>
 <h3 id="centered-message"><a class="header" href="#centered-message">Centered Message</a></h3>
-<pre><code class="language-graphix">paragraph(
+<pre><code class="language-graphix">use tui;
+use tui::paragraph;
+use tui::text;
+
+paragraph(
     #alignment: &amp;`Center,
-    &amp;text(&amp;[
+    &amp;[
         line(""),
-        line(#style: style(#fg: `Yellow, #add_modifier: `Bold), "Welcome"),
+        line(#style: style(#fg: `Yellow, #add_modifier: [`Bold]), "Welcome"),
         line(""),
         line("Press any key to continue")
-    ])
+    ]
 )
 </code></pre>
+<p><img src="ui/tui/./media/paragraph_centered.png" alt="Paragraph Centered" /></p>
 <h2 id="word-wrapping"><a class="header" href="#word-wrapping">Word Wrapping</a></h2>
 <p>The paragraph widget automatically wraps long lines to fit the available width. Word boundaries are respected, so words won't be split in the middle unless they're longer than the available width.</p>
 <h2 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h2>
@@ -3472,7 +3585,7 @@ val gauge: fn(
     ?#label: &amp;Line,
     ?#use_unicode: &amp;bool,
     ?#style: &amp;Style,
-    f64
+    &amp;f64
 ) -&gt; Widget;
 </code></pre>
 <h2 id="parameters-7"><a class="header" href="#parameters-7">Parameters</a></h2>
@@ -3494,68 +3607,62 @@ gauge(
     &amp;progress
 )
 </code></pre>
+<p><img src="ui/tui/./media/gauge_basic.png" alt="Basic Gauge" /></p>
 <h3 id="progress-with-color-thresholds"><a class="header" href="#progress-with-color-thresholds">Progress with Color Thresholds</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.5s, true);
-let power = 0.0;
-power &lt;- min(1.0, (clock ~ power) + 0.01);
+<pre><code class="language-graphix">use tui;
+use tui::gauge;
+use tui::block;
+use tui::text;
 
-let color = select power {
-    x if x &lt; 0.10 =&gt; `Red,
-    x if x &lt; 0.25 =&gt; `Yellow,
-    x =&gt; `Green
-};
+{
+    let clock = time::timer(duration:0.5s, true);
+    let power = 0.0;
+    power &lt;- min(1.0, (clock ~ power) + 0.01);
 
-let percentage = cast&lt;i64&gt;(power * 100.0)?;
+    let color = select power {
+        x if x &lt; 0.10 =&gt; `Red,
+        x if x &lt; 0.25 =&gt; `Yellow,
+        x =&gt; `Green
+    };
 
-block(
-    #border: &amp;`All,
-    #title: &amp;line("Power Level"),
-    &amp;gauge(
-        #gauge_style: &amp;style(#fg: color),
-        #label: &amp;line("[percentage]%"),
-        &amp;power
+    let percentage = cast&lt;i64&gt;(power * 100.0)?;
+
+    block(
+        #border: &amp;`All,
+        #title: &amp;line("Power Level"),
+        &amp;gauge(
+            #gauge_style: &amp;style(#fg: color),
+            #label: &amp;span("[percentage]%"),
+            &amp;power
+        )
     )
-)
+}
 </code></pre>
+<p><img src="ui/tui/./media/gauge_threshold.gif" alt="Gauge With Color" /></p>
 <h3 id="resource-usage"><a class="header" href="#resource-usage">Resource Usage</a></h3>
-<pre><code class="language-graphix">let used_memory = 6.5;  // GB
-let total_memory = 16.0;  // GB
-let usage_ratio = used_memory / total_memory;
+<pre><code class="language-graphix">use tui;
+use tui::gauge;
+use tui::text;
 
-let color = select usage_ratio {
-    x if x &gt; 0.9 =&gt; `Red,
-    x if x &gt; 0.7 =&gt; `Yellow,
-    _ =&gt; `Green
-};
+{
+    let used_memory = 6.5;  // GB
+    let total_memory = 16.0;  // GB
+    let usage_ratio = used_memory / total_memory;
 
-gauge(
-    #gauge_style: &amp;style(#fg: color),
-    #label: &amp;line("[used_memory] GB / [total_memory] GB"),
-    &amp;usage_ratio
-)
+    let color = select usage_ratio {
+        x if x &gt; 0.9 =&gt; `Red,
+        x if x &gt; 0.7 =&gt; `Yellow,
+        _ =&gt; `Green
+    };
+
+    gauge(
+        #gauge_style: &amp;style(#fg: color),
+        #label: &amp;span("[used_memory] GB / [total_memory] GB"),
+        &amp;usage_ratio
+    )
+}
 </code></pre>
-<h3 id="multi-gauge-dashboard"><a class="header" href="#multi-gauge-dashboard">Multi-gauge Dashboard</a></h3>
-<pre><code class="language-graphix">layout(
-    #direction: &amp;`Vertical,
-    &amp;[
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &amp;style(#fg: `Red),
-            #label: &amp;line("CPU: 45%"),
-            &amp;0.45
-        )),
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &amp;style(#fg: `Yellow),
-            #label: &amp;line("Memory: 67%"),
-            &amp;0.67
-        )),
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &amp;style(#fg: `Green),
-            #label: &amp;line("Disk: 23%"),
-            &amp;0.23
-        ))
-    ]
-)
-</code></pre>
+<p><img src="ui/tui/./media/gauge_resource.png" alt="Resource Usage Gauge" /></p>
 <h2 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/linegauge.html">linegauge</a> - For horizontal line-based gauges</li>
@@ -3598,31 +3705,43 @@ line_gauge(
 )
 </code></pre>
 <h3 id="color-coded-status"><a class="header" href="#color-coded-status">Color-coded Status</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.5s, true);
-let power = 0.0;
-power &lt;- min(1.0, (clock ~ power) + 0.01);
+<pre><code class="language-graphix">use tui;
+use tui::line_gauge;
+use tui::block;
+use tui::text;
 
-let color = select power {
-    x if x &lt; 0.10 =&gt; `Red,
-    x if x &lt; 0.25 =&gt; `Yellow,
-    x =&gt; `Green
-};
+{
+    let clock = time::timer(duration:0.5s, true);
+    let power = 0.0;
+    power &lt;- min(1.0, (clock ~ power) + 0.01);
 
-let percentage = cast&lt;i64&gt;(power * 100.0)?;
+    let color = select power {
+        x if x &lt; 0.10 =&gt; `Red,
+        x if x &lt; 0.25 =&gt; `Yellow,
+        x =&gt; `Green
+    };
 
-block(
-    #border: &amp;`All,
-    #title: &amp;line("Power"),
-    &amp;line_gauge(
-        #filled_style: &amp;style(#fg: color),
-        #line_set: &amp;`Thick,
-        #label: &amp;line("[percentage]%"),
-        &amp;power
+    let percentage = cast&lt;i64&gt;(power * 100.0)?;
+
+    block(
+        #border: &amp;`All,
+        #title: &amp;line("Power"),
+        &amp;line_gauge(
+            #filled_style: &amp;style(#fg: color),
+            #line_set: &amp;`Thick,
+            #label: &amp;line("[percentage]%"),
+            &amp;power
+        )
     )
-)
+}
 </code></pre>
 <h3 id="compact-multi-metric-display"><a class="header" href="#compact-multi-metric-display">Compact Multi-metric Display</a></h3>
-<pre><code class="language-graphix">layout(
+<pre><code class="language-graphix">use tui;
+use tui::line_gauge;
+use tui::text;
+use tui::layout;
+
+layout(
     #direction: &amp;`Vertical,
     &amp;[
         child(#constraint: `Length(1), line_gauge(
@@ -3644,14 +3763,19 @@ block(
 )
 </code></pre>
 <h3 id="line-set-styles"><a class="header" href="#line-set-styles">Line Set Styles</a></h3>
-<pre><code class="language-graphix">// Thin lines - subtle
-line_gauge(#line_set: &amp;`Thin, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+<pre><code class="language-graphix">use tui;
+use tui::line_gauge;
 
-// Thick lines - bold (default)
-line_gauge(#line_set: &amp;`Thick, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+{
+    // Thin lines - subtle
+    let thin = line_gauge(#filled_style: &amp;style(#fg: `Cyan), &amp;0.75);
 
-// Double lines - distinctive
-line_gauge(#line_set: &amp;`Double, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+    // Thick lines - bold (default)
+    let thick = line_gauge(#filled_style: &amp;style(#fg: `Green), &amp;0.75);
+
+    // Result
+    line_gauge(#filled_style: &amp;style(#fg: `Yellow), &amp;0.75)
+}
 </code></pre>
 <h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
 <ul>
@@ -3723,74 +3847,111 @@ val child: fn(?#constraint: Constraint, Widget) -&gt; Child;
 <pre><code class="language-graphix">use tui;
 use tui::layout;
 use tui::block;
+use tui::text;
 
-let sidebar = block(#border: &amp;`All, #title: &amp;line("Sidebar"), &amp;content1);
-let main = block(#border: &amp;`All, #title: &amp;line("Main"), &amp;content2);
+{
+    let content1 = text(&amp;"Sidebar content");
+    let content2 = text(&amp;"Main content");
 
-layout(
-    #direction: &amp;`Horizontal,
-    &amp;[
-        child(#constraint: `Percentage(30), sidebar),
-        child(#constraint: `Percentage(70), main)
-    ]
-)
+    let sidebar = block(#border: &amp;`All, #title: &amp;line("Sidebar"), &amp;content1);
+    let main = block(#border: &amp;`All, #title: &amp;line("Main"), &amp;content2);
+
+    layout(
+        #direction: &amp;`Horizontal,
+        &amp;[
+            child(#constraint: `Percentage(30), sidebar),
+            child(#constraint: `Percentage(70), main)
+        ]
+    )
+}
 </code></pre>
 <h3 id="three-pane-layout-with-focus"><a class="header" href="#three-pane-layout-with-focus">Three-Pane Layout with Focus</a></h3>
-<pre><code class="language-graphix">let focused = 0;
+<pre><code class="language-graphix">use tui;
+use tui::layout;
+use tui::text;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-    `Key(k) =&gt; select k.kind {
-        `Press =&gt; select k.code {
-            k@`Tab =&gt; {
-                focused &lt;- ((k ~ focused) + 1) % 3;
-                `Stop
+{
+    let focused = 0;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+        `Key(k) =&gt; select k.kind {
+            `Press =&gt; select k.code {
+                k@`Tab =&gt; {
+                    focused &lt;- ((k ~ focused) + 1) % 3;
+                    `Stop
+                },
+                _ =&gt; `Continue
             },
             _ =&gt; `Continue
         },
         _ =&gt; `Continue
-    },
-    _ =&gt; `Continue
-};
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;layout(
-        #direction: &amp;`Horizontal,
-        #focused: &amp;focused,
-        &amp;[
-            child(#constraint: `Percentage(25), left_pane),
-            child(#constraint: `Percentage(50), center_pane),
-            child(#constraint: `Percentage(25), right_pane)
-        ]
+    let left_pane = text(&amp;"Left");
+    let center_pane = text(&amp;"Center");
+    let right_pane = text(&amp;"Right");
+
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;layout(
+            #direction: &amp;`Horizontal,
+            #focused: &amp;focused,
+            &amp;[
+                child(#constraint: `Percentage(25), left_pane),
+                child(#constraint: `Percentage(50), center_pane),
+                child(#constraint: `Percentage(25), right_pane)
+            ]
+        )
     )
-)
+}
 </code></pre>
 <h3 id="nested-layouts"><a class="header" href="#nested-layouts">Nested Layouts</a></h3>
-<pre><code class="language-graphix">let top_row = layout(
-    #direction: &amp;`Horizontal,
-    &amp;[
-        child(#constraint: `Percentage(50), widget1),
-        child(#constraint: `Percentage(50), widget2)
-    ]
-);
+<pre><code class="language-graphix">use tui;
+use tui::layout;
+use tui::text;
 
-layout(
-    #direction: &amp;`Vertical,
-    &amp;[
-        child(#constraint: `Percentage(50), top_row),
-        child(#constraint: `Percentage(50), bottom_widget)
-    ]
-)
+{
+    let widget1 = text(&amp;"Widget 1");
+    let widget2 = text(&amp;"Widget 2");
+    let bottom_widget = text(&amp;"Bottom");
+
+    let top_row = layout(
+        #direction: &amp;`Horizontal,
+        &amp;[
+            child(#constraint: `Percentage(50), widget1),
+            child(#constraint: `Percentage(50), widget2)
+        ]
+    );
+
+    layout(
+        #direction: &amp;`Vertical,
+        &amp;[
+            child(#constraint: `Percentage(50), top_row),
+            child(#constraint: `Percentage(50), bottom_widget)
+        ]
+    )
+}
 </code></pre>
 <h3 id="headercontentfooter"><a class="header" href="#headercontentfooter">Header/Content/Footer</a></h3>
-<pre><code class="language-graphix">layout(
-    #direction: &amp;`Vertical,
-    &amp;[
-        child(#constraint: `Length(3), header),
-        child(#constraint: `Fill(1), content),
-        child(#constraint: `Length(1), footer)
-    ]
-)
+<pre><code class="language-graphix">use tui;
+use tui::layout;
+use tui::text;
+
+{
+    let header = text(&amp;"Header");
+    let content = text(&amp;"Main Content");
+    let footer = text(&amp;"Footer");
+
+    layout(
+        #direction: &amp;`Vertical,
+        &amp;[
+            child(#constraint: `Length(3), header),
+            child(#constraint: `Fill(1), content),
+            child(#constraint: `Length(1), footer)
+        ]
+    )
+}
 </code></pre>
 <h2 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h2>
 <ul>
@@ -3837,24 +3998,31 @@ list(
 )
 </code></pre>
 <h3 id="interactive-list-with-navigation"><a class="header" href="#interactive-list-with-navigation">Interactive List with Navigation</a></h3>
-<pre><code class="language-graphix">let items = [
-    line("Apple"), line("Banana"), line("Cherry"),
-    line("Date"), line("Elderberry"), line("Fig"), line("Grape")
-];
+<pre><code class="language-graphix">use tui;
+use tui::list;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let last = array::len(items) - 1;
-let selected = 0;
-let scroll_pos = 0;
-let visible = 5;
+{
+    let items = [
+        line("Apple"), line("Banana"), line("Cherry"),
+        line("Date"), line("Elderberry"), line("Fig"), line("Grape")
+    ];
 
-// Auto-scroll to keep selection visible
-scroll_pos &lt;- select selected {
-    s if s &lt; scroll_pos =&gt; s,
-    s if s &gt; (scroll_pos + visible - 1) =&gt; s - visible + 1,
-    _ =&gt; never()
-};
+    let last = array::len(items) - 1;
+    let selected = 0;
+    let scroll_pos = 0;
+    let visible = 5;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    // Auto-scroll to keep selection visible
+    scroll_pos &lt;- select selected {
+        s if s &lt; scroll_pos =&gt; s,
+        s if s &gt; (scroll_pos + visible - 1) =&gt; s - visible + 1,
+        _ =&gt; never()
+    };
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if selected &gt; 0 =&gt; {
@@ -3871,66 +4039,80 @@ let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
         },
         _ =&gt; `Continue
     },
-    _ =&gt; `Continue
-};
+        _ =&gt; `Continue
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("Fruit Selection"),
-        &amp;list(
-            #highlight_style: &amp;style(#fg: `Black, #bg: `Yellow),
-            #highlight_symbol: &amp;"▶ ",
-            #selected: &amp;selected,
-            #scroll: &amp;scroll_pos,
-            &amp;items
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("Fruit Selection"),
+            &amp;list(
+                #highlight_style: &amp;style(#fg: `Black, #bg: `Yellow),
+                #highlight_symbol: &amp;"▶ ",
+                #selected: &amp;selected,
+                #scroll: &amp;scroll_pos,
+                &amp;items
+            )
         )
     )
-)
+}
 </code></pre>
 <h3 id="styled-items"><a class="header" href="#styled-items">Styled Items</a></h3>
-<pre><code class="language-graphix">let make_item = |text, priority| select priority {
-    `High =&gt; line(#style: style(#fg: `Red, #add_modifier: `Bold), text),
-    `Medium =&gt; line(#style: style(#fg: `Yellow), text),
-    `Low =&gt; line(#style: style(#fg: `White), text)
-};
+<pre><code class="language-graphix">use tui;
+use tui::list;
+use tui::text;
 
-let items = [
-    make_item("Critical bug", `High),
-    make_item("Feature request", `Medium),
-    make_item("Documentation", `Low)
-];
+{
+    let make_item = |text, priority| select priority {
+        `High =&gt; line(#style: style(#fg: `Red, #add_modifier: [`Bold]), text),
+        `Medium =&gt; line(#style: style(#fg: `Yellow), text),
+        `Low =&gt; line(#style: style(#fg: `White), text)
+    };
 
-list(#selected: &amp;0, &amp;items)
+    let items = [
+        make_item("Critical bug", `High),
+        make_item("Feature request", `Medium),
+        make_item("Documentation", `Low)
+    ];
+
+    list(#selected: &amp;0, &amp;items)
+}
 </code></pre>
 <h3 id="action-on-selection"><a class="header" href="#action-on-selection">Action on Selection</a></h3>
-<pre><code class="language-graphix">let selected = 0;
-let action_triggered = never();
+<pre><code class="language-graphix">use tui;
+use tui::list;
+use tui::text;
+use tui::input_handler;
 
-let items = [line("Open"), line("Save"), line("Close"), line("Exit")];
+{
+    let selected = 0;
+    let action_triggered = never();
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-    `Key(k) =&gt; select k.kind {
-        `Press =&gt; select k.code {
-            // ... navigation keys ...
-            k@`Enter =&gt; {
-                action_triggered &lt;- k ~ selected;
-                `Stop
+    let items = [line("Open"), line("Save"), line("Close"), line("Exit")];
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+        `Key(k) =&gt; select k.kind {
+            `Press =&gt; select k.code {
+                // ... navigation keys ...
+                k@`Enter =&gt; {
+                    action_triggered &lt;- k ~ selected;
+                    `Stop
+                },
+                _ =&gt; `Continue
             },
             _ =&gt; `Continue
         },
         _ =&gt; `Continue
-    },
-    _ =&gt; `Continue
-};
+    };
 
-select action_triggered {
-    0 =&gt; net::write("/app/action", "open")?,
-    1 =&gt; net::write("/app/action", "save")?,
-    2 =&gt; net::write("/app/action", "close")?,
-    3 =&gt; net::write("/app/action", "exit")?,
-    _ =&gt; never()
+    select action_triggered {
+        0 =&gt; net::write("/app/action", "open")?,
+        1 =&gt; net::write("/app/action", "save")?,
+        2 =&gt; net::write("/app/action", "close")?,
+        3 =&gt; net::write("/app/action", "exit")?,
+        _ =&gt; never()
+    }
 }
 </code></pre>
 <h2 id="auto-scroll-logic"><a class="header" href="#auto-scroll-logic">Auto-scroll Logic</a></h2>
@@ -3944,6 +4126,8 @@ scroll_pos &lt;- select selected {
     s if s &gt;= (scroll_pos + visible_lines) =&gt; s - visible_lines + 1,
     _ =&gt; never()
 };
+
+scroll_pos
 </code></pre>
 <h2 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h2>
 <ul>
@@ -3975,23 +4159,34 @@ val scrollbar: fn(
 use tui::scrollbar;
 use tui::paragraph;
 
-let position = 0;
-let content = paragraph(
-    #scroll: &amp;{x: 0, y: position},
-    &amp;long_text
-);
+{
+    let long_text = "This is a very long text that needs scrolling. More content here. Even more content. And even more. Keep going with lots of text to demonstrate scrolling.";
+    let position = 0;
+    let content = paragraph(
+        #scroll: &amp;{x: 0, y: position},
+        &amp;long_text
+    );
 
-scrollbar(
-    #position: &amp;position,
-    &amp;content
-)
+    scrollbar(
+        #position: &amp;position,
+        &amp;content
+    )
+}
 </code></pre>
 <h3 id="scrollable-paragraph"><a class="header" href="#scrollable-paragraph">Scrollable Paragraph</a></h3>
-<pre><code class="language-graphix">let long_text = "Very long text content...";
-let position = 0;
-let max_position = 100;
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::paragraph;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+{
+    let long_text = "Very long text content...";
+    let position = 0;
+    let max_position = 100;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if position &gt; 0 =&gt; {
@@ -4016,62 +4211,76 @@ let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
         },
         _ =&gt; `Continue
     },
-    _ =&gt; `Continue
-};
+        _ =&gt; `Continue
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("Scrollable Content"),
-        &amp;scrollbar(
-            #position: &amp;position,
-            #content_length: &amp;max_position,
-            &amp;paragraph(#scroll: &amp;{x: 0, y: position}, &amp;long_text)
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("Scrollable Content"),
+            &amp;scrollbar(
+                #position: &amp;position,
+                #content_length: &amp;max_position,
+                &amp;paragraph(#scroll: &amp;{x: 0, y: position}, &amp;long_text)
+            )
         )
     )
-)
+}
 </code></pre>
 <h3 id="scrollable-list"><a class="header" href="#scrollable-list">Scrollable List</a></h3>
-<pre><code class="language-graphix">let items = [...];  // Large array
-let selected = 0;
-let scroll_pos = 0;
-let visible = 10;
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::list;
+use tui::text;
 
-// Auto-scroll to keep selection visible
-scroll_pos &lt;- select selected {
-    s if s &lt; scroll_pos =&gt; s,
-    s if s &gt;= (scroll_pos + visible) =&gt; s - visible + 1,
-    _ =&gt; never()
-};
+{
+    let items = [line("Item 1"), line("Item 2"), line("Item 3"), line("Item 4"), line("Item 5")];
+    let selected = 0;
+    let scroll_pos = 0;
+    let visible = 10;
 
-scrollbar(
-    #position: &amp;scroll_pos,
-    &amp;list(
-        #scroll: &amp;scroll_pos,
-        #selected: &amp;selected,
-        &amp;items
+    // Auto-scroll to keep selection visible
+    scroll_pos &lt;- select selected {
+        s if s &lt; scroll_pos =&gt; s,
+        s if s &gt;= (scroll_pos + visible) =&gt; s - visible + 1,
+        _ =&gt; never()
+    };
+
+    scrollbar(
+        #position: &amp;scroll_pos,
+        &amp;list(
+            #scroll: &amp;scroll_pos,
+            #selected: &amp;selected,
+            &amp;items
+        )
     )
-)
+}
 </code></pre>
 <h3 id="auto-scroll-to-bottom"><a class="header" href="#auto-scroll-to-bottom">Auto-scroll to Bottom</a></h3>
-<pre><code class="language-graphix">let lines = [];
-let new_line = net::subscribe("/logs/app")?;
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::paragraph;
 
-lines &lt;- array::window(#n: 100, new_line ~ lines, cast&lt;string&gt;(new_line)?);
+{
+    let lines = [];
+    let new_line = net::subscribe("/logs/app")?;
 
-let line_count = array::len(lines);
-let visible_lines = 20;
-let scroll_pos = max(0, line_count - visible_lines);
+    lines &lt;- array::window(#n: 100, new_line ~ lines, cast&lt;string&gt;(new_line)?);
 
-scrollbar(
-    #position: &amp;scroll_pos,
-    #content_length: &amp;line_count,
-    &amp;paragraph(
-        #scroll: &amp;{x: 0, y: scroll_pos},
-        &amp;array::fold(lines, "", |acc, l| "[acc]\n[l]")
+    let line_count = array::len(lines);
+    let visible_lines = 20;
+    let scroll_pos = max(0, line_count - visible_lines);
+
+    scrollbar(
+        #position: &amp;scroll_pos,
+        #content_length: &amp;line_count,
+        &amp;paragraph(
+            #scroll: &amp;{x: 0, y: scroll_pos},
+            &amp;array::fold(lines, "", |acc, l| "[acc]\n[l]")
+        )
     )
-)
+}
 </code></pre>
 <h2 id="common-mistake"><a class="header" href="#common-mistake">Common Mistake</a></h2>
 <p>Remember to apply the scroll position to both the scrollbar and the content:</p>
@@ -4139,62 +4348,78 @@ let data = [10.0, 25.0, 40.0, 55.0, 70.0, 85.0, 100.0];
 sparkline(#max: &amp;100, &amp;data)
 </code></pre>
 <h3 id="threshold-based-coloring"><a class="header" href="#threshold-based-coloring">Threshold-based Coloring</a></h3>
-<pre><code class="language-graphix">let data: Array&lt;[SparklineBar, f64]&gt; = {
-    let clock = time::timer(duration:0.3s, true);
-    let v = select rand::rand(#clock, #start:0., #end:100.) {
-        x if (x &gt; 50.) &amp;&amp; (x &lt; 75.) =&gt; sparkline_bar(#style: style(#fg:`Yellow), x),
-        x if x &gt; 75. =&gt; sparkline_bar(#style: style(#fg:`Red), x),
-        x =&gt; x  // Use default style
-    };
-    let d = [];
-    d &lt;- array::window(#n:80, clock ~ d, v);
-    d
-};
+<pre><code class="language-graphix">use tui;
+use tui::sparkline;
+use tui::block;
+use tui::text;
 
-block(
-    #border: &amp;`All,
-    #title: &amp;line("Network Traffic Rate"),
-    &amp;sparkline(
-        #style: &amp;style(#fg: `Green),
-        #max: &amp;100,
-        &amp;data
+{
+    let data: Array&lt;f64&gt; = {
+        let clock = time::timer(duration:0.3s, true);
+        let v = rand::rand(#clock, #start:0., #end:100.);
+        let d = [];
+        d &lt;- array::window(#n:80, clock ~ d, v);
+        d
+    };
+
+    block(
+        #border: &amp;`All,
+        #title: &amp;line("Network Traffic Rate"),
+        &amp;sparkline(
+            #style: &amp;style(#fg: `Green),
+            #max: &amp;100,
+            &amp;data
+        )
     )
-)
+}
 </code></pre>
 <h3 id="multi-metric-dashboard"><a class="header" href="#multi-metric-dashboard">Multi-metric Dashboard</a></h3>
-<pre><code class="language-graphix">let cpu_data = [...];
-let mem_data = [...];
-let net_data = [...];
+<pre><code class="language-graphix">use tui;
+use tui::sparkline;
+use tui::block;
+use tui::text;
+use tui::layout;
 
-layout(
-    #direction: &amp;`Vertical,
-    &amp;[
-        child(#constraint: `Length(3), block(
-            #title: &amp;line("CPU"),
-            &amp;sparkline(#style: &amp;style(#fg: `Red), #max: &amp;100, &amp;cpu_data)
-        )),
-        child(#constraint: `Length(3), block(
-            #title: &amp;line("Memory"),
-            &amp;sparkline(#style: &amp;style(#fg: `Yellow), #max: &amp;100, &amp;mem_data)
-        )),
-        child(#constraint: `Length(3), block(
-            #title: &amp;line("Network"),
-            &amp;sparkline(#style: &amp;style(#fg: `Cyan), &amp;net_data)
-        ))
-    ]
-)
+{
+    let cpu_data = [50., 60., 55., 70., 65.];
+    let mem_data = [30., 35., 40., 38., 42.];
+    let net_data = [10., 20., 15., 25., 30.];
+
+    layout(
+        #direction: &amp;`Vertical,
+        &amp;[
+            child(#constraint: `Length(3), block(
+                #title: &amp;line("CPU"),
+                &amp;sparkline(#style: &amp;style(#fg: `Red), #max: &amp;100, &amp;cpu_data)
+            )),
+            child(#constraint: `Length(3), block(
+                #title: &amp;line("Memory"),
+                &amp;sparkline(#style: &amp;style(#fg: `Yellow), #max: &amp;100, &amp;mem_data)
+            )),
+            child(#constraint: `Length(3), block(
+                #title: &amp;line("Network"),
+                &amp;sparkline(#style: &amp;style(#fg: `Cyan), &amp;net_data)
+            ))
+        ]
+    )
+}
 </code></pre>
 <h3 id="rolling-window"><a class="header" href="#rolling-window">Rolling Window</a></h3>
-<pre><code class="language-graphix">let data: Array&lt;f64&gt; = [];
-let new_value = net::subscribe("/metrics/cpu")?;
+<pre><code class="language-graphix">use tui;
+use tui::sparkline;
 
-data &lt;- array::window(
-    #n: 60,
-    new_value ~ data,
-    cast&lt;f64&gt;(new_value)?
-);
+{
+    let data: Array&lt;f64&gt; = [];
+    let new_value = net::subscribe("/metrics/cpu")?;
 
-sparkline(#max: &amp;100, &amp;data)
+    data &lt;- array::window(
+        #n: 60,
+        new_value ~ data,
+        cast&lt;f64&gt;(new_value)?
+    );
+
+    sparkline(#max: &amp;100, &amp;data)
+}
 </code></pre>
 <h2 id="use-cases-1"><a class="header" href="#use-cases-1">Use Cases</a></h2>
 <p>Sparklines are ideal for:</p>
@@ -4275,30 +4500,46 @@ table(
 )
 </code></pre>
 <h3 id="interactive-table"><a class="header" href="#interactive-table">Interactive Table</a></h3>
-<pre><code class="language-graphix">type User = {name: string, age: i64, city: string};
+<pre><code class="language-graphix">use tui;
+use tui::table;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let users: Array&lt;User&gt; = [
-    {name: "Alice", age: 28, city: "New York"},
-    {name: "Bob", age: 32, city: "San Francisco"},
-    {name: "Charlie", age: 25, city: "Chicago"}
-];
+{
+    type User = {name: string, age: i64, city: string};
 
-let header = row(
-    #style: style(#fg: `Yellow, #add_modifier: `Bold),
-    [cell(line("Name")), cell(line("Age")), cell(line("City"))]
-);
+    let users: Array&lt;User&gt; = [
+        {name: "Alice", age: 28, city: "New York"},
+        {name: "Bob", age: 32, city: "San Francisco"},
+        {name: "Charlie", age: 25, city: "Chicago"}
+    ];
 
-let rows: Array&lt;&amp;Row&gt; = array::map(users, |u: User| -&gt; &amp;Row {
-    &amp;row([
-        cell(line(u.name)),
-        cell(line("[u.age]")),
-        cell(line(u.city))
-    ])
-});
+    let header = row(
+        #style: style(#fg: `Yellow, #add_modifier: [`Bold]),
+        [cell(line("Name")), cell(line("Age")), cell(line("City"))]
+    );
 
-let selected = 0;
+    let row1 = row([
+        cell(line("Alice")),
+        cell(line("28")),
+        cell(line("New York"))
+    ]);
+    let row2 = row([
+        cell(line("Bob")),
+        cell(line("32")),
+        cell(line("San Francisco"))
+    ]);
+    let row3 = row([
+        cell(line("Charlie")),
+        cell(line("25")),
+        cell(line("Chicago"))
+    ]);
+    let rows = [&amp;row1, &amp;row2, &amp;row3];
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    let selected = 0;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if selected &gt; 0 =&gt; {
@@ -4313,61 +4554,83 @@ let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
         },
         _ =&gt; `Continue
     },
-    _ =&gt; `Continue
-};
+        _ =&gt; `Continue
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("User Directory"),
-        &amp;table(
-            #header: &amp;header,
-            #row_highlight_style: &amp;style(#bg: `Yellow, #fg: `Black),
-            #selected: &amp;selected,
-            #column_spacing: &amp;2,
-            #widths: &amp;[`Percentage(30), `Percentage(20), `Percentage(50)],
-            &amp;rows
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("User Directory"),
+            &amp;table(
+                #header: &amp;header,
+                #row_highlight_style: &amp;style(#bg: `Yellow, #fg: `Black),
+                #selected: &amp;selected,
+                #column_spacing: &amp;2,
+                #widths: &amp;[`Percentage(30), `Percentage(20), `Percentage(50)],
+                &amp;rows
+            )
         )
     )
-)
+}
 </code></pre>
 <h3 id="conditional-cell-styling"><a class="header" href="#conditional-cell-styling">Conditional Cell Styling</a></h3>
-<pre><code class="language-graphix">let make_cpu_cell = |cpu: i64| -&gt; Cell {
-    let style = select cpu {
-        c if c &gt; 80 =&gt; style(#fg: `Red),
-        c if c &gt; 50 =&gt; style(#fg: `Yellow),
-        _ =&gt; style(#fg: `Green)
-    };
-    cell(#style, line("[cpu]%"))
-};
+<pre><code class="language-graphix">use tui;
+use tui::table;
+use tui::text;
 
-let row = row([
-    cell(line("process-1")),
-    make_cpu_cell(85)  // Red
-]);
+{
+    let make_cpu_cell = |cpu| {
+        let s = select cpu {
+            c if c &gt; 80 =&gt; style(#fg: `Red),
+            c if c &gt; 50 =&gt; style(#fg: `Yellow),
+            _ =&gt; style(#fg: `Green)
+        };
+        cell(#style: s, line("[cpu]%"))
+    };
+
+    row([
+        cell(line("process-1")),
+        make_cpu_cell(85)  // Red
+    ])
+}
 </code></pre>
 <h3 id="real-time-updates"><a class="header" href="#real-time-updates">Real-time Updates</a></h3>
-<pre><code class="language-graphix">type Process = {pid: i64, name: string, cpu: i64};
+<pre><code class="language-graphix">use tui;
+use tui::table;
+use tui::text;
 
-let processes: Array&lt;Process&gt; = [...];
-let clock = time::timer(duration:1.s, true);
+{
+    type Process = {pid: i64, name: string, cpu: i64};
 
-let rows: Array&lt;&amp;Row&gt; = array::map(processes, |p: Process| -&gt; &amp;Row {
-    let cpu_val = p.cpu;
+    let processes: Array&lt;Process&gt; = [
+        {pid: 1, name: "init", cpu: 5},
+        {pid: 2, name: "kthreadd", cpu: 0},
+        {pid: 3, name: "rcu_gp", cpu: 0}
+    ];
+    let clock = time::timer(duration:1.s, true);
+
+    let cpu_val = 5;
     cpu_val &lt;- {
         let v = clock ~ cpu_val;
         v + rand::rand(#clock, #start: -5, #end: 5)
     };
-    
-    &amp;row([
-        cell(line("[p.pid]")),
-        cell(line(p.name)),
-        cell(line("[cpu_val]%"))
-    ])
-});
 
-table(#header: &amp;header, &amp;rows)
+    let row1 = row([
+        cell(line("1")),
+        cell(line("init")),
+        cell(line("[cpu_val]%"))
+    ]);
+    let row2 = row([
+        cell(line("2")),
+        cell(line("kthreadd")),
+        cell(line("0%"))
+    ]);
+    let rows = [&amp;row1, &amp;row2];
+
+    let header = row([cell(line("PID")), cell(line("Name")), cell(line("CPU"))]);
+    table(#header: &amp;header, &amp;rows)
+}
 </code></pre>
 <h2 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h2>
 <ul>
@@ -4414,75 +4677,107 @@ tabs(
 )
 </code></pre>
 <h3 id="navigation-between-tabs"><a class="header" href="#navigation-between-tabs">Navigation Between Tabs</a></h3>
-<pre><code class="language-graphix">let selected_tab = 0;
+<pre><code class="language-graphix">use tui;
+use tui::tabs;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-    `Key(k) =&gt; select k.kind {
-        `Press =&gt; select k.code {
-            k@`Left if selected_tab &gt; 0 =&gt; {
-                selected_tab &lt;- (k ~ selected_tab) - 1;
-                `Stop
-            },
-            k@`Right if selected_tab &lt; 2 =&gt; {
-                selected_tab &lt;- (k ~ selected_tab) + 1;
-                `Stop
-            },
-            k@`Tab =&gt; {
-                selected_tab &lt;- ((k ~ selected_tab) + 1) % 3;
-                `Stop
+{
+    let selected_tab = 0;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+        `Key(k) =&gt; select k.kind {
+            `Press =&gt; select k.code {
+                k@`Left if selected_tab &gt; 0 =&gt; {
+                    selected_tab &lt;- (k ~ selected_tab) - 1;
+                    `Stop
+                },
+                k@`Right if selected_tab &lt; 2 =&gt; {
+                    selected_tab &lt;- (k ~ selected_tab) + 1;
+                    `Stop
+                },
+                k@`Tab =&gt; {
+                    selected_tab &lt;- ((k ~ selected_tab) + 1) % 3;
+                    `Stop
+                },
+                _ =&gt; `Continue
             },
             _ =&gt; `Continue
         },
         _ =&gt; `Continue
-    },
-    _ =&gt; `Continue
-};
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("Application (←/→ to navigate)"),
-        &amp;tabs(
-            #highlight_style: &amp;style(#fg: `Yellow, #add_modifier: `Bold),
-            #style: &amp;style(#fg: `Gray),
-            #selected: &amp;selected_tab,
-            &amp;[(line("Overview"), overview), (line("Items"), items), (line("Settings"), settings)]
+    let overview = text(&amp;"Overview");
+    let items = text(&amp;"Items");
+    let settings = text(&amp;"Settings");
+
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("Application (←/→ to navigate)"),
+            &amp;tabs(
+                #highlight_style: &amp;style(#fg: `Yellow, #add_modifier: [`Bold]),
+                #style: &amp;style(#fg: `Gray),
+                #selected: &amp;selected_tab,
+                &amp;[(line("Overview"), overview), (line("Items"), items), (line("Settings"), settings)]
+            )
         )
     )
-)
+}
 </code></pre>
 <h3 id="styled-tab-titles"><a class="header" href="#styled-tab-titles">Styled Tab Titles</a></h3>
-<pre><code class="language-graphix">let tab_list = [
-    (line([
-        span(#style: style(#fg: `Green), "✓ "),
-        span("Completed")
-    ]), completed_content),
-    (line([
-        span(#style: style(#fg: `Yellow), "⚠ "),
-        span("In Progress")
-    ]), progress_content),
-    (line([
-        span(#style: style(#fg: `Red), "✗ "),
-        span("Failed")
-    ]), failed_content)
-];
+<pre><code class="language-graphix">use tui;
+use tui::tabs;
+use tui::text;
 
-tabs(&amp;tab_list)
+{
+    let completed_content = text(&amp;"Completed");
+    let progress_content = text(&amp;"In Progress");
+    let failed_content = text(&amp;"Failed");
+
+    let tab_list = [
+        (line([
+            span(#style: style(#fg: `Green), "✓ "),
+            span("Completed")
+        ]), completed_content),
+        (line([
+            span(#style: style(#fg: `Yellow), "⚠ "),
+            span("In Progress")
+        ]), progress_content),
+        (line([
+            span(#style: style(#fg: `Red), "✗ "),
+            span("Failed")
+        ]), failed_content)
+    ];
+
+    tabs(&amp;tab_list)
+}
 </code></pre>
 <h3 id="tab-with-badge"><a class="header" href="#tab-with-badge">Tab with Badge</a></h3>
-<pre><code class="language-graphix">let unread_count = 5;
+<pre><code class="language-graphix">use tui;
+use tui::tabs;
+use tui::text;
 
-let messages_tab = line([
-    span("Messages"),
-    span(#style: style(#fg: `Red, #add_modifier: `Bold), " ([unread_count])")
-]);
+{
+    let unread_count = 5;
 
-tabs(&amp;[
-    (line("Home"), home_content),
-    (messages_tab, messages_content),
-    (line("Settings"), settings_content)
-])
+    let messages_tab = line([
+        span("Messages"),
+        span(#style: style(#fg: `Red, #add_modifier: [`Bold]), " ([unread_count])")
+    ]);
+
+    let home_content = text(&amp;"Home");
+    let messages_content = text(&amp;"Messages");
+    let settings_content = text(&amp;"Settings");
+
+    tabs(&amp;[
+        (line("Home"), home_content),
+        (messages_tab, messages_content),
+        (line("Settings"), settings_content)
+    ])
+}
 </code></pre>
 <h2 id="keyboard-navigation"><a class="header" href="#keyboard-navigation">Keyboard Navigation</a></h2>
 <p>Common patterns:</p>

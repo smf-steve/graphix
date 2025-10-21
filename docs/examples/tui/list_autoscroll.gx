@@ -1,0 +1,11 @@
+let selected = 0;
+let scroll_pos = 0;
+let visible_lines = 10;
+
+scroll_pos <- select selected {
+    s if s < scroll_pos => s,
+    s if s >= (scroll_pos + visible_lines) => s - visible_lines + 1,
+    _ => never()
+};
+
+scroll_pos

@@ -189,7 +189,7 @@ type Color = [
 ];
 
 /// Creates styled text from a string or array of lines
-val text: fn([string, Array&lt;Line&gt;]) -&gt; Widget;
+val text: fn(&amp;[string, Array&lt;Line&gt;]) -&gt; Widget;
 
 /// Creates a line of text from a string or array of spans
 val line: fn(?#style: Style, ?#alignment: Alignment, [string, Array&lt;Span&gt;]) -&gt; Line;
@@ -211,27 +211,20 @@ val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -&gt; Style;
 <pre><code class="language-graphix">use tui;
 use tui::text;
 
-// Simple text
 text(&amp;"Hello, World!")
-
-// Multi-line
-text(&amp;[
-    line("First line"),
-    line("Second line")
-])
-
-// Styled
-let error = span(#style: style(#fg: `Red, #add_modifier: `Bold), "Error:");
-text(&amp;[line([error, span(" Something went wrong")])])
 </code></pre>
+<p><img src="./media/text_basic.png" alt="Basic Text" /></p>
 <h3 id="status-messages"><a class="header" href="#status-messages">Status Messages</a></h3>
-<pre><code class="language-graphix">let make_status = |level, msg| select level {
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+let make_status = |level, msg| select level {
     `Error =&gt; line([
-        span(#style: style(#fg: `Red, #add_modifier: `Bold), "ERROR: "),
+        span(#style: style(#fg: `Red, #add_modifier: [`Bold]), "ERROR: "),
         span(msg)
     ]),
     `Warning =&gt; line([
-        span(#style: style(#fg: `Yellow, #add_modifier: `Bold), "WARNING: "),
+        span(#style: style(#fg: `Yellow, #add_modifier: [`Bold]), "WARNING: "),
         span(msg)
     ]),
     `Info =&gt; line([
@@ -246,26 +239,37 @@ text(&amp;[
     make_status(`Error, "Connection failed")
 ])
 </code></pre>
+<p><img src="./media/text_status.png" alt="Multi Line Status" /></p>
 <h3 id="dynamic-colors"><a class="header" href="#dynamic-colors">Dynamic Colors</a></h3>
-<pre><code class="language-graphix">let count = 0;
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+let count = 0;
 let timer = time::timer(duration:1.s, true);
 count &lt;- timer ~ (count + 1);
 
 let colors = [`Red, `Green, `Yellow, `Blue, `Magenta, `Cyan];
 let color = colors[count % array::len(colors)]$;
 
-line([
+let l = line([
     span(#style: style(#fg: `White), "Count: "),
-    span(#style: style(#fg: color, #add_modifier: `Bold), "[count]")
-])
+    span(#style: style(#fg: color, #add_modifier: [`Bold]), "[count]")
+]);
+
+text(&amp;[l])
 </code></pre>
+<p><img src="./media/text_dynamic.gif" alt="Dynamic Text" /></p>
 <h3 id="alignment"><a class="header" href="#alignment">Alignment</a></h3>
-<pre><code class="language-graphix">text(&amp;[
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+text(&amp;[
     line(#alignment: `Left, "Left aligned"),
     line(#alignment: `Center, "Centered"),
     line(#alignment: `Right, "Right aligned")
 ])
 </code></pre>
+<p><img src="./media/text_alignment.gif" alt="Text Alignment" /></p>
 <h2 id="color-support"><a class="header" href="#color-support">Color Support</a></h2>
 <ul>
 <li><strong>Named colors</strong>: <code>Red</code>, <code>Green</code>, <code>Blue</code>, <code>Yellow</code>, <code>Magenta</code>, <code>Cyan</code>, <code>White</code>, <code>Black</code>, <code>Gray</code>, <code>DarkGray</code>, and <code>Light*</code> variants</li>

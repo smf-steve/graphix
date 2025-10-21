@@ -231,6 +231,7 @@ let bar1 = bar(
 
 bar_chart(&amp;[bar_group(#label: line("Q1"), [bar1])])
 </code></pre>
+<p><img src="./media/barchart_basic.png" alt="Basic Bar Chart" /></p>
 <h3 id="grouped-bars-with-dynamic-data"><a class="header" href="#grouped-bars-with-dynamic-data">Grouped Bars with Dynamic Data</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::barchart;
@@ -261,6 +262,7 @@ let chart = bar_chart(
 
 block(#border: &amp;`All, #title: &amp;line("Resource Usage"), &amp;chart)
 </code></pre>
+<p><img src="./media/barchart_grouped.png" alt="Grouped Bar Chart" /></p>
 <h3 id="color-coded-values"><a class="header" href="#color-coded-values">Color-coded Values</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::barchart;
@@ -282,6 +284,7 @@ let bars = [
 
 bar_chart(&amp;[bar_group(bars)])
 </code></pre>
+<p><img src="./media/barchart_colored.png" alt="Colored Bar Chart" /></p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>
 <li><a href="chart.html">chart</a> - For continuous data visualization</li>

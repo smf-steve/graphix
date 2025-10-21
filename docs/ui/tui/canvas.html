@@ -233,59 +233,66 @@ canvas(
     &amp;[&amp;line, &amp;circle]
 )
 </code></pre>
+<p><img src="./media/canvas_basic.png" alt="Basic Canvas" /></p>
 <h3 id="function-plotting"><a class="header" href="#function-plotting">Function Plotting</a></h3>
-<pre><code class="language-graphix">let points = array::range(0, 100);
-let coords = array::map(points, |i| {
-    let x = cast&lt;f64&gt;(i)? / 10.0;
-    let y = math::sin(x);
-    (x, y)
-});
+<pre><code class="language-graphix">use tui;
+use tui::canvas;
 
-let plot = `Points({color: `Cyan, coords});
+{
+    let coords = [
+        (0.0, 0.0), (0.5, 0.48), (1.0, 0.84), (1.5, 1.0),
+        (2.0, 0.91), (2.5, 0.60), (3.0, 0.14), (3.5, -0.35),
+        (4.0, -0.76), (4.5, -0.98), (5.0, -0.96)
+    ];
 
-canvas(
-    #x_bounds: &amp;{min: 0.0, max: 10.0},
-    #y_bounds: &amp;{min: -1.0, max: 1.0},
-    &amp;[&amp;plot]
-)
+    let plot = `Points({color: `Cyan, coords});
+
+    canvas(
+        #x_bounds: &amp;{min: 0.0, max: 10.0},
+        #y_bounds: &amp;{min: -1.0, max: 1.0},
+        &amp;[&amp;plot]
+    )
+}
 </code></pre>
+<p><img src="./media/canvas_plot.png" alt="Scatter Plot" /></p>
 <h3 id="network-diagram"><a class="header" href="#network-diagram">Network Diagram</a></h3>
-<pre><code class="language-graphix">type Node = {x: f64, y: f64, label: string};
+<pre><code class="language-graphix">use tui;
+use tui::canvas;
+use tui::text;
 
-let nodes = [
-    {x: 2.0, y: 5.0, label: "A"},
-    {x: 8.0, y: 5.0, label: "B"},
-    {x: 5.0, y: 8.0, label: "C"}
-];
+{
+    let circle1 = `Circle({color: `Blue, x: 2.0, y: 5.0, radius: 0.5});
+    let circle2 = `Circle({color: `Blue, x: 8.0, y: 5.0, radius: 0.5});
+    let circle3 = `Circle({color: `Blue, x: 5.0, y: 8.0, radius: 0.5});
 
-let circles = array::map(nodes, |n| {
-    &amp;`Circle({color: `Blue, x: n.x, y: n.y, radius: 0.5})
-});
+    let line1 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 8.0, y2: 5.0});
+    let line2 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 5.0, y2: 8.0});
+    let line3 = `Line({color: `White, x1: 8.0, y1: 5.0, x2: 5.0, y2: 8.0});
 
-let labels = array::map(nodes, |n| {
-    &amp;`Label({line: line(n.label), x: n.x, y: n.y - 0.8})
-});
+    let all_shapes = [&amp;line1, &amp;line2, &amp;line3, &amp;circle1, &amp;circle2, &amp;circle3];
 
-let line1 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 8.0, y2: 5.0});
-let line2 = `Line({color: `White, x1: 2.0, y1: 5.0, x2: 5.0, y2: 8.0});
-let line3 = `Line({color: `White, x1: 8.0, y1: 5.0, x2: 5.0, y2: 8.0});
-
-let all_shapes = array::concat([[&amp;line1, &amp;line2, &amp;line3], circles, labels]);
-
-canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;all_shapes)
+    canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;all_shapes)
+}
 </code></pre>
+<p><img src="./media/canvas_network.png" alt="Network Diagram" /></p>
 <h3 id="animated-graphics"><a class="header" href="#animated-graphics">Animated Graphics</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.1s, true);
-let x = 0.0;
-x &lt;- {
-    let new_x = (clock ~ x) + 0.1;
-    select new_x &gt; 10.0 { true =&gt; 0.0, false =&gt; new_x }
-};
+<pre><code class="language-graphix">use tui;
+use tui::canvas;
 
-let moving_circle = `Circle({color: `Red, x, y: 5.0, radius: 1.0});
+{
+    let clock = time::timer(duration:0.1s, true);
+    let x = 0.0;
+    x &lt;- {
+        let new_x = (clock ~ x) + 0.1;
+        select new_x &gt; 10.0 { true =&gt; 0.0, false =&gt; new_x }
+    };
 
-canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;[&amp;moving_circle])
+    let moving_circle = `Circle({color: `Red, x, y: 5.0, radius: 1.0});
+
+    canvas(#x_bounds: &amp;{min: 0.0, max: 10.0}, #y_bounds: &amp;{min: 0.0, max: 10.0}, &amp;[&amp;moving_circle])
+}
 </code></pre>
+<p><img src="./media/canvas_animated.gif" alt="Animated Canvas" /></p>
 <h2 id="marker-comparison"><a class="header" href="#marker-comparison">Marker Comparison</a></h2>
 <ul>
 <li><strong>Braille</strong>: Highest resolution, smoothest curves, best for detailed graphics</li>

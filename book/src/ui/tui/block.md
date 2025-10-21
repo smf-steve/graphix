@@ -36,6 +36,8 @@ val block: fn(
 {{#include ../../examples/tui/block_basic.gx}}
 ```
 
+![Basic Block](./media/block_basic.png)
+
 ### Focus Indication
 
 Use dynamic styling to show which block has focus:
@@ -44,6 +46,8 @@ Use dynamic styling to show which block has focus:
 {{#include ../../examples/tui/block_focus.gx}}
 ```
 
+![Styled Block](./media/block_focus.png)
+
 ### Dynamic Titles
 
 Titles can contain reactive values that update automatically:
@@ -51,6 +55,8 @@ Titles can contain reactive values that update automatically:
 ```graphix
 {{#include ../../examples/tui/block_dynamic_title.gx}}
 ```
+
+![Block With Dynamic Title](./media/block_dynamic_title.png)
 
 ## See Also
 

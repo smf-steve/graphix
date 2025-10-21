@@ -214,75 +214,107 @@ tabs(
 )
 </code></pre>
 <h3 id="navigation-between-tabs"><a class="header" href="#navigation-between-tabs">Navigation Between Tabs</a></h3>
-<pre><code class="language-graphix">let selected_tab = 0;
+<pre><code class="language-graphix">use tui;
+use tui::tabs;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-    `Key(k) =&gt; select k.kind {
-        `Press =&gt; select k.code {
-            k@`Left if selected_tab &gt; 0 =&gt; {
-                selected_tab &lt;- (k ~ selected_tab) - 1;
-                `Stop
-            },
-            k@`Right if selected_tab &lt; 2 =&gt; {
-                selected_tab &lt;- (k ~ selected_tab) + 1;
-                `Stop
-            },
-            k@`Tab =&gt; {
-                selected_tab &lt;- ((k ~ selected_tab) + 1) % 3;
-                `Stop
+{
+    let selected_tab = 0;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+        `Key(k) =&gt; select k.kind {
+            `Press =&gt; select k.code {
+                k@`Left if selected_tab &gt; 0 =&gt; {
+                    selected_tab &lt;- (k ~ selected_tab) - 1;
+                    `Stop
+                },
+                k@`Right if selected_tab &lt; 2 =&gt; {
+                    selected_tab &lt;- (k ~ selected_tab) + 1;
+                    `Stop
+                },
+                k@`Tab =&gt; {
+                    selected_tab &lt;- ((k ~ selected_tab) + 1) % 3;
+                    `Stop
+                },
+                _ =&gt; `Continue
             },
             _ =&gt; `Continue
         },
         _ =&gt; `Continue
-    },
-    _ =&gt; `Continue
-};
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("Application (←/→ to navigate)"),
-        &amp;tabs(
-            #highlight_style: &amp;style(#fg: `Yellow, #add_modifier: `Bold),
-            #style: &amp;style(#fg: `Gray),
-            #selected: &amp;selected_tab,
-            &amp;[(line("Overview"), overview), (line("Items"), items), (line("Settings"), settings)]
+    let overview = text(&amp;"Overview");
+    let items = text(&amp;"Items");
+    let settings = text(&amp;"Settings");
+
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("Application (←/→ to navigate)"),
+            &amp;tabs(
+                #highlight_style: &amp;style(#fg: `Yellow, #add_modifier: [`Bold]),
+                #style: &amp;style(#fg: `Gray),
+                #selected: &amp;selected_tab,
+                &amp;[(line("Overview"), overview), (line("Items"), items), (line("Settings"), settings)]
+            )
         )
     )
-)
+}
 </code></pre>
 <h3 id="styled-tab-titles"><a class="header" href="#styled-tab-titles">Styled Tab Titles</a></h3>
-<pre><code class="language-graphix">let tab_list = [
-    (line([
-        span(#style: style(#fg: `Green), "✓ "),
-        span("Completed")
-    ]), completed_content),
-    (line([
-        span(#style: style(#fg: `Yellow), "⚠ "),
-        span("In Progress")
-    ]), progress_content),
-    (line([
-        span(#style: style(#fg: `Red), "✗ "),
-        span("Failed")
-    ]), failed_content)
-];
+<pre><code class="language-graphix">use tui;
+use tui::tabs;
+use tui::text;
 
-tabs(&amp;tab_list)
+{
+    let completed_content = text(&amp;"Completed");
+    let progress_content = text(&amp;"In Progress");
+    let failed_content = text(&amp;"Failed");
+
+    let tab_list = [
+        (line([
+            span(#style: style(#fg: `Green), "✓ "),
+            span("Completed")
+        ]), completed_content),
+        (line([
+            span(#style: style(#fg: `Yellow), "⚠ "),
+            span("In Progress")
+        ]), progress_content),
+        (line([
+            span(#style: style(#fg: `Red), "✗ "),
+            span("Failed")
+        ]), failed_content)
+    ];
+
+    tabs(&amp;tab_list)
+}
 </code></pre>
 <h3 id="tab-with-badge"><a class="header" href="#tab-with-badge">Tab with Badge</a></h3>
-<pre><code class="language-graphix">let unread_count = 5;
+<pre><code class="language-graphix">use tui;
+use tui::tabs;
+use tui::text;
 
-let messages_tab = line([
-    span("Messages"),
-    span(#style: style(#fg: `Red, #add_modifier: `Bold), " ([unread_count])")
-]);
+{
+    let unread_count = 5;
 
-tabs(&amp;[
-    (line("Home"), home_content),
-    (messages_tab, messages_content),
-    (line("Settings"), settings_content)
-])
+    let messages_tab = line([
+        span("Messages"),
+        span(#style: style(#fg: `Red, #add_modifier: [`Bold]), " ([unread_count])")
+    ]);
+
+    let home_content = text(&amp;"Home");
+    let messages_content = text(&amp;"Messages");
+    let settings_content = text(&amp;"Settings");
+
+    tabs(&amp;[
+        (line("Home"), home_content),
+        (messages_tab, messages_content),
+        (line("Settings"), settings_content)
+    ])
+}
 </code></pre>
 <h2 id="keyboard-navigation"><a class="header" href="#keyboard-navigation">Keyboard Navigation</a></h2>
 <p>Common patterns:</p>

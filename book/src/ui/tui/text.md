@@ -16,7 +16,7 @@ type Color = [
 ];
 
 /// Creates styled text from a string or array of lines
-val text: fn([string, Array<Line>]) -> Widget;
+val text: fn(&[string, Array<Line>]) -> Widget;
 
 /// Creates a line of text from a string or array of spans
 val line: fn(?#style: Style, ?#alignment: Alignment, [string, Array<Span>]) -> Line;
@@ -42,11 +42,15 @@ val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -> Style;
 {{#include ../../examples/tui/text_basic.gx}}
 ```
 
+![Basic Text](./media/text_basic.png)
+
 ### Status Messages
 
 ```graphix
 {{#include ../../examples/tui/text_status.gx}}
 ```
+
+![Multi Line Status](./media/text_status.png)
 
 ### Dynamic Colors
 
@@ -54,11 +58,15 @@ val style: fn(?#fg: Color, ?#bg: Color, ?#add_modifier: Modifier) -> Style;
 {{#include ../../examples/tui/text_dynamic.gx}}
 ```
 
+![Dynamic Text](./media/text_dynamic.gif)
+
 ### Alignment
 
 ```graphix
 {{#include ../../examples/tui/text_alignment.gx}}
 ```
+
+![Text Alignment](./media/text_alignment.gif)
 
 ## Color Support
 

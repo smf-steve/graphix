@@ -214,9 +214,15 @@ block(
     &amp;content
 )
 </code></pre>
+<p><img src="./media/block_basic.png" alt="Basic Block" /></p>
 <h3 id="focus-indication"><a class="header" href="#focus-indication">Focus Indication</a></h3>
 <p>Use dynamic styling to show which block has focus:</p>
-<pre><code class="language-graphix">let focused_block = 0;
+<pre><code class="language-graphix">use tui;
+use tui::block;
+use tui::paragraph;
+
+let focused_block = 0;
+let content = paragraph(&amp;"Content here");
 
 block(
     #border: &amp;`All,
@@ -230,11 +236,18 @@ block(
     &amp;content
 )
 </code></pre>
+<p><img src="./media/block_focus.png" alt="Styled Block" /></p>
 <h3 id="dynamic-titles"><a class="header" href="#dynamic-titles">Dynamic Titles</a></h3>
 <p>Titles can contain reactive values that update automatically:</p>
-<pre><code class="language-graphix">let count = 0;
+<pre><code class="language-graphix">use tui;
+use tui::block;
+use tui::paragraph;
+
+let count = 0;
 let timer = time::timer(duration:1.s, true);
 count &lt;- timer ~ (count + 1);
+
+let content = paragraph(&amp;"Content here");
 
 block(
     #border: &amp;`All,
@@ -242,6 +255,7 @@ block(
     &amp;content
 )
 </code></pre>
+<p><img src="./media/block_dynamic_title.png" alt="Block With Dynamic Title" /></p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>
 <li><a href="layout.html">layout</a> - For arranging multiple blocks</li>

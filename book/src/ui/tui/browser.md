@@ -32,11 +32,15 @@ val browser: fn(
 {{#include ../../examples/tui/browser_basic.gx}}
 ```
 
+![Basic Browser Widget](./media/browser_basic.png)
+
 ### Basic Navigation
 
 ```graphix
 {{#include ../../examples/tui/browser_navigation.gx}}
 ```
+
+![Browser With Navigation](./media/browser_navigation.gif)
 
 ## See Also
 

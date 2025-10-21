@@ -12,7 +12,7 @@ val paragraph: fn(
     ?#scroll: &ScrollPosition,
     ?#alignment: &Alignment,
     ?#wrap: &bool,
-    [string, Text]
+    &[string, Text]
 ) -> Widget;
 ```
 
@@ -30,11 +30,15 @@ val paragraph: fn(
 {{#include ../../examples/tui/paragraph_basic.gx}}
 ```
 
+![Basic Paragraph](./media/paragraph_basic.png)
+
 ### Scrollable Content
 
 ```graphix
 {{#include ../../examples/tui/paragraph_scrollable.gx}}
 ```
+
+![Scrollable Paragraph](./media/paragraph_scrollable.gif)
 
 ### Live Log Viewer
 
@@ -44,11 +48,15 @@ Display real-time updating content:
 {{#include ../../examples/tui/paragraph_log_viewer.gx}}
 ```
 
+![Log Viewer](./media/paragraph_log_viewer.gif)
+
 ### Centered Message
 
 ```graphix
 {{#include ../../examples/tui/paragraph_centered.gx}}
 ```
+
+![Paragraph Centered](./media/paragraph_centered.png)
 
 ## Word Wrapping
 

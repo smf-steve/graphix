@@ -60,11 +60,15 @@ val dataset: fn(
 {{#include ../../examples/tui/chart_basic.gx}}
 ```
 
+![Basic Chart](./media/chart_basic.png)
+
 ### Real-time Data Visualization
 
 ```graphix
 {{#include ../../examples/tui/chart_realtime.gx}}
 ```
+
+![Real Time Chart](./media/chart_realtime.gif)
 
 ### Multiple Datasets
 
@@ -72,11 +76,8 @@ val dataset: fn(
 {{#include ../../examples/tui/chart_multi.gx}}
 ```
 
-### Scatter Plot
+![Multi Chart](./media/chart_multi.png)
 
-```graphix
-{{#include ../../examples/tui/chart_scatter.gx}}
-```
 
 ## Marker Comparison
 

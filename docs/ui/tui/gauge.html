@@ -184,7 +184,7 @@ val gauge: fn(
     ?#label: &amp;Line,
     ?#use_unicode: &amp;bool,
     ?#style: &amp;Style,
-    f64
+    &amp;f64
 ) -&gt; Widget;
 </code></pre>
 <h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
@@ -206,68 +206,62 @@ gauge(
     &amp;progress
 )
 </code></pre>
+<p><img src="./media/gauge_basic.png" alt="Basic Gauge" /></p>
 <h3 id="progress-with-color-thresholds"><a class="header" href="#progress-with-color-thresholds">Progress with Color Thresholds</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.5s, true);
-let power = 0.0;
-power &lt;- min(1.0, (clock ~ power) + 0.01);
+<pre><code class="language-graphix">use tui;
+use tui::gauge;
+use tui::block;
+use tui::text;
 
-let color = select power {
-    x if x &lt; 0.10 =&gt; `Red,
-    x if x &lt; 0.25 =&gt; `Yellow,
-    x =&gt; `Green
-};
+{
+    let clock = time::timer(duration:0.5s, true);
+    let power = 0.0;
+    power &lt;- min(1.0, (clock ~ power) + 0.01);
 
-let percentage = cast&lt;i64&gt;(power * 100.0)?;
+    let color = select power {
+        x if x &lt; 0.10 =&gt; `Red,
+        x if x &lt; 0.25 =&gt; `Yellow,
+        x =&gt; `Green
+    };
 
-block(
-    #border: &amp;`All,
-    #title: &amp;line("Power Level"),
-    &amp;gauge(
-        #gauge_style: &amp;style(#fg: color),
-        #label: &amp;line("[percentage]%"),
-        &amp;power
+    let percentage = cast&lt;i64&gt;(power * 100.0)?;
+
+    block(
+        #border: &amp;`All,
+        #title: &amp;line("Power Level"),
+        &amp;gauge(
+            #gauge_style: &amp;style(#fg: color),
+            #label: &amp;span("[percentage]%"),
+            &amp;power
+        )
     )
-)
+}
 </code></pre>
+<p><img src="./media/gauge_threshold.gif" alt="Gauge With Color" /></p>
 <h3 id="resource-usage"><a class="header" href="#resource-usage">Resource Usage</a></h3>
-<pre><code class="language-graphix">let used_memory = 6.5;  // GB
-let total_memory = 16.0;  // GB
-let usage_ratio = used_memory / total_memory;
+<pre><code class="language-graphix">use tui;
+use tui::gauge;
+use tui::text;
 
-let color = select usage_ratio {
-    x if x &gt; 0.9 =&gt; `Red,
-    x if x &gt; 0.7 =&gt; `Yellow,
-    _ =&gt; `Green
-};
+{
+    let used_memory = 6.5;  // GB
+    let total_memory = 16.0;  // GB
+    let usage_ratio = used_memory / total_memory;
 
-gauge(
-    #gauge_style: &amp;style(#fg: color),
-    #label: &amp;line("[used_memory] GB / [total_memory] GB"),
-    &amp;usage_ratio
-)
+    let color = select usage_ratio {
+        x if x &gt; 0.9 =&gt; `Red,
+        x if x &gt; 0.7 =&gt; `Yellow,
+        _ =&gt; `Green
+    };
+
+    gauge(
+        #gauge_style: &amp;style(#fg: color),
+        #label: &amp;span("[used_memory] GB / [total_memory] GB"),
+        &amp;usage_ratio
+    )
+}
 </code></pre>
-<h3 id="multi-gauge-dashboard"><a class="header" href="#multi-gauge-dashboard">Multi-gauge Dashboard</a></h3>
-<pre><code class="language-graphix">layout(
-    #direction: &amp;`Vertical,
-    &amp;[
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &amp;style(#fg: `Red),
-            #label: &amp;line("CPU: 45%"),
-            &amp;0.45
-        )),
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &amp;style(#fg: `Yellow),
-            #label: &amp;line("Memory: 67%"),
-            &amp;0.67
-        )),
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &amp;style(#fg: `Green),
-            #label: &amp;line("Disk: 23%"),
-            &amp;0.23
-        ))
-    ]
-)
-</code></pre>
+<p><img src="./media/gauge_resource.png" alt="Resource Usage Gauge" /></p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>
 <li><a href="linegauge.html">linegauge</a> - For horizontal line-based gauges</li>

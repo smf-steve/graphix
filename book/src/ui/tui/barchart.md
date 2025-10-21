@@ -52,17 +52,23 @@ val bar: fn(
 {{#include ../../examples/tui/barchart_basic.gx}}
 ```
 
+![Basic Bar Chart](./media/barchart_basic.png)
+
 ### Grouped Bars with Dynamic Data
 
 ```graphix
 {{#include ../../examples/tui/barchart_grouped.gx}}
 ```
 
+![Grouped Bar Chart](./media/barchart_grouped.png)
+
 ### Color-coded Values
 
 ```graphix
 {{#include ../../examples/tui/barchart_colored.gx}}
 ```
+
+![Colored Bar Chart](./media/barchart_colored.png)
 
 ## See Also
 

@@ -211,31 +211,43 @@ line_gauge(
 )
 </code></pre>
 <h3 id="color-coded-status"><a class="header" href="#color-coded-status">Color-coded Status</a></h3>
-<pre><code class="language-graphix">let clock = time::timer(duration:0.5s, true);
-let power = 0.0;
-power &lt;- min(1.0, (clock ~ power) + 0.01);
+<pre><code class="language-graphix">use tui;
+use tui::line_gauge;
+use tui::block;
+use tui::text;
 
-let color = select power {
-    x if x &lt; 0.10 =&gt; `Red,
-    x if x &lt; 0.25 =&gt; `Yellow,
-    x =&gt; `Green
-};
+{
+    let clock = time::timer(duration:0.5s, true);
+    let power = 0.0;
+    power &lt;- min(1.0, (clock ~ power) + 0.01);
 
-let percentage = cast&lt;i64&gt;(power * 100.0)?;
+    let color = select power {
+        x if x &lt; 0.10 =&gt; `Red,
+        x if x &lt; 0.25 =&gt; `Yellow,
+        x =&gt; `Green
+    };
 
-block(
-    #border: &amp;`All,
-    #title: &amp;line("Power"),
-    &amp;line_gauge(
-        #filled_style: &amp;style(#fg: color),
-        #line_set: &amp;`Thick,
-        #label: &amp;line("[percentage]%"),
-        &amp;power
+    let percentage = cast&lt;i64&gt;(power * 100.0)?;
+
+    block(
+        #border: &amp;`All,
+        #title: &amp;line("Power"),
+        &amp;line_gauge(
+            #filled_style: &amp;style(#fg: color),
+            #line_set: &amp;`Thick,
+            #label: &amp;line("[percentage]%"),
+            &amp;power
+        )
     )
-)
+}
 </code></pre>
 <h3 id="compact-multi-metric-display"><a class="header" href="#compact-multi-metric-display">Compact Multi-metric Display</a></h3>
-<pre><code class="language-graphix">layout(
+<pre><code class="language-graphix">use tui;
+use tui::line_gauge;
+use tui::text;
+use tui::layout;
+
+layout(
     #direction: &amp;`Vertical,
     &amp;[
         child(#constraint: `Length(1), line_gauge(
@@ -257,14 +269,19 @@ block(
 )
 </code></pre>
 <h3 id="line-set-styles"><a class="header" href="#line-set-styles">Line Set Styles</a></h3>
-<pre><code class="language-graphix">// Thin lines - subtle
-line_gauge(#line_set: &amp;`Thin, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+<pre><code class="language-graphix">use tui;
+use tui::line_gauge;
 
-// Thick lines - bold (default)
-line_gauge(#line_set: &amp;`Thick, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+{
+    // Thin lines - subtle
+    let thin = line_gauge(#filled_style: &amp;style(#fg: `Cyan), &amp;0.75);
 
-// Double lines - distinctive
-line_gauge(#line_set: &amp;`Double, #filled_style: &amp;style(#fg: `Cyan), &amp;0.75)
+    // Thick lines - bold (default)
+    let thick = line_gauge(#filled_style: &amp;style(#fg: `Green), &amp;0.75);
+
+    // Result
+    line_gauge(#filled_style: &amp;style(#fg: `Yellow), &amp;0.75)
+}
 </code></pre>
 <h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
 <ul>

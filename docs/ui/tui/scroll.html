@@ -198,23 +198,34 @@ val scrollbar: fn(
 use tui::scrollbar;
 use tui::paragraph;
 
-let position = 0;
-let content = paragraph(
-    #scroll: &amp;{x: 0, y: position},
-    &amp;long_text
-);
+{
+    let long_text = "This is a very long text that needs scrolling. More content here. Even more content. And even more. Keep going with lots of text to demonstrate scrolling.";
+    let position = 0;
+    let content = paragraph(
+        #scroll: &amp;{x: 0, y: position},
+        &amp;long_text
+    );
 
-scrollbar(
-    #position: &amp;position,
-    &amp;content
-)
+    scrollbar(
+        #position: &amp;position,
+        &amp;content
+    )
+}
 </code></pre>
 <h3 id="scrollable-paragraph"><a class="header" href="#scrollable-paragraph">Scrollable Paragraph</a></h3>
-<pre><code class="language-graphix">let long_text = "Very long text content...";
-let position = 0;
-let max_position = 100;
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::paragraph;
+use tui::block;
+use tui::text;
+use tui::input_handler;
 
-let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+{
+    let long_text = "Very long text content...";
+    let position = 0;
+    let max_position = 100;
+
+    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if position &gt; 0 =&gt; {
@@ -239,62 +250,76 @@ let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
         },
         _ =&gt; `Continue
     },
-    _ =&gt; `Continue
-};
+        _ =&gt; `Continue
+    };
 
-input_handler(
-    #handle: &amp;handle_event,
-    &amp;block(
-        #border: &amp;`All,
-        #title: &amp;line("Scrollable Content"),
-        &amp;scrollbar(
-            #position: &amp;position,
-            #content_length: &amp;max_position,
-            &amp;paragraph(#scroll: &amp;{x: 0, y: position}, &amp;long_text)
+    input_handler(
+        #handle: &amp;handle_event,
+        &amp;block(
+            #border: &amp;`All,
+            #title: &amp;line("Scrollable Content"),
+            &amp;scrollbar(
+                #position: &amp;position,
+                #content_length: &amp;max_position,
+                &amp;paragraph(#scroll: &amp;{x: 0, y: position}, &amp;long_text)
+            )
         )
     )
-)
+}
 </code></pre>
 <h3 id="scrollable-list"><a class="header" href="#scrollable-list">Scrollable List</a></h3>
-<pre><code class="language-graphix">let items = [...];  // Large array
-let selected = 0;
-let scroll_pos = 0;
-let visible = 10;
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::list;
+use tui::text;
 
-// Auto-scroll to keep selection visible
-scroll_pos &lt;- select selected {
-    s if s &lt; scroll_pos =&gt; s,
-    s if s &gt;= (scroll_pos + visible) =&gt; s - visible + 1,
-    _ =&gt; never()
-};
+{
+    let items = [line("Item 1"), line("Item 2"), line("Item 3"), line("Item 4"), line("Item 5")];
+    let selected = 0;
+    let scroll_pos = 0;
+    let visible = 10;
 
-scrollbar(
-    #position: &amp;scroll_pos,
-    &amp;list(
-        #scroll: &amp;scroll_pos,
-        #selected: &amp;selected,
-        &amp;items
+    // Auto-scroll to keep selection visible
+    scroll_pos &lt;- select selected {
+        s if s &lt; scroll_pos =&gt; s,
+        s if s &gt;= (scroll_pos + visible) =&gt; s - visible + 1,
+        _ =&gt; never()
+    };
+
+    scrollbar(
+        #position: &amp;scroll_pos,
+        &amp;list(
+            #scroll: &amp;scroll_pos,
+            #selected: &amp;selected,
+            &amp;items
+        )
     )
-)
+}
 </code></pre>
 <h3 id="auto-scroll-to-bottom"><a class="header" href="#auto-scroll-to-bottom">Auto-scroll to Bottom</a></h3>
-<pre><code class="language-graphix">let lines = [];
-let new_line = net::subscribe("/logs/app")?;
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::paragraph;
 
-lines &lt;- array::window(#n: 100, new_line ~ lines, cast&lt;string&gt;(new_line)?);
+{
+    let lines = [];
+    let new_line = net::subscribe("/logs/app")?;
 
-let line_count = array::len(lines);
-let visible_lines = 20;
-let scroll_pos = max(0, line_count - visible_lines);
+    lines &lt;- array::window(#n: 100, new_line ~ lines, cast&lt;string&gt;(new_line)?);
 
-scrollbar(
-    #position: &amp;scroll_pos,
-    #content_length: &amp;line_count,
-    &amp;paragraph(
-        #scroll: &amp;{x: 0, y: scroll_pos},
-        &amp;array::fold(lines, "", |acc, l| "[acc]\n[l]")
+    let line_count = array::len(lines);
+    let visible_lines = 20;
+    let scroll_pos = max(0, line_count - visible_lines);
+
+    scrollbar(
+        #position: &amp;scroll_pos,
+        #content_length: &amp;line_count,
+        &amp;paragraph(
+            #scroll: &amp;{x: 0, y: scroll_pos},
+            &amp;array::fold(lines, "", |acc, l| "[acc]\n[l]")
+        )
     )
-)
+}
 </code></pre>
 <h2 id="common-mistake"><a class="header" href="#common-mistake">Common Mistake</a></h2>
 <p>Remember to apply the scroll position to both the scrollbar and the content:</p>

@@ -11,7 +11,7 @@ val gauge: fn(
     ?#label: &Line,
     ?#use_unicode: &bool,
     ?#style: &Style,
-    f64
+    &f64
 ) -> Widget;
 ```
 
@@ -30,11 +30,15 @@ val gauge: fn(
 {{#include ../../examples/tui/gauge_basic.gx}}
 ```
 
+![Basic Gauge](./media/gauge_basic.png)
+
 ### Progress with Color Thresholds
 
 ```graphix
 {{#include ../../examples/tui/gauge_threshold.gx}}
 ```
+
+![Gauge With Color](./media/gauge_threshold.gif)
 
 ### Resource Usage
 
@@ -42,30 +46,7 @@ val gauge: fn(
 {{#include ../../examples/tui/gauge_resource.gx}}
 ```
 
-### Multi-gauge Dashboard
-
-```graphix
-layout(
-    #direction: &`Vertical,
-    &[
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &style(#fg: `Red),
-            #label: &line("CPU: 45%"),
-            &0.45
-        )),
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &style(#fg: `Yellow),
-            #label: &line("Memory: 67%"),
-            &0.67
-        )),
-        child(#constraint: `Length(1), gauge(
-            #gauge_style: &style(#fg: `Green),
-            #label: &line("Disk: 23%"),
-            &0.23
-        ))
-    ]
-)
-```
+![Resource Usage Gauge](./media/gauge_resource.png)
 
 ## See Also
 
