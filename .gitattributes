@@ -2,3 +2,6 @@
 *.ttf binary
 *.woff binary
 *.woff2 binary
+*.gif binary
+*.png binary
+*.jpg binary
