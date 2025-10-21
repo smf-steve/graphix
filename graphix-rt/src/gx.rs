@@ -280,6 +280,9 @@ impl<X: GXExt> GX<X> {
                 ToGX::GetEnv { res } => {
                     let _ = res.send(self.ctx.env.clone());
                 }
+                ToGX::Check { path, res } => {
+                    let _ = res.send(self.check(&path).await);
+                }
                 ToGX::Compile { text, rt, res } => {
                     let _ = res.send(self.compile(rt, text).await);
                 }
@@ -370,9 +373,7 @@ impl<X: GXExt> GX<X> {
         Ok(CompRes { exprs, env: self.ctx.env.clone() })
     }
 
-    async fn load(&mut self, rt: GXHandle<X>, file: &PathBuf) -> Result<CompRes<X>> {
-        let scope = Scope::root();
-        let st = Instant::now();
+    async fn load_exprs(&self, file: &PathBuf) -> Result<(Origin, Arc<[Expr]>)> {
         let (ori, exprs) = match file.extension() {
             Some(e) if e.as_encoded_bytes() == b"gx" => {
                 let file = file.canonicalize()?;
@@ -401,7 +402,9 @@ impl<X: GXExt> GX<X> {
                         Component::RootDir
                         | Component::CurDir
                         | Component::ParentDir
-                        | Component::Prefix(_) => bail!("invalid module name {file:?}"),
+                        | Component::Prefix(_) => {
+                            bail!("invalid module name {file:?}")
+                        }
                         Component::Normal(s) => Ok(s),
                     })
                     .collect::<Result<Box<[_]>>>()?;
@@ -434,6 +437,48 @@ impl<X: GXExt> GX<X> {
                 (ori, exprs)
             }
         };
+        Ok((ori, exprs))
+    }
+
+    async fn check(&mut self, file: &PathBuf) -> Result<()> {
+        let env = self.ctx.env.clone();
+        let go = async {
+            let st = Instant::now();
+            info!("parse time: {:?}", st.elapsed());
+            let scope = Scope::root();
+            let (ori, exprs) = self.load_exprs(file).await?;
+            let exprs =
+                try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
+                    .await?;
+            info!("resolve time: {:?}", st.elapsed());
+            let mut nodes: LPooled<Vec<_>> = LPooled::take();
+            for e in exprs.iter() {
+                let res = compile(&mut self.ctx, self.flags, &scope, e.clone())
+                    .with_context(|| ori.clone());
+                match res {
+                    Ok(n) => nodes.push(n),
+                    Err(e) => {
+                        for mut n in nodes.drain(..) {
+                            n.delete(&mut self.ctx);
+                        }
+                        return Err(e);
+                    }
+                }
+            }
+            for mut n in nodes.drain(..) {
+                n.delete(&mut self.ctx);
+            }
+            Ok(())
+        };
+        let res = go.await;
+        self.ctx.env = env;
+        res
+    }
+
+    async fn load(&mut self, rt: GXHandle<X>, file: &PathBuf) -> Result<CompRes<X>> {
+        let scope = Scope::root();
+        let st = Instant::now();
+        let (ori, exprs) = self.load_exprs(file).await?;
         info!("parse time: {:?}", st.elapsed());
         let st = Instant::now();
         let exprs =

@@ -18,7 +18,9 @@ use netidx::{
 };
 use poolshark::global::GPooled;
 use reedline::Signal;
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock, time::Duration};
+use std::{
+    collections::HashMap, path::PathBuf, process::exit, sync::LazyLock, time::Duration,
+};
 use tokio::{select, sync::mpsc};
 use triomphe::Arc;
 use tui::Tui;
@@ -115,13 +117,15 @@ pub enum Mode {
     /// Compile and execute the code in the specified string. Besides
     /// not loading from a file this mode behaves exactly like File.
     Static(ArcStr),
+    /// Check that the specified file compiles but do not run it
+    Check(PathBuf),
 }
 
 impl Mode {
     fn file_mode(&self) -> bool {
         match self {
             Self::Repl => false,
-            Self::File(_) | Self::Static(_) => true,
+            Self::File(_) | Self::Check(_) | Self::Static(_) => true,
         }
     }
 }
@@ -201,7 +205,9 @@ impl<X: GXExt> Shell<X> {
             None => ArcStr::from(format!("{root};\nmod tui")),
         };
         let mut flags = match self.mode {
-            Mode::File(_) | Mode::Static(_) => CFlag::WarnUnhandled | CFlag::WarnUnused,
+            Mode::File(_) | Mode::Check(_) | Mode::Static(_) => {
+                CFlag::WarnUnhandled | CFlag::WarnUnused
+            }
             Mode::Repl => BitFlags::empty(),
         };
         flags.insert(self.enable_flags);
@@ -250,6 +256,10 @@ impl<X: GXExt> Shell<X> {
             Mode::File(file) => {
                 let r = gx.load(file.clone()).await?;
                 file_mode!(r)
+            }
+            Mode::Check(file) => {
+                gx.check(file.clone()).await?;
+                exit(0)
             }
             Mode::Static(s) => {
                 let r = gx.compile(s.clone()).await?;

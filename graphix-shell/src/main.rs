@@ -110,6 +110,10 @@ struct Params {
     /// do not attempt to run the init module
     #[arg(short = 'i', long)]
     no_init: bool,
+    /// do not execute the program, just veryify that it compiles and
+    /// type checks.
+    #[arg(long = "check")]
+    check: bool,
     /// run the program in the specified file instead of starting the REPL
     file: Option<PathBuf>,
     /// enable or disable compiler flags. Currently supported flags are,
@@ -180,8 +184,12 @@ async fn main() -> Result<()> {
     if let Some(t) = p.resolve_timeout {
         shell = shell.resolve_timeout(Duration::from_secs(t));
     }
+    if p.file.is_none() && p.check {
+        bail!("check mode requires a file to check")
+    }
     if let Some(f) = &p.file {
-        shell = shell.mode(Mode::File(f.clone()));
+        let mode = if p.check { Mode::Check(f.clone()) } else { Mode::File(f.clone()) };
+        shell = shell.mode(mode);
         match f.parent() {
             Some(p) if p.as_os_str().is_empty() => (),
             None => (),

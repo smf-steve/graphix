@@ -250,6 +250,10 @@ enum ToGX<X: GXExt> {
         rt: GXHandle<X>,
         res: oneshot::Sender<Result<CompRes<X>>>,
     },
+    Check {
+        path: PathBuf,
+        res: oneshot::Sender<Result<()>>,
+    },
     Compile {
         text: ArcStr,
         rt: GXHandle<X>,
@@ -311,6 +315,17 @@ impl<X: GXExt> GXHandle<X> {
     /// Get a copy of the current graphix environment
     pub async fn get_env(&self) -> Result<Env<GXRt<X>, X::UserEvent>> {
         self.exec(|res| ToGX::GetEnv { res }).await
+    }
+
+    /// Check that the specified file compiles and typechecks.
+    ///
+    /// If the file will compile and type check successfully
+    /// return Ok(()) otherwise an error describing the problem. The
+    /// environment will not be altered by checking an expression, so
+    /// you will not be able to use any defined names later in the
+    /// program. If you want to do that see `compile`
+    pub async fn check(&self, path: PathBuf) -> Result<()> {
+        Ok(self.exec(|tx| ToGX::Check { path, res: tx }).await??)
     }
 
     /// Compile and execute the specified graphix expression.
