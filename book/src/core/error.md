@@ -81,7 +81,7 @@ not stop the execution of nodes in the try catch.
 
 Graphix function types are annotated by the type of error they might raise. In
 most cases this is automatic, but for some higher order functions it may be
-neccessary to specify it explicitly. For example array map has type
+necessary to specify it explicitly. For example array map has type
 `fn(Array<'a>, fn('a) -> 'b throws 'e) -> Array<'b> throws 'e` indicating that
 while the map function itself does not throw any errors, it will throw any
 errors the function passed to it throws. This is all in the service of being
@@ -108,7 +108,7 @@ Caused by:
     1: missing match cases type mismatch `ArithError('_1897: string) does not contain '_1895: [`ArithError(string), `ArrayIndexError(string)]
 ```
 
-You'll recognize that this is just the normal select exhaustivness checking at
+You'll recognize that this is just the normal select exhaustiveness checking at
 work. Since errors are just normal types, the important point is the compiler
 knows the type of every error at compile time, everything else flows from there.
 

@@ -423,12 +423,14 @@ previously used array that has since become unused. This makes using arrays a
 lot more efficient than you might expect.</p>
 </li>
 <li>
-<p>Arrays are contiguous in memory, there is no funny business going on (looking
-at you lua). This means they are generally very memory efficient, each element
-is 2 machine words, and O(1) to access. However there are a few cases where
-this causes a problem, such as building up an array by appending one element
-at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
-another data structure for this kind of operation.</p>
+<p>Arrays are contiguous in memory, there is no funny business going on
+(looking at you lua). This means they are generally very memory
+efficient, each element is 2 machine words, and O(1) to
+access. However there are a few cases where this causes a problem,
+such as building up an array by appending one element at a
+time. This is sadly an O(N^2) operation on arrays. You may wish to
+use another data structure, such as a map (which would be O(n
+log(n)) if you need to build a large data structure this way.</p>
 </li>
 <li>
 <p>Array slices are zero copy. They do not allocate memory, and they do not clone
@@ -1013,7 +1015,7 @@ not stop the execution of nodes in the try catch.</p>
 <h2 id="checked-errors"><a class="header" href="#checked-errors">Checked Errors</a></h2>
 <p>Graphix function types are annotated by the type of error they might raise. In
 most cases this is automatic, but for some higher order functions it may be
-neccessary to specify it explicitly. For example array map has type
+necessary to specify it explicitly. For example array map has type
 <code>fn(Array&lt;'a&gt;, fn('a) -&gt; 'b throws 'e) -&gt; Array&lt;'b&gt; throws 'e</code> indicating that
 while the map function itself does not throw any errors, it will throw any
 errors the function passed to it throws. This is all in the service of being
@@ -1034,7 +1036,7 @@ Caused by:
     0: at: line: 3, column: 13, in: select (e.0).error {`ArithError(s) =&gt; ..
     1: missing match cases type mismatch `ArithError('_1897: string) does not contain '_1895: [`ArithError(string), `ArrayIndexError(string)]
 </code></pre>
-<p>You'll recognize that this is just the normal select exhaustivness checking at
+<p>You'll recognize that this is just the normal select exhaustiveness checking at
 work. Since errors are just normal types, the important point is the compiler
 knows the type of every error at compile time, everything else flows from there.</p>
 <h2 id="unhandled-errors"><a class="header" href="#unhandled-errors">Unhandled Errors</a></h2>

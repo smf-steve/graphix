@@ -228,12 +228,14 @@ Arrays.
   previously used array that has since become unused. This makes using arrays a
   lot more efficient than you might expect.
 
-- Arrays are contiguous in memory, there is no funny business going on (looking
-  at you lua). This means they are generally very memory efficient, each element
-  is 2 machine words, and O(1) to access. However there are a few cases where
-  this causes a problem, such as building up an array by appending one element
-  at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
-  another data structure for this kind of operation.
+- Arrays are contiguous in memory, there is no funny business going on
+  (looking at you lua). This means they are generally very memory
+  efficient, each element is 2 machine words, and O(1) to
+  access. However there are a few cases where this causes a problem,
+  such as building up an array by appending one element at a
+  time. This is sadly an O(N^2) operation on arrays. You may wish to
+  use another data structure, such as a map (which would be O(n
+  log(n)) if you need to build a large data structure this way.
 
 - Array slices are zero copy. They do not allocate memory, and they do not clone
   any of the array's elements, they simply create a light weight view into the
