@@ -47,9 +47,12 @@ output of the program will change to 50, and so on forever.
 This is a powerful way to think about programming, and it's especially well
 suited to building user interfaces and transforming data streams.
 
-Besides being a dataflow language Graphix tries hard to be a normal language
-that would feel familiar to anyone who knows a modern functional programming
-language. Some of it's features are,
+## Dataflow but Otherwise Normal
+
+Besides being a dataflow language Graphix tries hard to be a normal
+functional language that would feel familiar to anyone who knows
+Haskell, OCaml, F# or a similar ML derived language. Some of it's
+features are,
 
 - lexically scoped
 - expression oriented
@@ -60,3 +63,5 @@ language. Some of it's features are,
 - algebraic data types
 - pattern matching
 - first class functions, and closures
+- late binding
+
