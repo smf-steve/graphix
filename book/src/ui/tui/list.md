@@ -1,20 +1,22 @@
-# list
+# The List Widget
 
 The `list` widget displays a scrollable, selectable list of items with keyboard navigation support. It's perfect for menus, file browsers, option selectors, and any interface that requires choosing from a list of items.
 
-## Function Signature
+## API
 
 ```
-/// Creates a list widget from an array of lines
-val list: fn(
-    ?#selected: &i64,
-    ?#scroll: &i64,
-    ?#highlight_style: &Style,
-    ?#highlight_symbol: &string,
-    ?#repeat_highlight_symbol: &bool,
-    ?#style: &Style,
-    &Array<Line>
-) -> Widget;
+mod list: sig {
+    /// Creates a list widget from an array of lines
+    val list: fn(
+        ?#selected: &i64,
+        ?#scroll: &i64,
+        ?#highlight_style: &Style,
+        ?#highlight_symbol: &string,
+        ?#repeat_highlight_symbol: &bool,
+        ?#style: &Style,
+        &Array<Line>
+    ) -> Widget;
+}
 ```
 
 ## Parameters

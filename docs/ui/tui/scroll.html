@@ -175,16 +175,18 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="scrollbar"><a class="header" href="#scrollbar">scrollbar</a></h1>
+                        <h1 id="the-scrollbar-widget"><a class="header" href="#the-scrollbar-widget">The Scrollbar Widget</a></h1>
 <p>The <code>scrollbar</code> widget adds a visual scrollbar indicator to scrollable content, making it clear when content extends beyond the visible area and showing the current scroll position.</p>
-<h2 id="function-signature"><a class="header" href="#function-signature">Function Signature</a></h2>
-<pre><code>/// Wraps a widget with a scrollbar indicator
-val scrollbar: fn(
-    #position: &amp;i64,
-    ?#content_length: &amp;i64,
-    ?#size: &amp;Size,
-    &amp;Widget
-) -&gt; Widget;
+<h2 id="api"><a class="header" href="#api">API</a></h2>
+<pre><code>mod scrollbar: sig {
+    /// Wraps a widget with a scrollbar indicator
+    val scrollbar: fn(
+        #position: &amp;i64,
+        ?#content_length: &amp;i64,
+        ?#size: &amp;Size,
+        &amp;Widget
+    ) -&gt; Widget;
+}
 </code></pre>
 <h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
 <ul>
@@ -271,7 +273,13 @@ use tui::scrollbar;
 use tui::list;
 use tui::text;
 
-let items = [line("Item 1"), line("Item 2"), line("Item 3"), line("Item 4"), line("Item 5")];
+let items = [
+    line("Item 1"),
+    line("Item 2"),
+    line("Item 3"),
+    line("Item 4"),
+    line("Item 5")
+];
 let selected = 0;
 let scroll_pos = 0;
 let visible = 10;

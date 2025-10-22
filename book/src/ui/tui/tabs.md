@@ -1,18 +1,20 @@
-# tabs
+# The Tabs Widget
 
 The `tabs` widget creates a tabbed interface for organizing content into multiple switchable panels. Each tab has a title displayed in the tab bar and associated content that's shown when the tab is selected.
 
-## Function Signature
+## API
 
 ```
-/// Creates a tabbed interface from an array of (title, content) tuples
-val tabs: fn(
-    ?#selected: &i64,
-    ?#highlight_style: &Style,
-    ?#style: &Style,
-    ?#divider: &[string, Span],
-    Array<(Line, Widget)>
-) -> Widget;
+mod tabs: sig {
+    /// Creates a tabbed interface from an array of (title, content) tuples
+    val tabs: fn(
+        ?#selected: &i64,
+        ?#highlight_style: &Style,
+        ?#style: &Style,
+        ?#divider: &[string, Span],
+        &Array<(Line, Widget)>
+    ) -> Widget;
+}
 ```
 
 ## Parameters
@@ -30,11 +32,15 @@ val tabs: fn(
 {{#include ../../examples/tui/tabs_basic.gx}}
 ```
 
+![Basic Tabs](./media/tabs_basic.png)
+
 ### Navigation Between Tabs
 
 ```graphix
 {{#include ../../examples/tui/tabs_navigation.gx}}
 ```
+
+![Tabs With Navigation](./media/tabs_navigation.gif)
 
 ### Styled Tab Titles
 
@@ -42,11 +48,15 @@ val tabs: fn(
 {{#include ../../examples/tui/tabs_styled.gx}}
 ```
 
+![Styled Tabs](./media/tabs_styled.png)
+
 ### Tab with Badge
 
 ```graphix
 {{#include ../../examples/tui/tabs_badge.gx}}
 ```
+
+![Tabs With Badges](./media/tabs_badge.png)
 
 ## Keyboard Navigation
 

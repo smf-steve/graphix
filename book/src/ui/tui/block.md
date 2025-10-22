@@ -1,22 +1,24 @@
-# block
+# The Block Widget
 
 The `block` widget is a container that wraps other widgets with optional borders, titles, and styling. It's one of the most commonly used widgets for creating structured layouts and visually separating different sections of your TUI.
 
-## Function Signature
+## API
 
 ```
-type Borders = [`All, `None, `Top, `Bottom, `Left, `Right];
+mod block: sig {
+    type Borders = [`All, `None, `Top, `Bottom, `Left, `Right];
 
-/// Creates a block widget that wraps content with borders and styling
-val block: fn(
-    ?#border: &Borders,
-    ?#border_style: &Style,
-    ?#title: &Line,
-    ?#title_bottom: &Line,
-    ?#style: &Style,
-    ?#size: &Size,
-    &Widget
-) -> Widget;
+    /// Creates a block widget that wraps content with borders and styling
+    val block: fn(
+        ?#border: &Borders,
+        ?#border_style: &Style,
+        ?#title: &Line,
+        ?#title_bottom: &Line,
+        ?#style: &Style,
+        ?#size: &Size,
+        &Widget
+    ) -> Widget;
+}
 ```
 
 ## Parameters

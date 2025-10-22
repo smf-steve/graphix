@@ -3,7 +3,13 @@ use tui::scrollbar;
 use tui::list;
 use tui::text;
 
-let items = [line("Item 1"), line("Item 2"), line("Item 3"), line("Item 4"), line("Item 5")];
+let items = [
+    line("Item 1"),
+    line("Item 2"),
+    line("Item 3"),
+    line("Item 4"),
+    line("Item 5")
+];
 let selected = 0;
 let scroll_pos = 0;
 let visible = 10;

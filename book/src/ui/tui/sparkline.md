@@ -1,22 +1,24 @@
-# sparkline
+# The Sparkline Widget
 
 The `sparkline` widget renders compact inline charts perfect for dashboards and status displays. It shows data trends in minimal space, with support for color-coded bars based on thresholds.
 
-## Function Signatures
+## APIs
 
 ```
-type Direction = [`LeftToRight, `RightToLeft];
+mod sparkline: sig {
+    type Direction = [`LeftToRight, `RightToLeft];
 
-/// Creates a sparkline widget from data values
-val sparkline: fn(
-    ?#max: &i64,
-    ?#style: &Style,
-    ?#direction: &Direction,
-    &Array<[SparklineBar, f64]>
-) -> Widget;
+    /// Creates a sparkline widget from data values
+    val sparkline: fn(
+        ?#max: &i64,
+        ?#style: &Style,
+        ?#direction: &Direction,
+        &Array<[SparklineBar, f64]>
+    ) -> Widget;
 
-/// Creates a sparkline bar with custom styling
-val sparkline_bar: fn(?#style: Style, f64) -> SparklineBar;
+    /// Creates a sparkline bar with custom styling
+    val sparkline_bar: fn(?#style: Style, f64) -> SparklineBar;
+}
 ```
 
 ## Parameters

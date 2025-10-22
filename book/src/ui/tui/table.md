@@ -1,30 +1,32 @@
-# table
+# The Table Widget
 
 The `table` widget displays structured data in rows and columns with support for selection, scrolling, and custom styling. It's ideal for data grids, process monitors, file listings, and any tabular data display.
 
-## Function Signatures
+## APIs
 
 ```
-type HighlightSpacing = [`Always, `WhenSelected, `Never];
+mod table: sig {
+    type HighlightSpacing = [`Always, `WhenSelected, `Never];
 
-/// Creates a table widget from an array of row references
-val table: fn(
-    ?#header: &Row,
-    ?#selected: &i64,
-    ?#row_highlight_style: &Style,
-    ?#highlight_symbol: &string,
-    ?#highlight_spacing: &HighlightSpacing,
-    ?#widths: &Array<Constraint>,
-    ?#column_spacing: &i64,
-    ?#style: &Style,
-    Array<&Row>
-) -> Widget;
+    /// Creates a table widget from an array of row references
+    val table: fn(
+        ?#header: &Row,
+        ?#selected: &i64,
+        ?#row_highlight_style: &Style,
+        ?#highlight_symbol: &string,
+        ?#highlight_spacing: &HighlightSpacing,
+        ?#widths: &Array<Constraint>,
+        ?#column_spacing: &i64,
+        ?#style: &Style,
+        &Array<&Row>
+    ) -> Widget;
 
-/// Creates a table row from cells
-val row: fn(?#style: Style, Array<Cell>) -> Row;
+    /// Creates a table row from cells
+    val row: fn(?#style: Style, Array<Cell>) -> Row;
 
-/// Creates a table cell from a line
-val cell: fn(?#style: Style, Line) -> Cell;
+    /// Creates a table cell from a line
+    val cell: fn(?#style: Style, Line) -> Cell;
+}
 ```
 
 ## Parameters
@@ -46,11 +48,15 @@ val cell: fn(?#style: Style, Line) -> Cell;
 {{#include ../../examples/tui/table_basic.gx}}
 ```
 
+![Basic Table](./media/table_basic.png)
+
 ### Interactive Table
 
 ```graphix
 {{#include ../../examples/tui/table_interactive.gx}}
 ```
+
+![Interactive Table](./media/table_interactive.gif)
 
 ### Conditional Cell Styling
 
@@ -58,11 +64,15 @@ val cell: fn(?#style: Style, Line) -> Cell;
 {{#include ../../examples/tui/table_styled_cells.gx}}
 ```
 
+![Conditional Styling](./media/table_styled_cells.png)
+
 ### Real-time Updates
 
 ```graphix
 {{#include ../../examples/tui/table_realtime.gx}}
 ```
+
+![Realtime Table](./media/table_realtime.gif)
 
 ## See Also
 

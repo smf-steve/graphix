@@ -1,0 +1,17 @@
+use tui;
+use tui::layout;
+use tui::text;
+use tui::block;
+
+let header = block(#border:&`All, &text(&"Header"));
+let content = block(#border:&`All, &text(&"Main Content"));
+let footer = block(#border:&`All, &text(&"Footer"));
+
+layout(
+    #direction: &`Vertical,
+    &[
+        child(#constraint: `Percentage(20), header),
+        child(#constraint: `Fill(1), content),
+        child(#constraint: `Percentage(20), footer)
+    ]
+)

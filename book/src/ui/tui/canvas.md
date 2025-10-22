@@ -1,27 +1,29 @@
-# canvas
+# The Canvas Widget
 
 The `canvas` widget provides a low-level drawing surface for custom graphics. You can draw lines, circles, rectangles, points, and text labels at specific coordinates, making it perfect for diagrams, plots, and custom visualizations.
 
-## Function Signatures
+## APIs
 
 ```
-type Bounds = {min: f64, max: f64};
-type Shape = [
-    `Line({color: Color, x1: f64, y1: f64, x2: f64, y2: f64}),
-    `Circle({color: Color, x: f64, y: f64, radius: f64}),
-    `Rectangle({color: Color, x: f64, y: f64, width: f64, height: f64}),
-    `Points({color: Color, coords: Array<(f64, f64)>}),
-    `Label({line: Line, x: f64, y: f64})
-];
+mod canvas: sig {
+    type Bounds = {min: f64, max: f64};
+    type Shape = [
+        `Line({color: Color, x1: f64, y1: f64, x2: f64, y2: f64}),
+        `Circle({color: Color, x: f64, y: f64, radius: f64}),
+        `Rectangle({color: Color, x: f64, y: f64, width: f64, height: f64}),
+        `Points({color: Color, coords: Array<(f64, f64)>}),
+        `Label({line: Line, x: f64, y: f64})
+    ];
 
-/// Creates a canvas widget for custom graphics
-val canvas: fn(
-    ?#background_color: &Color,
-    ?#marker: &Marker,
-    #x_bounds: &Bounds,
-    #y_bounds: &Bounds,
-    &Array<&Shape>
-) -> Widget;
+    /// Creates a canvas widget for custom graphics
+    val canvas: fn(
+        ?#background_color: &Color,
+        ?#marker: &Marker,
+        #x_bounds: &Bounds,
+        #y_bounds: &Bounds,
+        &Array<&Shape>
+    ) -> Widget;
+}
 ```
 
 ## Parameters

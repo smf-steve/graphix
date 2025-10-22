@@ -1,24 +1,26 @@
-# calendar
+# The Calendar Widget
 
 The `calendar` widget displays a monthly calendar view with support for highlighting specific dates and displaying events. It's perfect for date pickers, event schedulers, and time-based visualizations.
 
-## Function Signatures
+## APIs
 
 ```
-/// Creates a calendar widget displaying a month
-val calendar: fn(
-    ?#show_month: &Style,
-    ?#show_weekday: &Style,
-    ?#show_surrounding: &Style,
-    ?#events: &Array<CalendarEvent>,
-    &Date
-) -> Widget;
+mod calendar: sig {
+    /// Creates a calendar widget displaying a month
+    val calendar: fn(
+        ?#show_month: &Style,
+        ?#show_weekday: &Style,
+        ?#show_surrounding: &Style,
+        ?#events: &Array<CalendarEvent>,
+        &Date
+    ) -> Widget;
 
-/// Creates an event marker for a specific date
-val calendar_event: fn(Style, Date) -> CalendarEvent;
+    /// Creates an event marker for a specific date
+    val calendar_event: fn(Style, Date) -> CalendarEvent;
 
-/// Creates a date object
-val date: fn(i64, i64, i64) -> Date;  // (year, month, day)
+    /// Creates a date object
+    val date: fn(i64, i64, i64) -> Date;  // (year, month, day)
+}
 ```
 
 ## Parameters

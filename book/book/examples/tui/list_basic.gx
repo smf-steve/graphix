@@ -1,0 +1,13 @@
+use tui;
+use tui::list;
+
+let items = [
+    line("Apple"),
+    line("Banana"),
+    line("Cherry")
+];
+
+list(
+    #selected: &0,
+    &items
+)

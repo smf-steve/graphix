@@ -1,37 +1,39 @@
-# chart
+# The Chart Widget
 
 The `chart` widget renders line charts with multiple datasets, custom axes, labels, and styling. It's ideal for visualizing time series data, trends, sensor readings, and any numeric data relationships.
 
-## Function Signatures
+## APIs
 
 ```
-type GraphType = [`Line, `Scatter];
-type Marker = [`Dot, `Braille, `Block];
+mod chart: sig {
+    type GraphType = [`Line, `Scatter];
+    type Marker = [`Dot, `Braille, `Block];
 
-/// Creates a chart widget with datasets and axes
-val chart: fn(
-    ?#style: &Style,
-    #x_axis: &Axis,
-    #y_axis: &Axis,
-    &Array<Dataset>
-) -> Widget;
+    /// Creates a chart widget with datasets and axes
+    val chart: fn(
+        ?#style: &Style,
+        #x_axis: &Axis,
+        #y_axis: &Axis,
+        &Array<Dataset>
+    ) -> Widget;
 
-/// Creates an axis configuration
-val axis: fn(
-    ?#title: Line,
-    ?#labels: Array<Line>,
-    ?#style: Style,
-    {min: f64, max: f64}
-) -> Axis;
+    /// Creates an axis configuration
+    val axis: fn(
+        ?#title: Line,
+        ?#labels: Array<Line>,
+        ?#style: Style,
+        {min: f64, max: f64}
+    ) -> Axis;
 
-/// Creates a dataset to display on the chart
-val dataset: fn(
-    ?#style: &Style,
-    ?#graph_type: &GraphType,
-    ?#marker: &Marker,
-    ?#name: &Line,
-    &Array<(f64, f64)>
-) -> Dataset;
+    /// Creates a dataset to display on the chart
+    val dataset: fn(
+        ?#style: &Style,
+        ?#graph_type: &GraphType,
+        ?#marker: &Marker,
+        ?#name: &Line,
+        &Array<(f64, f64)>
+    ) -> Dataset;
+}
 ```
 
 ## Parameters

@@ -1,19 +1,21 @@
-# paragraph
+# The Paragraph Widget
 
 The `paragraph` widget displays multi-line text with automatic word wrapping and scrolling support. It's ideal for displaying long text content, logs, or any content that needs to flow across multiple lines.
 
-## Function Signature
+## API
 
 ```
-type ScrollPosition = {x: i64, y: i64};
+mod paragraph: sig {
+    type ScrollPosition = {x: i64, y: i64};
 
-/// Creates a paragraph widget with text content
-val paragraph: fn(
-    ?#scroll: &ScrollPosition,
-    ?#alignment: &Alignment,
-    ?#wrap: &bool,
-    &[string, Text]
-) -> Widget;
+    /// Creates a paragraph widget with text content
+    val paragraph: fn(
+        ?#scroll: &ScrollPosition,
+        ?#alignment: &Alignment,
+        ?#wrap: &bool,
+        &[string, Text]
+    ) -> Widget;
+}
 ```
 
 ## Parameters

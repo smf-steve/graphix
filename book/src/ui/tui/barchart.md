@@ -1,30 +1,32 @@
-# barchart
+# The Bar Chart Widget
 
 The `barchart` widget displays categorical data as vertical bars, supporting grouped bars, custom styling, and dynamic updates. It's ideal for comparing values across categories, showing rankings, or displaying resource usage.
 
-## Function Signatures
+## APIs
 
 ```
-/// Creates a bar chart from bar groups
-val bar_chart: fn(
-    ?#max: &i64,
-    ?#bar_width: &i64,
-    ?#bar_gap: &i64,
-    ?#group_gap: &i64,
-    ?#style: &Style,
-    &Array<BarGroup>
-) -> Widget;
+mod barchart: sig {
+    /// Creates a bar chart from bar groups
+    val bar_chart: fn(
+        ?#max: &i64,
+        ?#bar_width: &i64,
+        ?#bar_gap: &i64,
+        ?#group_gap: &i64,
+        ?#style: &Style,
+        &Array<BarGroup>
+    ) -> Widget;
 
-/// Creates a group of bars
-val bar_group: fn(?#label: Line, Array<Bar>) -> BarGroup;
+    /// Creates a group of bars
+    val bar_group: fn(?#label: Line, Array<Bar>) -> BarGroup;
 
-/// Creates an individual bar
-val bar: fn(
-    ?#style: &Style,
-    ?#label: &Line,
-    ?#text_value: &Line,
-    &i64
-) -> Bar;
+    /// Creates an individual bar
+    val bar: fn(
+        ?#style: &Style,
+        ?#label: &Line,
+        ?#text_value: &Line,
+        &i64
+    ) -> Bar;
+}
 ```
 
 ## Parameters

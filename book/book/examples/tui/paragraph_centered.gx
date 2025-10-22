@@ -1,0 +1,13 @@
+use tui;
+use tui::paragraph;
+use tui::text;
+
+paragraph(
+    #alignment: &`Center,
+    &[
+        line(""),
+        line(#style: style(#fg: `Yellow, #add_modifier: [`Bold]), "Welcome"),
+        line(""),
+        line("Press any key to continue")
+    ]
+)

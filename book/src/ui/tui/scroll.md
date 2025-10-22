@@ -1,17 +1,19 @@
-# scrollbar
+# The Scrollbar Widget
 
 The `scrollbar` widget adds a visual scrollbar indicator to scrollable content, making it clear when content extends beyond the visible area and showing the current scroll position.
 
-## Function Signature
+## API
 
 ```
-/// Wraps a widget with a scrollbar indicator
-val scrollbar: fn(
-    #position: &i64,
-    ?#content_length: &i64,
-    ?#size: &Size,
-    &Widget
-) -> Widget;
+mod scrollbar: sig {
+    /// Wraps a widget with a scrollbar indicator
+    val scrollbar: fn(
+        #position: &i64,
+        ?#content_length: &i64,
+        ?#size: &Size,
+        &Widget
+    ) -> Widget;
+}
 ```
 
 ## Parameters

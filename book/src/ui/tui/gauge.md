@@ -1,18 +1,20 @@
-# gauge
+# The Gauge Widget
 
 The `gauge` widget displays a single value as a filled progress indicator, perfect for showing percentages, completion status, or resource usage. It provides a clear visual representation of how full or complete something is.
 
-## Function Signature
+## API
 
 ```
-/// Creates a gauge widget showing progress from 0.0 to 1.0
-val gauge: fn(
-    ?#gauge_style: &Style,
-    ?#label: &Line,
-    ?#use_unicode: &bool,
-    ?#style: &Style,
-    &f64
-) -> Widget;
+mod gauge: sig {
+    /// Creates a gauge widget showing progress from 0.0 to 1.0
+    val gauge: fn(
+        ?#gauge_style: &Style,
+        ?#label: &Line,
+        ?#use_unicode: &bool,
+        ?#style: &Style,
+        &f64
+    ) -> Widget;
+}
 ```
 
 ## Parameters

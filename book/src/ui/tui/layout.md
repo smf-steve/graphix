@@ -1,31 +1,33 @@
-# layout
+# The Layout Widget
 
 The `layout` widget arranges child widgets in horizontal or vertical layouts with flexible sizing constraints. It's the primary tool for organizing complex TUI interfaces and supports focus management for interactive applications.
 
-## Function Signatures
+## APIs
 
 ```
-type Direction = [`Horizontal, `Vertical];
-type Flex = [`Start, `Center, `End, `SpaceAround, `SpaceBetween];
-type Constraint = [
-    `Percentage(i64),
-    `Length(i64),
-    `Min(i64),
-    `Max(i64),
-    `Ratio(i64, i64),
-    `Fill(i64)
-];
+mod layout: sig {
+    type Direction = [`Horizontal, `Vertical];
+    type Flex = [`Start, `Center, `End, `SpaceAround, `SpaceBetween];
+    type Constraint = [
+        `Percentage(i64),
+        `Length(i64),
+        `Min(i64),
+        `Max(i64),
+        `Ratio(i64, i64),
+        `Fill(i64)
+    ];
 
-/// Creates a layout that arranges child widgets
-val layout: fn(
-    ?#direction: &Direction,
-    ?#focused: &i64,
-    ?#flex: &Flex,
-    &Array<Child>
-) -> Widget;
+    /// Creates a layout that arranges child widgets
+    val layout: fn(
+        ?#direction: &Direction,
+        ?#focused: &i64,
+        ?#flex: &Flex,
+        &Array<Child>
+    ) -> Widget;
 
-/// Creates a child widget with sizing constraints
-val child: fn(?#constraint: Constraint, Widget) -> Child;
+    /// Creates a child widget with sizing constraints
+    val child: fn(?#constraint: Constraint, Widget) -> Child;
+}
 ```
 
 ## Parameters
