@@ -212,7 +212,7 @@ constrained GUI type with just labels and boxes,</p>
 </code></pre>
 <p>So we can build labels in boxes, and we can nest the boxes, laying out the
 labels however we like (use your imagination). We have the same problem as the
-more abstract example above, if we were mapping this onto a stateful gui library
+more abstract example above, if we were mapping this onto a stateful GUI library
 then every time a label text changed anywhere we'd have to destroy all the
 widgets we had created and rebuild the entire UI from scratch. We'd like to be
 able to just update the label text that changed, and we can, with a small change
@@ -224,8 +224,8 @@ to the type.</p>
 </code></pre>
 <p>Now, the string inside the label is a reference instead of the actual string.
 Since references are assigned an id at compile time, they never change, and so
-the layout of our gui can never change just because a label text was updated.
-Whatever is actually building the gui will only see an update to the root when
+the layout of our GUI can never change just because a label text was updated.
+Whatever is actually building the GUI will only see an update to the root when
 the actual layout changes. To handle the labels it can just deref the string
 reference in each label, and when that updates it can update the text of the
 label, exactly what we wanted.</p>

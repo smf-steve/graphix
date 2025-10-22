@@ -168,7 +168,7 @@ eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
 The following kinds of slice patterns are supported,
 
 - whole slice, with binds, or literals, e.g. `[1, x, 2, y]` matches a 4 element
-  array and binds it's 2nd and 4th element to `x` and `y` respectivly.
+  array and binds it's 2nd and 4th element to `x` and `y` respectively.
 
 - head pattern, like the above program, e.g. `[(x, y), ..]` matches the first
   pair in an array of pairs and ignores the rest of the array, binding the pair
@@ -180,7 +180,7 @@ The following kinds of slice patterns are supported,
   fields `foo` and `bar`, binding `hd` to the array minus the last element, and
   `foo` to field foo and `bar` to field bar.
 
-Structure patterns (all of the differnt types) can be nested to any depth.
+Structure patterns (all of the different types) can be nested to any depth.
 
 ### Tuple Patterns
 
@@ -223,7 +223,7 @@ eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
 ```
 
 You might be tempted to replace `y: _` with `..` as it would be shorter.
-Unfortunatly this will confuse the type checker, because the Graphix type system
+Unfortunately this will confuse the type checker, because the Graphix type system
 is structural saying `{x, ..}` without any other information could match ANY
 struct with a field called `x`. This is currently too much for the type checker
 to handle,

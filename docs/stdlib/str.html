@@ -183,7 +183,7 @@
 };
 
 /// the default escaping config escapes \, /, \n, \r, \t, \0, and non printable
-/// characters to unicode \u{HHHH} format
+/// characters to Unicode \u{HHHH} format
 val default_escape: Escape = {
     escape: "\\/\n\r\t\0",
     escape_char: "\\",
@@ -229,11 +229,11 @@ val join: fn(#sep:string, @args: [string, Array&lt;string&gt;]) -&gt; string;
 /// concatenate the specified strings into a single string
 val concat: fn(@args: [string, Array&lt;string&gt;]) -&gt; string;
 
-/// escape all the charachters in #to_escape in s with the escape charachter #escape.
-/// The escape charachter must appear in #to_escape
+/// escape all the characters in #to_escape in s with the escape character #escape.
+/// The escape character must appear in #to_escape
 val escape: fn(?#esc:Escape, string) -&gt; Result&lt;string, `StringError(string)&gt;;
 
-/// unescape all the charachters in s escaped by the specified #escape charachter
+/// unescape all the characters in s escaped by the specified #escape character
 val unescape: fn(?#esc:Escape, string) -&gt; Result&lt;string, `StringError(string)&gt;;
 
 /// split the string by the specified #pat and return an array of each part
@@ -278,8 +278,8 @@ val sprintf: fn(string, @args: Any) -&gt; string;
 /// return the length of the string in bytes
 val len: fn(string) -&gt; i64;
 
-/// extract a substring of s starting at #start with lenth #len.
-/// both #start and #len are unicode character indexes,
+/// extract a substring of s starting at #start with length #len.
+/// both #start and #len are Unicode character indexes,
 /// not byte indexes. e.g. str::sub(#start:0, #len:2, "💖💖💖")
 /// will return "💖💖"
 val sub: fn(#start:i64, #len:i64, string) -&gt; Result&lt;string, `SubError(string)&gt;;

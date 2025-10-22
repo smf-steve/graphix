@@ -19,7 +19,7 @@ val map: fn(Array<'a>, fn('a) -> 'b throws 'e) -> Array<'b> throws 'e;
 
 /// return a new array where each element is the output of f applied to the
 /// corresponding element in a, except that if f returns an array then it's
-/// elements will be concatanated to the end of the output instead of nesting.
+/// elements will be concatenated to the end of the output instead of nesting.
 val flat_map: fn(Array<'a>, fn('a) -> ['b, Array<'b>] throws 'e) -> Array<'b> throws 'e;
 
 /// return the result of f applied to the init and every element of a in
@@ -39,7 +39,7 @@ val iter: fn(Array<'a>) -> 'a;
 /// iterq produces an update for each value in a, but only when clock updates. If
 /// clock does not update but a does, then iterq will store each a in an internal
 /// fifo queue. If clock updates but a does not, iterq will record the number of
-/// times it was triggered, and will update immediatly that many times when a
+/// times it was triggered, and will update immediately that many times when a
 /// updates.
 val iterq: fn(#clock:Any, Array<'a>) -> 'a;
 

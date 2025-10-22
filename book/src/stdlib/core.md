@@ -48,7 +48,7 @@ val and: fn(@args: bool) -> bool;
 /// return the number of times x has updated
 val count: fn(Any) -> i64;
 
-/// return the first argument divided by all subsuquent arguments
+/// return the first argument divided by all subsequent arguments
 val divide: fn('a, @args:'a) -> 'a;
 
 /// return e only if e is an error
@@ -72,7 +72,7 @@ val mean: fn([Number, Array<Number>], @args: [Number, Array<Number>]) -> Result<
 /// return the minimum value of any argument
 val min: fn('a, @args:'a) -> 'a;
 
-/// return v only once, subsuquent updates to v will be ignored
+/// return v only once, subsequent updates to v will be ignored
 /// and once will return nothing
 val once: fn('a) -> 'a;
 
@@ -98,11 +98,11 @@ val uniq: fn('a) -> 'a;
 /// values from the queue when they are available.
 val queue: fn(#clock:Any, 'a) -> 'a;
 
-/// hold the most recent value of v interally until clock updates. If v updates
+/// hold the most recent value of v internally until clock updates. If v updates
 /// more than once before clock updates, older values of v will be discarded,
 /// only the most recent value will be retained. If clock updates when no v is held
-/// internall, record the number of times it updated, and pass that many v updates
-/// through immediatly when they happen.
+/// internally, record the number of times it updated, and pass that many v updates
+/// through immediately when they happen.
 val hold: fn(#clock:Any, 'a) -> 'a;
 
 /// ignore updates to any argument and never return anything

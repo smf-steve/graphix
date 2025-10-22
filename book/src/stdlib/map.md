@@ -36,7 +36,7 @@ val iter: fn(Map<'a, 'b>) -> ('a, 'b);
 /// iterq produces an update for each value in m, but only when clock updates. If
 /// clock does not update but m does, then iterq will store each m in an internal
 /// fifo queue. If clock updates but m does not, iterq will record the number of
-/// times it was triggered, and will update immediatly that many times when m
+/// times it was triggered, and will update immediately that many times when m
 /// updates.
 val iterq: fn(#clock:Any, Map<'a, 'b>) -> ('a, 'b);
 ```

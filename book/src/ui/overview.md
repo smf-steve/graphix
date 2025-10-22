@@ -4,18 +4,22 @@ Graphix excels at building user interfaces thanks to its reactive dataflow natur
 
 ## Why Graphix for UIs?
 
-Traditional UI frameworks require you to manually manage state changes, update DOM elements, and coordinate between different parts of your application. Graphix eliminates this complexity by treating your entire UI as a reactive graph where:
+Traditional UI frameworks require you to manually manage state changes, update DOM elements, and coordinate between different parts of your application. Graphix eliminates this complexity by treating your entire application as a reactive graph where:
 
 - **Data flows automatically**: When underlying data changes, dependent UI components update automatically
 - **State is declarative**: You describe what the UI should look like, not how to update it
 - **Composition is natural**: Complex UIs are built by composing simple, reusable components
 - **Performance is built-in**: Only components that depend on changed data will re-render
 
+## Currently Targeting TUIs
+
+The first UI target for Graphix is TUIs. Surprisingly complex and useful UIs can be built in the standard terminal, and it is the absolute lowest common denominator that will always be present even on a bandwidth constrained remote system. Graphix uses the excellent ratatui library as a basis to build upon.
+
 ## Future UI Targets
 
-While Graphix currently implements supprot for building TUIs, the reactive architecture makes it well-suited for other UI paradigms:
+While Graphix currently implements support for building TUIs, the reactive architecture makes it well-suited for other UI paradigms:
 
-- **Desktop Applications**: Native desktop applications with reactive updates. Support for this is planned.
+- **Desktop Applications**: Native desktop applications. Support for this is planned next.
 - **Web UIs**: The dataflow model maps naturally to modern web frameworks
 - **Mobile UIs**: Touch-based interfaces with gesture handling
 

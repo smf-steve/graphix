@@ -259,7 +259,7 @@ the other number types.</p>
 <tr><td>Mod</td><td>%</td></tr>
 </tbody></table>
 </div>
-<p>The compiler will let you do arithmatic on different types of numbers directly
+<p>The compiler will let you do arithmetic on different types of numbers directly
 without casting, however the return type of the operation will be the set of all
 the types in the operation, representing that either type could be returned. If
 you try to pass this result to a function that wants a specific numeric type, it
@@ -292,7 +292,7 @@ unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
 </code></pre>
 <p>The thread panic message is an artifact of how the overflow error is handled at
 runtime, it is safe to continue using the shell and runtime if such an error
-occurrs. However the particular arith operation that caused the error will not
+occurs. However the particular arith operation that caused the error will not
 update, which may cause problems depending on what your program is doing with
 it.</p>
 <h3 id="number-sets"><a class="header" href="#number-sets">Number Sets</a></h3>
@@ -386,7 +386,7 @@ an error), or use a <code>select</code> expression to match it's type (more on s
 then it can't be null. The set <code>['a, null]</code> (alias <code>Option&lt;'a&gt;</code>) is commonly
 used to represent things that will sometimes return <code>null</code>.</p>
 <h2 id="array"><a class="header" href="#array">Array</a></h2>
-<p>Arrays are immutable, contiguous, and homogenous. They are parameterized,
+<p>Arrays are immutable, contiguous, and homogeneous. They are parameterized,
 <code>Array&lt;string&gt;</code> indicates an array of strings. Arrays are zero indexed <code>a[0]</code> is
 the first element. Array elements can be any type, including other arrays at
 arbitrary levels of nesting. There is a special <code>array</code> (case sensitive), that
@@ -394,7 +394,7 @@ represents the fundamental array type in the underlying value representation.
 Array literals are written like <code>[x, y, z]</code>. There are many functions in the
 <code>array</code> module of the standard library for working with arrays.</p>
 <h3 id="array-slicing-and-indexing"><a class="header" href="#array-slicing-and-indexing">Array Slicing and Indexing</a></h3>
-<p>Graphix supports array subslicing, the syntax will be familar to Rust programmers.</p>
+<p>Graphix supports array subslicing, the syntax will be familiar to Rust programmers.</p>
 <ul>
 <li><code>a[2..]</code> a slice from index 2 to the end of the array</li>
 <li><code>a[..4]</code> a slice from the beginning of the array to index 3</li>
@@ -622,7 +622,7 @@ y; // compile error, y isn't in scope
 important_thing
 </code></pre>
 <p>This program won't compile because you can't reference y and x from outside the
-block scope, but if you removed those refernces it would print a very important
+block scope, but if you removed those references it would print a very important
 number. Blocks are valid anywhere an expression is valid, and they are just
 expressions. They will become very important when we introduce lambda
 expressions.</p>
@@ -797,7 +797,7 @@ select a {
 <ul>
 <li>
 <p>whole slice, with binds, or literals, e.g. <code>[1, x, 2, y]</code> matches a 4 element
-array and binds it's 2nd and 4th element to <code>x</code> and <code>y</code> respectivly.</p>
+array and binds it's 2nd and 4th element to <code>x</code> and <code>y</code> respectively.</p>
 </li>
 <li>
 <p>head pattern, like the above program, e.g. <code>[(x, y), ..]</code> matches the first
@@ -812,7 +812,7 @@ fields <code>foo</code> and <code>bar</code>, binding <code>hd</code> to the arr
 <code>foo</code> to field foo and <code>bar</code> to field bar.</p>
 </li>
 </ul>
-<p>Structure patterns (all of the differnt types) can be nested to any depth.</p>
+<p>Structure patterns (all of the different types) can be nested to any depth.</p>
 <h3 id="tuple-patterns"><a class="header" href="#tuple-patterns">Tuple Patterns</a></h3>
 <p>Tuple patterns allow you to match tuples. Compared to slice patterns they are
 fairly simple. You must specify every field of the tuple, you can choose to bind
@@ -844,7 +844,7 @@ select a {
 `Ok(23, 32)
 </code></pre>
 <p>You might be tempted to replace <code>y: _</code> with <code>..</code> as it would be shorter.
-Unfortunatly this will confuse the type checker, because the Graphix type system
+Unfortunately this will confuse the type checker, because the Graphix type system
 is structural saying <code>{x, ..}</code> without any other information could match ANY
 struct with a field called <code>x</code>. This is currently too much for the type checker
 to handle,</p>
@@ -1630,8 +1630,8 @@ because the constraint is violated.</p>
 <p>Type aliases can be used to define recursive types, and this is a very powerful
 modeling tool for repeating structure. If you want to see an advanced example
 look no further than the <code>Tui</code> type in <code>graphix-shell</code>. Tui's are a set of
-mutually recursive types that define the tree structure of a ui. For a less
-overwelming example consider a classic,</p>
+mutually recursive types that define the tree structure of a UI. For a less
+overwhelming example consider a classic,</p>
 <pre><code>type List&lt;'a&gt; = [
   `Cons('a, List&lt;'a&gt;),
   `Nil
@@ -1734,7 +1734,7 @@ constrained GUI type with just labels and boxes,</p>
 </code></pre>
 <p>So we can build labels in boxes, and we can nest the boxes, laying out the
 labels however we like (use your imagination). We have the same problem as the
-more abstract example above, if we were mapping this onto a stateful gui library
+more abstract example above, if we were mapping this onto a stateful GUI library
 then every time a label text changed anywhere we'd have to destroy all the
 widgets we had created and rebuild the entire UI from scratch. We'd like to be
 able to just update the label text that changed, and we can, with a small change
@@ -1746,8 +1746,8 @@ to the type.</p>
 </code></pre>
 <p>Now, the string inside the label is a reference instead of the actual string.
 Since references are assigned an id at compile time, they never change, and so
-the layout of our gui can never change just because a label text was updated.
-Whatever is actually building the gui will only see an update to the root when
+the layout of our GUI can never change just because a label text was updated.
+Whatever is actually building the GUI will only see an update to the root when
 the actual layout changes. To handle the labels it can just deref the string
 reference in each label, and when that updates it can update the text of the
 label, exactly what we wanted.</p>
@@ -1962,7 +1962,7 @@ select status {
 2
 </code></pre>
 <p>In the first part of this program we just publish a string containing the source
-code of the module we want to ultimatly load. The second part is where it gets
+code of the module we want to ultimately load. The second part is where it gets
 interesting, lets break it down.</p>
 <p><code>mod foo dynamic</code> declares a dynamically loaded module named <code>foo</code>. In the rest
 of our code we can refer (statically) to <code>foo</code> as if it was a normal module that
@@ -2071,7 +2071,7 @@ val and: fn(@args: bool) -&gt; bool;
 /// return the number of times x has updated
 val count: fn(Any) -&gt; i64;
 
-/// return the first argument divided by all subsuquent arguments
+/// return the first argument divided by all subsequent arguments
 val divide: fn('a, @args:'a) -&gt; 'a;
 
 /// return e only if e is an error
@@ -2095,7 +2095,7 @@ val mean: fn([Number, Array&lt;Number&gt;], @args: [Number, Array&lt;Number&gt;]
 /// return the minimum value of any argument
 val min: fn('a, @args:'a) -&gt; 'a;
 
-/// return v only once, subsuquent updates to v will be ignored
+/// return v only once, subsequent updates to v will be ignored
 /// and once will return nothing
 val once: fn('a) -&gt; 'a;
 
@@ -2121,11 +2121,11 @@ val uniq: fn('a) -&gt; 'a;
 /// values from the queue when they are available.
 val queue: fn(#clock:Any, 'a) -&gt; 'a;
 
-/// hold the most recent value of v interally until clock updates. If v updates
+/// hold the most recent value of v internally until clock updates. If v updates
 /// more than once before clock updates, older values of v will be discarded,
 /// only the most recent value will be retained. If clock updates when no v is held
-/// internall, record the number of times it updated, and pass that many v updates
-/// through immediatly when they happen.
+/// internally, record the number of times it updated, and pass that many v updates
+/// through immediately when they happen.
 val hold: fn(#clock:Any, 'a) -&gt; 'a;
 
 /// ignore updates to any argument and never return anything
@@ -2185,11 +2185,11 @@ val rpc: fn(
 val list: fn(?#update:Any, string) -&gt; Result&lt;Array&lt;string&gt;, `ListError(string)&gt;;
 
 /// list the table under the specified path. If #update is specified, then the table
-/// will be refreshed each time clock is triggered. If update is not specifed, the table
+/// will be refreshed each time clock is triggered. If update is not specified, the table
 /// will be updated each second
 val list_table: fn(?#update:Any, string) -&gt; Result&lt;Table, `ListError(string)&gt;;
 
-/// Publish the specifed value at the specified path. Whenever the value updates,
+/// Publish the specified value at the specified path. Whenever the value updates,
 /// the new value will be sent to subscribers. If #on_write is specified, then if
 /// subscribers write to the value on_write will be called with the written value.
 /// on_write need not return anything.
@@ -2214,7 +2214,7 @@ val map: fn(Array&lt;'a&gt;, fn('a) -&gt; 'b throws 'e) -&gt; Array&lt;'b&gt; th
 
 /// return a new array where each element is the output of f applied to the
 /// corresponding element in a, except that if f returns an array then it's
-/// elements will be concatanated to the end of the output instead of nesting.
+/// elements will be concatenated to the end of the output instead of nesting.
 val flat_map: fn(Array&lt;'a&gt;, fn('a) -&gt; ['b, Array&lt;'b&gt;] throws 'e) -&gt; Array&lt;'b&gt; throws 'e;
 
 /// return the result of f applied to the init and every element of a in
@@ -2234,7 +2234,7 @@ val iter: fn(Array&lt;'a&gt;) -&gt; 'a;
 /// iterq produces an update for each value in a, but only when clock updates. If
 /// clock does not update but a does, then iterq will store each a in an internal
 /// fifo queue. If clock updates but a does not, iterq will record the number of
-/// times it was triggered, and will update immediatly that many times when a
+/// times it was triggered, and will update immediately that many times when a
 /// updates.
 val iterq: fn(#clock:Any, Array&lt;'a&gt;) -&gt; 'a;
 
@@ -2326,7 +2326,7 @@ val iter: fn(Map&lt;'a, 'b&gt;) -&gt; ('a, 'b);
 /// iterq produces an update for each value in m, but only when clock updates. If
 /// clock does not update but m does, then iterq will store each m in an internal
 /// fifo queue. If clock updates but m does not, iterq will record the number of
-/// times it was triggered, and will update immediatly that many times when m
+/// times it was triggered, and will update immediately that many times when m
 /// updates.
 val iterq: fn(#clock:Any, Map&lt;'a, 'b&gt;) -&gt; ('a, 'b);
 </code></pre>
@@ -2338,7 +2338,7 @@ val iterq: fn(#clock:Any, Map&lt;'a, 'b&gt;) -&gt; ('a, 'b);
 };
 
 /// the default escaping config escapes \, /, \n, \r, \t, \0, and non printable
-/// characters to unicode \u{HHHH} format
+/// characters to Unicode \u{HHHH} format
 val default_escape: Escape = {
     escape: "\\/\n\r\t\0",
     escape_char: "\\",
@@ -2384,11 +2384,11 @@ val join: fn(#sep:string, @args: [string, Array&lt;string&gt;]) -&gt; string;
 /// concatenate the specified strings into a single string
 val concat: fn(@args: [string, Array&lt;string&gt;]) -&gt; string;
 
-/// escape all the charachters in #to_escape in s with the escape charachter #escape.
-/// The escape charachter must appear in #to_escape
+/// escape all the characters in #to_escape in s with the escape character #escape.
+/// The escape character must appear in #to_escape
 val escape: fn(?#esc:Escape, string) -&gt; Result&lt;string, `StringError(string)&gt;;
 
-/// unescape all the charachters in s escaped by the specified #escape charachter
+/// unescape all the characters in s escaped by the specified #escape character
 val unescape: fn(?#esc:Escape, string) -&gt; Result&lt;string, `StringError(string)&gt;;
 
 /// split the string by the specified #pat and return an array of each part
@@ -2433,8 +2433,8 @@ val sprintf: fn(string, @args: Any) -&gt; string;
 /// return the length of the string in bytes
 val len: fn(string) -&gt; i64;
 
-/// extract a substring of s starting at #start with lenth #len.
-/// both #start and #len are unicode character indexes,
+/// extract a substring of s starting at #start with length #len.
+/// both #start and #len are Unicode character indexes,
 /// not byte indexes. e.g. str::sub(#start:0, #len:2, "💖💖💖")
 /// will return "💖💖"
 val sub: fn(#start:i64, #len:i64, string) -&gt; Result&lt;string, `SubError(string)&gt;;
@@ -2496,17 +2496,19 @@ val shuffle: fn(Array&lt;'a&gt;) -&gt; Array&lt;'a&gt;;
 <div style="break-before: page; page-break-before: always;"></div><h1 id="building-uis-with-graphix"><a class="header" href="#building-uis-with-graphix">Building UIs With Graphix</a></h1>
 <p>Graphix excels at building user interfaces thanks to its reactive dataflow nature. Changes in data automatically propagate through the UI graph, updating only the components that need to change. This makes building complex, interactive applications surprisingly straightforward.</p>
 <h2 id="why-graphix-for-uis"><a class="header" href="#why-graphix-for-uis">Why Graphix for UIs?</a></h2>
-<p>Traditional UI frameworks require you to manually manage state changes, update DOM elements, and coordinate between different parts of your application. Graphix eliminates this complexity by treating your entire UI as a reactive graph where:</p>
+<p>Traditional UI frameworks require you to manually manage state changes, update DOM elements, and coordinate between different parts of your application. Graphix eliminates this complexity by treating your entire application as a reactive graph where:</p>
 <ul>
 <li><strong>Data flows automatically</strong>: When underlying data changes, dependent UI components update automatically</li>
 <li><strong>State is declarative</strong>: You describe what the UI should look like, not how to update it</li>
 <li><strong>Composition is natural</strong>: Complex UIs are built by composing simple, reusable components</li>
 <li><strong>Performance is built-in</strong>: Only components that depend on changed data will re-render</li>
 </ul>
+<h2 id="currently-targeting-tuis"><a class="header" href="#currently-targeting-tuis">Currently Targeting TUIs</a></h2>
+<p>The first UI target for Graphix is TUIs. Surprisingly complex and useful UIs can be built in the standard terminal, and it is the absolute lowest common denominator that will always be present even on a bandwidth constrained remote system. Graphix uses the excellent ratatui library as a basis to build upon.</p>
 <h2 id="future-ui-targets"><a class="header" href="#future-ui-targets">Future UI Targets</a></h2>
-<p>While Graphix currently implements supprot for building TUIs, the reactive architecture makes it well-suited for other UI paradigms:</p>
+<p>While Graphix currently implements support for building TUIs, the reactive architecture makes it well-suited for other UI paradigms:</p>
 <ul>
-<li><strong>Desktop Applications</strong>: Native desktop applications with reactive updates. Support for this is planned.</li>
+<li><strong>Desktop Applications</strong>: Native desktop applications. Support for this is planned next.</li>
 <li><strong>Web UIs</strong>: The dataflow model maps naturally to modern web frameworks</li>
 <li><strong>Mobile UIs</strong>: Touch-based interfaces with gesture handling</li>
 </ul>

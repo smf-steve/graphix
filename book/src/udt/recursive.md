@@ -3,8 +3,8 @@
 Type aliases can be used to define recursive types, and this is a very powerful
 modeling tool for repeating structure. If you want to see an advanced example
 look no further than the `Tui` type in `graphix-shell`. Tui's are a set of
-mutually recursive types that define the tree structure of a ui. For a less
-overwelming example consider a classic,
+mutually recursive types that define the tree structure of a UI. For a less
+overwhelming example consider a classic,
 
 ```
 type List<'a> = [

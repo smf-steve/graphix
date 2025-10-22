@@ -307,7 +307,7 @@ select a {
 <ul>
 <li>
 <p>whole slice, with binds, or literals, e.g. <code>[1, x, 2, y]</code> matches a 4 element
-array and binds it's 2nd and 4th element to <code>x</code> and <code>y</code> respectivly.</p>
+array and binds it's 2nd and 4th element to <code>x</code> and <code>y</code> respectively.</p>
 </li>
 <li>
 <p>head pattern, like the above program, e.g. <code>[(x, y), ..]</code> matches the first
@@ -322,7 +322,7 @@ fields <code>foo</code> and <code>bar</code>, binding <code>hd</code> to the arr
 <code>foo</code> to field foo and <code>bar</code> to field bar.</p>
 </li>
 </ul>
-<p>Structure patterns (all of the differnt types) can be nested to any depth.</p>
+<p>Structure patterns (all of the different types) can be nested to any depth.</p>
 <h3 id="tuple-patterns"><a class="header" href="#tuple-patterns">Tuple Patterns</a></h3>
 <p>Tuple patterns allow you to match tuples. Compared to slice patterns they are
 fairly simple. You must specify every field of the tuple, you can choose to bind
@@ -354,7 +354,7 @@ select a {
 `Ok(23, 32)
 </code></pre>
 <p>You might be tempted to replace <code>y: _</code> with <code>..</code> as it would be shorter.
-Unfortunatly this will confuse the type checker, because the Graphix type system
+Unfortunately this will confuse the type checker, because the Graphix type system
 is structural saying <code>{x, ..}</code> without any other information could match ANY
 struct with a field called <code>x</code>. This is currently too much for the type checker
 to handle,</p>

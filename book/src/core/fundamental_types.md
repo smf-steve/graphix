@@ -25,7 +25,7 @@ the other number types.
 | Divide    |     /    |
 | Mod       |     %    |
 
-The compiler will let you do arithmatic on different types of numbers directly
+The compiler will let you do arithmetic on different types of numbers directly
 without casting, however the return type of the operation will be the set of all
 the types in the operation, representing that either type could be returned. If
 you try to pass this result to a function that wants a specific numeric type, it
@@ -64,7 +64,7 @@ unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
 
 The thread panic message is an artifact of how the overflow error is handled at
 runtime, it is safe to continue using the shell and runtime if such an error
-occurrs. However the particular arith operation that caused the error will not
+occurs. However the particular arith operation that caused the error will not
 update, which may cause problems depending on what your program is doing with
 it.
 
@@ -191,7 +191,7 @@ used to represent things that will sometimes return `null`.
 
 ## Array
 
-Arrays are immutable, contiguous, and homogenous. They are parameterized,
+Arrays are immutable, contiguous, and homogeneous. They are parameterized,
 `Array<string>` indicates an array of strings. Arrays are zero indexed `a[0]` is
 the first element. Array elements can be any type, including other arrays at
 arbitrary levels of nesting. There is a special `array` (case sensitive), that
@@ -201,7 +201,7 @@ Array literals are written like `[x, y, z]`. There are many functions in the
 
 ### Array Slicing and Indexing
 
-Graphix supports array subslicing, the syntax will be familar to Rust programmers.
+Graphix supports array subslicing, the syntax will be familiar to Rust programmers.
 
 - `a[2..]` a slice from index 2 to the end of the array
 - `a[..4]` a slice from the beginning of the array to index 3

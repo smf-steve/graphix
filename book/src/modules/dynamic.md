@@ -43,7 +43,7 @@ eric@katana ~/p/graphix (main)> target/debug/graphix ~/test.gx
 ```
 
 In the first part of this program we just publish a string containing the source
-code of the module we want to ultimatly load. The second part is where it gets
+code of the module we want to ultimately load. The second part is where it gets
 interesting, lets break it down.
 
 `mod foo dynamic` declares a dynamically loaded module named `foo`. In the rest
