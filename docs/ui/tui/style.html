@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>linegauge - The Graphix Programming Language</title>
+        <title>style - The Graphix Programming Language</title>
 
 
         <!-- Custom HTML head -->
@@ -175,142 +175,139 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="the-line-gauge-widget"><a class="header" href="#the-line-gauge-widget">The Line Gauge Widget</a></h1>
-<p>The <code>line_gauge</code> widget displays a horizontal progress indicator using line-drawing characters. It's more compact than <code>gauge</code> and ideal for dashboards where vertical space is limited.</p>
+                        <h1 id="styling"><a class="header" href="#styling">Styling</a></h1>
+<p>The <code>style</code> function creates visual styles for TUI widgets, controlling colors, text modifiers, and underline colors. Styles are used throughout the TUI system to customize the appearance of text, widgets, and interactive elements.</p>
 <h2 id="api"><a class="header" href="#api">API</a></h2>
-<pre><code>mod linegauge: sig {
-    type LineSet = [`Thin, `Thick, `Double];
+<pre><code class="language-graphix">mod tui: sig {
+    type Color = [
+      `Reset,
+      `Black,
+      `Red,
+      `Green,
+      `Yellow,
+      `Blue,
+      `Magenta,
+      `Cyan,
+      `Gray,
+      `DarkGray,
+      `LightRed,
+      `LightGreen,
+      `LightYellow,
+      `LightBlue,
+      `LightMagenta,
+      `LightCyan,
+      `White,
+      `Rgb({ r: i64, g: i64, b: i64 }), // r, g, b range: 0-255
+      `Indexed(i64)                      // 0-255 for 256-color palette
+    ];
 
-    /// Creates a line gauge widget showing progress from 0.0 to 1.0
-    val line_gauge: fn(
-        ?#filled_style: &amp;Style,
-        ?#unfilled_style: &amp;Style,
-        ?#line_set: &amp;LineSet,
-        ?#label: &amp;Line,
-        ?#style: &amp;Style,
-        &amp;f64
-    ) -&gt; Widget;
-}
-</code></pre>
-<h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
-<ul>
-<li><strong>filled_style</strong> - Style for the filled portion</li>
-<li><strong>unfilled_style</strong> - Style for the unfilled portion</li>
-<li><strong>line_set</strong> - Character set: <code>Thin</code>, <code>Thick</code> (default), or <code>Double</code></li>
-<li><strong>label</strong> - Line or span displayed within the gauge</li>
-<li><strong>style</strong> - Base style for the widget</li>
-</ul>
-<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
-<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
-<pre><code class="language-graphix">use tui;
-use tui::line_gauge;
+    type Modifier = [
+      `Bold,
+      `Italic
+    ];
 
-let progress = 0.75;  // 75%
-
-line_gauge(
-    #filled_style: &amp;style(#fg: `Green),
-    &amp;progress
-)
-</code></pre>
-<p><img src="./media/linegauge_basic.png" alt="Basic Line Gauge" /></p>
-<h3 id="color-coded-status"><a class="header" href="#color-coded-status">Color-coded Status</a></h3>
-<pre><code class="language-graphix">use tui;
-use tui::line_gauge;
-use tui::block;
-use tui::text;
-
-{
-    let clock = time::timer(duration:0.5s, true);
-    let power = 0.0;
-    power &lt;- min(1.0, (clock ~ power) + 0.01);
-
-    let color = select power {
-        x if x &lt; 0.10 =&gt; `Red,
-        x if x &lt; 0.25 =&gt; `Yellow,
-        x =&gt; `Green
+    type Style = {
+      fg: [Color, null],
+      bg: [Color, null],
+      underline_color: [Color, null],
+      add_modifier: [Array&lt;Modifier&gt;, null],
+      sub_modifier: [Array&lt;Modifier&gt;, null]
     };
 
-    let percentage = cast&lt;i64&gt;(power * 100.0)?;
-
-    block(
-        #border: &amp;`All,
-        #title: &amp;line("Power"),
-        &amp;line_gauge(
-            #filled_style: &amp;style(#fg: color),
-            #line_set: &amp;`Thick,
-            #label: &amp;line("[percentage]%"),
-            &amp;power
-        )
-    )
+    /// Creates a style with optional foreground/background colors and modifiers
+    val style: fn(
+        ?#fg: [Color, null],
+        ?#bg: [Color, null],
+        ?#underline_color: [Color, null],
+        ?#add_modifier: [Array&lt;Modifier&gt;, null],
+        ?#sub_modifier: [Array&lt;Modifier&gt;, null]
+    ) -&gt; Style;
 }
 </code></pre>
-<p><img src="./media/linegauge_colored.gif" alt="Line Gauge Color Coded" /></p>
-<h3 id="compact-multi-metric-display"><a class="header" href="#compact-multi-metric-display">Compact Multi-metric Display</a></h3>
-<pre><code class="language-graphix">use tui;
-use tui::line_gauge;
-use tui::text;
-use tui::layout;
-
-layout(
-    #direction: &amp;`Vertical,
-    &amp;[
-        child(#constraint: `Percentage(5), line_gauge(
-            #line_set:&amp;`Thick,
-            #filled_style: &amp;style(#fg: `Red),
-            #label: &amp;line("CPU 45%"),
-            &amp;0.45
-        )),
-        child(#constraint: `Percentage(5), line_gauge(
-            #line_set:&amp;`Thick,
-            #filled_style: &amp;style(#fg: `Yellow),
-            #label: &amp;line("MEM 67%"),
-            &amp;0.67
-        )),
-        child(#constraint: `Percentage(5), line_gauge(
-            #line_set:&amp;`Thick,
-            #filled_style: &amp;style(#fg: `Green),
-            #label: &amp;line("DSK 23%"),
-            &amp;0.23
-        ))
-    ]
-)
+<h2 id="colors"><a class="header" href="#colors">Colors</a></h2>
+<h3 id="named-colors"><a class="header" href="#named-colors">Named Colors</a></h3>
+<p>Standard terminal colors are available as simple variants:</p>
+<ul>
+<li><strong>Basic</strong>: <code>Black</code>, <code>Red</code>, <code>Green</code>, <code>Yellow</code>, <code>Blue</code>, <code>Magenta</code>, <code>Cyan</code>, <code>White</code>, <code>Gray</code></li>
+<li><strong>Light variants</strong>: <code>LightRed</code>, <code>LightGreen</code>, <code>LightYellow</code>, <code>LightBlue</code>, <code>LightMagenta</code>, <code>LightCyan</code></li>
+<li><strong>Gray tones</strong>: <code>DarkGray</code>, <code>Gray</code></li>
+<li><strong>Reset</strong>: <code>Reset</code> - resets to terminal default</li>
+</ul>
+<h3 id="true-color-rgb"><a class="header" href="#true-color-rgb">True Color (RGB)</a></h3>
+<p>For precise color control, use RGB values with components from 0-255:</p>
+<pre><code class="language-graphix">style(#fg: `Rgb({r: 255, g: 100, b: 50}))
+style(#bg: `Rgb({r: 20, g: 20, b: 20}))
 </code></pre>
-<p><img src="./media/linegauge_multi.png" alt="Line Gauge Multi Colored" /></p>
-<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="indexed-colors"><a class="header" href="#indexed-colors">Indexed Colors</a></h3>
+<p>Access the 256-color palette with indexed colors (0-255):</p>
+<pre><code class="language-graphix">style(#fg: `Indexed(202))  // Orange
+style(#bg: `Indexed(234))  // Dark gray
+</code></pre>
+<p>The 256-color palette includes:</p>
 <ul>
-<li>System resource monitors (CPU, RAM, disk, network)</li>
-<li>Download/upload progress indicators</li>
-<li>Compact status dashboards</li>
-<li>Progress tracking in limited space</li>
+<li>0-15: Standard terminal colors</li>
+<li>16-231: 6x6x6 RGB color cube</li>
+<li>232-255: Grayscale ramp</li>
 </ul>
-<h2 id="comparison-with-gauge"><a class="header" href="#comparison-with-gauge">Comparison with gauge</a></h2>
-<p>Use <code>line_gauge</code> when:</p>
+<h2 id="text-modifiers"><a class="header" href="#text-modifiers">Text Modifiers</a></h2>
+<p>Modifiers change text appearance. Pass them as an array to <code>add_modifier</code>:</p>
+<pre><code class="language-graphix">style(#add_modifier: [`Bold])
+style(#add_modifier: [`Italic])
+style(#add_modifier: [`Bold, `Italic])
+</code></pre>
+<p>Available modifiers:</p>
 <ul>
-<li>You need compact, single-line displays</li>
-<li>Vertical space is limited</li>
-<li>You want a more technical/modern look</li>
+<li><strong><code>Bold</code></strong>: Bold/bright text</li>
+<li><strong><code>Italic</code></strong>: Italic text (terminal support varies)</li>
 </ul>
-<p>Use <code>gauge</code> when:</p>
+<p>Use <code>sub_modifier</code> to explicitly remove modifiers when inheriting styles:</p>
+<pre><code class="language-graphix">style(#sub_modifier: [`Bold])  // Remove bold from inherited style
+</code></pre>
+<h2 id="style-parameters"><a class="header" href="#style-parameters">Style Parameters</a></h2>
+<p>All parameters are optional and nullable:</p>
 <ul>
-<li>You have more vertical space available</li>
-<li>You want larger, more prominent indicators</li>
+<li><strong><code>fg</code></strong>: Foreground (text) color</li>
+<li><strong><code>bg</code></strong>: Background color</li>
+<li><strong><code>underline_color</code></strong>: Color for underlined text</li>
+<li><strong><code>add_modifier</code></strong>: Array of modifiers to add</li>
+<li><strong><code>sub_modifier</code></strong>: Array of modifiers to remove</li>
+</ul>
+<p>Omitted or <code>null</code> parameters use the terminal's default or inherit from parent styles.</p>
+<h2 id="style-inheritance"><a class="header" href="#style-inheritance">Style Inheritance</a></h2>
+<p>Styles are typically applied hierarchically:</p>
+<ol>
+<li><strong>Widget style</strong>: Base style for the entire widget</li>
+<li><strong>Line style</strong>: Style for a line of text</li>
+<li><strong>Span style</strong>: Style for individual text segments</li>
+</ol>
+<p>More specific styles override less specific ones. For example, a span's foreground color overrides the line's foreground color.</p>
+<h2 id="terminal-compatibility"><a class="header" href="#terminal-compatibility">Terminal Compatibility</a></h2>
+<p>Not all terminals support all styling features:</p>
+<ul>
+<li><strong>Named colors</strong>: Universally supported</li>
+<li><strong>256-color palette</strong>: Widely supported in modern terminals</li>
+<li><strong>True color (RGB)</strong>: Supported in most modern terminals (check <code>COLORTERM=truecolor</code>)</li>
+<li><strong>Bold</strong>: Universally supported</li>
+<li><strong>Italic</strong>: Support varies; some terminals display as inverse or underline</li>
 </ul>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>
-<li><a href="gauge.html">gauge</a> - For block-style progress indicators</li>
-<li><a href="sparkline.html">sparkline</a> - For historical trend display</li>
-<li><a href="barchart.html">barchart</a> - For categorical value comparison</li>
+<li><a href="text.html">text</a> - Using styles with text, spans, and lines</li>
+<li><a href="block.html">block</a> - Styling block borders and titles</li>
+<li><a href="list.html">list</a> - Highlight styles for selections</li>
+<li><a href="table.html">table</a> - Cell and row styling</li>
+<li><a href="tabs.html">tabs</a> - Tab styling</li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../ui/tui/gauge.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../ui/tui/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../../ui/tui/input.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../ui/tui/barchart.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -320,11 +317,11 @@ layout(
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../ui/tui/gauge.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../ui/tui/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../../ui/tui/input.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../ui/tui/barchart.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

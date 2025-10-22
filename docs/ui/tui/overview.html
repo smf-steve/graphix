@@ -202,18 +202,10 @@
 <li><strong>Canvas</strong>: Low-level drawing surface for custom graphics</li>
 </ul>
 <h3 id="input-handling"><a class="header" href="#input-handling">Input Handling</a></h3>
-<p>Interactive components use Graphix's event system for keyboard and mouse input:</p>
-<pre><code class="language-graphix">use tui;
-use tui::text;
-
-{
-    let position = 0;
-
-    // Example showing input handling structure - returns dummy text widget
-    text(&amp;"Input handler example")
-}
-</code></pre>
-<p>Events flow through the component tree, allowing parent components to handle unprocessed events from children.</p>
+<p>Interactive components use the input widget to handle UI events that
+flow through the widget graph from parent to child. Parents can choose
+to pass on events they receive or not. See the input widget for more
+details.</p>
 <h2 id="building-your-first-tui"><a class="header" href="#building-your-first-tui">Building Your First TUI</a></h2>
 <p>Here's a simple example that demonstrates the core concepts:</p>
 <pre><code class="language-graphix">use tui;
@@ -235,6 +227,7 @@ block(
 )
 </code></pre>
 <p>This creates a bordered block with a counter that increments every second. The key insight is that when <code>counter</code> changes, the text automatically updates because of Graphix's reactive nature.</p>
+<p><img src="./media/overview_first.gif" alt="First Overview" /></p>
 <h2 id="styling-and-theming"><a class="header" href="#styling-and-theming">Styling and Theming</a></h2>
 <p>Graphix TUIs support rich styling with:</p>
 <ul>
@@ -243,17 +236,16 @@ block(
 <li><strong>Background Colors</strong>: Set background colors for any component</li>
 <li><strong>Conditional Styling</strong>: Use <code>select</code> expressions to change styles based on state</li>
 </ul>
+<p>Many widgets take optional style arguments, allowing styling to be applied at many levels.</p>
 <pre><code class="language-graphix">use tui;
 
-{
-    let is_selected = true;
+let is_selected = true;
 
-    style(
-      #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
-      #bg: `DarkGray,
-      #add_modifier: [`Bold]
-    )
-}
+style(
+  #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
+  #bg: `DarkGray,
+  #add_modifier: [`Bold]
+)
 </code></pre>
 <h2 id="layout-system"><a class="header" href="#layout-system">Layout System</a></h2>
 <p>The layout system provides flexible component arrangement:</p>
@@ -267,20 +259,18 @@ block(
 use tui::layout;
 use tui::text;
 
-{
-    let selected_pane = 0;
-    let sidebar = text(&amp;"Sidebar");
-    let main_content = text(&amp;"Main");
+let selected_pane = 0;
+let sidebar = text(&amp;"Sidebar");
+let main_content = text(&amp;"Main");
 
-    layout(
-      #direction: &amp;`Horizontal,
-      #focused: &amp;selected_pane,
-      &amp;[
-        child(#constraint: `Percentage(30), sidebar),
-        child(#constraint: `Percentage(70), main_content)
-      ]
-    )
-}
+layout(
+  #direction: &amp;`Horizontal,
+  #focused: &amp;selected_pane,
+  &amp;[
+    child(#constraint: `Percentage(30), sidebar),
+    child(#constraint: `Percentage(70), main_content)
+  ]
+)
 </code></pre>
 <h2 id="state-management"><a class="header" href="#state-management">State Management</a></h2>
 <p>In Graphix, UI state is just regular program state. Use variables to track:</p>
@@ -295,18 +285,16 @@ use tui::text;
 use tui::list;
 use tui::text;
 
-{
-    let selected_item = 0;
-    let items = [line("Item 1"), line("Item 2"), line("Item 3")];
-    let arrow_pressed = never();
+let selected_item = 0;
+let items = [line("Item 1"), line("Item 2"), line("Item 3")];
+let arrow_pressed = never();
 
-    // When user presses down arrow assume the event is handled as
-    // shown above and arrow_pressed is set using connect
-    selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
+// When user presses down arrow assume the event is handled as
+// shown above and arrow_pressed is set using connect
+selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
 
-    // UI automatically reflects the change
-    list(#selected: &amp;selected_item, &amp;items)
-}
+// UI automatically reflects the change
+list(#selected: &amp;selected_item, &amp;items)
 </code></pre>
 <h2 id="real-time-data-integration"><a class="header" href="#real-time-data-integration">Real-time Data Integration</a></h2>
 <p>Graphix TUIs excel at displaying real-time data. Connect to data sources via netidx and the UI updates automatically:</p>
@@ -314,17 +302,15 @@ use tui::text;
 use tui::gauge;
 use tui::text;
 
-{
-    // Subscribe to live data
-    let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
+// Subscribe to live data
+let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
 
-    // Display automatically updates when data changes
-    gauge(
-      #gauge_style: &amp;style(#fg: `Red),
-      #label: &amp;span("Temperature"),
-      &amp;(temperature / 100.0)
-    )
-}
+// Will display updates automatically when data changes
+gauge(
+  #gauge_style: &amp;style(#fg: `Red),
+  #label: &amp;span("Temperature"),
+  &amp;(temperature / 100.0)
+)
 </code></pre>
 
                     </main>
@@ -335,7 +321,7 @@ use tui::text;
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../../ui/tui/barchart.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../../ui/tui/style.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -349,7 +335,7 @@ use tui::text;
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../../ui/tui/barchart.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../../ui/tui/style.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

@@ -2,14 +2,12 @@ use tui;
 use tui::gauge;
 use tui::text;
 
-{
-    // Subscribe to live data
-    let temperature = cast<f64>(net::subscribe("/sensors/temperature")?)?;
+// Subscribe to live data
+let temperature = cast<f64>(net::subscribe("/sensors/temperature")?)?;
 
-    // Display automatically updates when data changes
-    gauge(
-      #gauge_style: &style(#fg: `Red),
-      #label: &span("Temperature"),
-      &(temperature / 100.0)
-    )
-}
+// Will display updates automatically when data changes
+gauge(
+  #gauge_style: &style(#fg: `Red),
+  #label: &span("Temperature"),
+  &(temperature / 100.0)
+)

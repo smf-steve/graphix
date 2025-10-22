@@ -2541,18 +2541,10 @@ val shuffle: fn(Array&lt;'a&gt;) -&gt; Array&lt;'a&gt;;
 <li><strong>Canvas</strong>: Low-level drawing surface for custom graphics</li>
 </ul>
 <h3 id="input-handling"><a class="header" href="#input-handling">Input Handling</a></h3>
-<p>Interactive components use Graphix's event system for keyboard and mouse input:</p>
-<pre><code class="language-graphix">use tui;
-use tui::text;
-
-{
-    let position = 0;
-
-    // Example showing input handling structure - returns dummy text widget
-    text(&amp;"Input handler example")
-}
-</code></pre>
-<p>Events flow through the component tree, allowing parent components to handle unprocessed events from children.</p>
+<p>Interactive components use the input widget to handle UI events that
+flow through the widget graph from parent to child. Parents can choose
+to pass on events they receive or not. See the input widget for more
+details.</p>
 <h2 id="building-your-first-tui"><a class="header" href="#building-your-first-tui">Building Your First TUI</a></h2>
 <p>Here's a simple example that demonstrates the core concepts:</p>
 <pre><code class="language-graphix">use tui;
@@ -2574,6 +2566,7 @@ block(
 )
 </code></pre>
 <p>This creates a bordered block with a counter that increments every second. The key insight is that when <code>counter</code> changes, the text automatically updates because of Graphix's reactive nature.</p>
+<p><img src="ui/tui/./media/overview_first.gif" alt="First Overview" /></p>
 <h2 id="styling-and-theming"><a class="header" href="#styling-and-theming">Styling and Theming</a></h2>
 <p>Graphix TUIs support rich styling with:</p>
 <ul>
@@ -2582,17 +2575,16 @@ block(
 <li><strong>Background Colors</strong>: Set background colors for any component</li>
 <li><strong>Conditional Styling</strong>: Use <code>select</code> expressions to change styles based on state</li>
 </ul>
+<p>Many widgets take optional style arguments, allowing styling to be applied at many levels.</p>
 <pre><code class="language-graphix">use tui;
 
-{
-    let is_selected = true;
+let is_selected = true;
 
-    style(
-      #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
-      #bg: `DarkGray,
-      #add_modifier: [`Bold]
-    )
-}
+style(
+  #fg: select is_selected { true =&gt; `Yellow, false =&gt; `White },
+  #bg: `DarkGray,
+  #add_modifier: [`Bold]
+)
 </code></pre>
 <h2 id="layout-system"><a class="header" href="#layout-system">Layout System</a></h2>
 <p>The layout system provides flexible component arrangement:</p>
@@ -2606,20 +2598,18 @@ block(
 use tui::layout;
 use tui::text;
 
-{
-    let selected_pane = 0;
-    let sidebar = text(&amp;"Sidebar");
-    let main_content = text(&amp;"Main");
+let selected_pane = 0;
+let sidebar = text(&amp;"Sidebar");
+let main_content = text(&amp;"Main");
 
-    layout(
-      #direction: &amp;`Horizontal,
-      #focused: &amp;selected_pane,
-      &amp;[
-        child(#constraint: `Percentage(30), sidebar),
-        child(#constraint: `Percentage(70), main_content)
-      ]
-    )
-}
+layout(
+  #direction: &amp;`Horizontal,
+  #focused: &amp;selected_pane,
+  &amp;[
+    child(#constraint: `Percentage(30), sidebar),
+    child(#constraint: `Percentage(70), main_content)
+  ]
+)
 </code></pre>
 <h2 id="state-management"><a class="header" href="#state-management">State Management</a></h2>
 <p>In Graphix, UI state is just regular program state. Use variables to track:</p>
@@ -2634,18 +2624,16 @@ use tui::text;
 use tui::list;
 use tui::text;
 
-{
-    let selected_item = 0;
-    let items = [line("Item 1"), line("Item 2"), line("Item 3")];
-    let arrow_pressed = never();
+let selected_item = 0;
+let items = [line("Item 1"), line("Item 2"), line("Item 3")];
+let arrow_pressed = never();
 
-    // When user presses down arrow assume the event is handled as
-    // shown above and arrow_pressed is set using connect
-    selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
+// When user presses down arrow assume the event is handled as
+// shown above and arrow_pressed is set using connect
+selected_item &lt;- arrow_pressed ~ ((selected_item + 1) % array::len(items));
 
-    // UI automatically reflects the change
-    list(#selected: &amp;selected_item, &amp;items)
-}
+// UI automatically reflects the change
+list(#selected: &amp;selected_item, &amp;items)
 </code></pre>
 <h2 id="real-time-data-integration"><a class="header" href="#real-time-data-integration">Real-time Data Integration</a></h2>
 <p>Graphix TUIs excel at displaying real-time data. Connect to data sources via netidx and the UI updates automatically:</p>
@@ -2653,18 +2641,139 @@ use tui::text;
 use tui::gauge;
 use tui::text;
 
-{
-    // Subscribe to live data
-    let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
+// Subscribe to live data
+let temperature = cast&lt;f64&gt;(net::subscribe("/sensors/temperature")?)?;
 
-    // Display automatically updates when data changes
-    gauge(
-      #gauge_style: &amp;style(#fg: `Red),
-      #label: &amp;span("Temperature"),
-      &amp;(temperature / 100.0)
-    )
+// Will display updates automatically when data changes
+gauge(
+  #gauge_style: &amp;style(#fg: `Red),
+  #label: &amp;span("Temperature"),
+  &amp;(temperature / 100.0)
+)
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="styling"><a class="header" href="#styling">Styling</a></h1>
+<p>The <code>style</code> function creates visual styles for TUI widgets, controlling colors, text modifiers, and underline colors. Styles are used throughout the TUI system to customize the appearance of text, widgets, and interactive elements.</p>
+<h2 id="api"><a class="header" href="#api">API</a></h2>
+<pre><code class="language-graphix">mod tui: sig {
+    type Color = [
+      `Reset,
+      `Black,
+      `Red,
+      `Green,
+      `Yellow,
+      `Blue,
+      `Magenta,
+      `Cyan,
+      `Gray,
+      `DarkGray,
+      `LightRed,
+      `LightGreen,
+      `LightYellow,
+      `LightBlue,
+      `LightMagenta,
+      `LightCyan,
+      `White,
+      `Rgb({ r: i64, g: i64, b: i64 }), // r, g, b range: 0-255
+      `Indexed(i64)                      // 0-255 for 256-color palette
+    ];
+
+    type Modifier = [
+      `Bold,
+      `Italic
+    ];
+
+    type Style = {
+      fg: [Color, null],
+      bg: [Color, null],
+      underline_color: [Color, null],
+      add_modifier: [Array&lt;Modifier&gt;, null],
+      sub_modifier: [Array&lt;Modifier&gt;, null]
+    };
+
+    /// Creates a style with optional foreground/background colors and modifiers
+    val style: fn(
+        ?#fg: [Color, null],
+        ?#bg: [Color, null],
+        ?#underline_color: [Color, null],
+        ?#add_modifier: [Array&lt;Modifier&gt;, null],
+        ?#sub_modifier: [Array&lt;Modifier&gt;, null]
+    ) -&gt; Style;
 }
 </code></pre>
+<h2 id="colors"><a class="header" href="#colors">Colors</a></h2>
+<h3 id="named-colors"><a class="header" href="#named-colors">Named Colors</a></h3>
+<p>Standard terminal colors are available as simple variants:</p>
+<ul>
+<li><strong>Basic</strong>: <code>Black</code>, <code>Red</code>, <code>Green</code>, <code>Yellow</code>, <code>Blue</code>, <code>Magenta</code>, <code>Cyan</code>, <code>White</code>, <code>Gray</code></li>
+<li><strong>Light variants</strong>: <code>LightRed</code>, <code>LightGreen</code>, <code>LightYellow</code>, <code>LightBlue</code>, <code>LightMagenta</code>, <code>LightCyan</code></li>
+<li><strong>Gray tones</strong>: <code>DarkGray</code>, <code>Gray</code></li>
+<li><strong>Reset</strong>: <code>Reset</code> - resets to terminal default</li>
+</ul>
+<h3 id="true-color-rgb"><a class="header" href="#true-color-rgb">True Color (RGB)</a></h3>
+<p>For precise color control, use RGB values with components from 0-255:</p>
+<pre><code class="language-graphix">style(#fg: `Rgb({r: 255, g: 100, b: 50}))
+style(#bg: `Rgb({r: 20, g: 20, b: 20}))
+</code></pre>
+<h3 id="indexed-colors"><a class="header" href="#indexed-colors">Indexed Colors</a></h3>
+<p>Access the 256-color palette with indexed colors (0-255):</p>
+<pre><code class="language-graphix">style(#fg: `Indexed(202))  // Orange
+style(#bg: `Indexed(234))  // Dark gray
+</code></pre>
+<p>The 256-color palette includes:</p>
+<ul>
+<li>0-15: Standard terminal colors</li>
+<li>16-231: 6x6x6 RGB color cube</li>
+<li>232-255: Grayscale ramp</li>
+</ul>
+<h2 id="text-modifiers"><a class="header" href="#text-modifiers">Text Modifiers</a></h2>
+<p>Modifiers change text appearance. Pass them as an array to <code>add_modifier</code>:</p>
+<pre><code class="language-graphix">style(#add_modifier: [`Bold])
+style(#add_modifier: [`Italic])
+style(#add_modifier: [`Bold, `Italic])
+</code></pre>
+<p>Available modifiers:</p>
+<ul>
+<li><strong><code>Bold</code></strong>: Bold/bright text</li>
+<li><strong><code>Italic</code></strong>: Italic text (terminal support varies)</li>
+</ul>
+<p>Use <code>sub_modifier</code> to explicitly remove modifiers when inheriting styles:</p>
+<pre><code class="language-graphix">style(#sub_modifier: [`Bold])  // Remove bold from inherited style
+</code></pre>
+<h2 id="style-parameters"><a class="header" href="#style-parameters">Style Parameters</a></h2>
+<p>All parameters are optional and nullable:</p>
+<ul>
+<li><strong><code>fg</code></strong>: Foreground (text) color</li>
+<li><strong><code>bg</code></strong>: Background color</li>
+<li><strong><code>underline_color</code></strong>: Color for underlined text</li>
+<li><strong><code>add_modifier</code></strong>: Array of modifiers to add</li>
+<li><strong><code>sub_modifier</code></strong>: Array of modifiers to remove</li>
+</ul>
+<p>Omitted or <code>null</code> parameters use the terminal's default or inherit from parent styles.</p>
+<h2 id="style-inheritance"><a class="header" href="#style-inheritance">Style Inheritance</a></h2>
+<p>Styles are typically applied hierarchically:</p>
+<ol>
+<li><strong>Widget style</strong>: Base style for the entire widget</li>
+<li><strong>Line style</strong>: Style for a line of text</li>
+<li><strong>Span style</strong>: Style for individual text segments</li>
+</ol>
+<p>More specific styles override less specific ones. For example, a span's foreground color overrides the line's foreground color.</p>
+<h2 id="terminal-compatibility"><a class="header" href="#terminal-compatibility">Terminal Compatibility</a></h2>
+<p>Not all terminals support all styling features:</p>
+<ul>
+<li><strong>Named colors</strong>: Universally supported</li>
+<li><strong>256-color palette</strong>: Widely supported in modern terminals</li>
+<li><strong>True color (RGB)</strong>: Supported in most modern terminals (check <code>COLORTERM=truecolor</code>)</li>
+<li><strong>Bold</strong>: Universally supported</li>
+<li><strong>Italic</strong>: Support varies; some terminals display as inverse or underline</li>
+</ul>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="ui/tui/text.html">text</a> - Using styles with text, spans, and lines</li>
+<li><a href="ui/tui/block.html">block</a> - Styling block borders and titles</li>
+<li><a href="ui/tui/list.html">list</a> - Highlight styles for selections</li>
+<li><a href="ui/tui/table.html">table</a> - Cell and row styling</li>
+<li><a href="ui/tui/tabs.html">tabs</a> - Tab styling</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-bar-chart-widget"><a class="header" href="#the-bar-chart-widget">The Bar Chart Widget</a></h1>
 <p>The <code>barchart</code> widget displays categorical data as vertical bars, supporting grouped bars, custom styling, and dynamic updates. It's ideal for comparing values across categories, showing rankings, or displaying resource usage.</p>
 <h2 id="apis"><a class="header" href="#apis">APIs</a></h2>
@@ -2777,7 +2886,7 @@ let bars = [
 bar_chart(&amp;[bar_group(bars)])
 </code></pre>
 <p><img src="ui/tui/./media/barchart_colored.png" alt="Colored Bar Chart" /></p>
-<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<h2 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/chart.html">chart</a> - For continuous data visualization</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For compact trend display</li>
@@ -2785,7 +2894,7 @@ bar_chart(&amp;[bar_group(bars)])
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-block-widget"><a class="header" href="#the-block-widget">The Block Widget</a></h1>
 <p>The <code>block</code> widget is a container that wraps other widgets with optional borders, titles, and styling. It's one of the most commonly used widgets for creating structured layouts and visually separating different sections of your TUI.</p>
-<h2 id="api"><a class="header" href="#api">API</a></h2>
+<h2 id="api-1"><a class="header" href="#api-1">API</a></h2>
 <pre><code>mod block: sig {
     type Borders = [`All, `None, `Top, `Bottom, `Left, `Right];
 
@@ -2866,7 +2975,7 @@ block(
 )
 </code></pre>
 <p><img src="ui/tui/./media/block_dynamic_title.png" alt="Block With Dynamic Title" /></p>
-<h2 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h2>
+<h2 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/layout.html">layout</a> - For arranging multiple blocks</li>
 <li><a href="ui/tui/paragraph.html">paragraph</a> - Common content for blocks</li>
@@ -2946,7 +3055,7 @@ input_handler(
 )
 </code></pre>
 <p><img src="ui/tui/./media/browser_navigation.gif" alt="Browser With Navigation" /></p>
-<h2 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h2>
+<h2 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/list.html">list</a> - For simpler selection interfaces</li>
 <li><a href="ui/tui/table.html">table</a> - For tabular data display</li>
@@ -3045,7 +3154,7 @@ let events = [event1, event2, event3, event4];
 calendar(#events: &amp;events, &amp;date(2024, 5, 1))
 </code></pre>
 <p><img src="ui/tui/media/calendar_typed.png" alt="Calendar Typed" /></p>
-<h2 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h2>
+<h2 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/table.html">table</a> - For tabular date-based data</li>
 <li><a href="ui/tui/list.html">list</a> - For event lists</li>
@@ -3186,7 +3295,7 @@ canvas(
 <li>Y increases upward</li>
 <li>Shapes outside bounds are clipped</li>
 </ul>
-<h2 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h2>
+<h2 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/chart.html">chart</a> - For pre-built line charts</li>
 <li><a href="ui/tui/barchart.html">barchart</a> - For bar-based visualizations</li>
@@ -3348,7 +3457,7 @@ chart(
 <li><strong>Braille</strong>: Smoothest curves, medium performance, best visual quality</li>
 <li><strong>Block</strong>: High contrast, medium performance</li>
 </ul>
-<h2 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h2>
+<h2 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/barchart.html">barchart</a> - For categorical data visualization</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For compact inline charts</li>
@@ -3466,13 +3575,13 @@ text(&amp;[
 <li><strong>Indexed colors</strong>: <code>Indexed(202)</code> for 256-color palette</li>
 <li><strong>RGB colors</strong>: <code>Rgb({r: 255, g: 100, b: 50})</code> for true color</li>
 </ul>
-<h2 id="text-modifiers"><a class="header" href="#text-modifiers">Text Modifiers</a></h2>
+<h2 id="text-modifiers-1"><a class="header" href="#text-modifiers-1">Text Modifiers</a></h2>
 <ul>
 <li><code>Bold</code>, <code>Italic</code>, <code>Underlined</code>, <code>CrossedOut</code></li>
 <li><code>SlowBlink</code>, <code>RapidBlink</code> (terminal support varies)</li>
 <li><code>Reversed</code>, <code>Hidden</code></li>
 </ul>
-<h2 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h2>
+<h2 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/paragraph.html">paragraph</a> - For wrapped and scrollable text</li>
 <li><a href="ui/tui/block.html">block</a> - For containing text with borders</li>
@@ -3480,7 +3589,7 @@ text(&amp;[
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-paragraph-widget"><a class="header" href="#the-paragraph-widget">The Paragraph Widget</a></h1>
 <p>The <code>paragraph</code> widget displays multi-line text with automatic word wrapping and scrolling support. It's ideal for displaying long text content, logs, or any content that needs to flow across multiple lines.</p>
-<h2 id="api-1"><a class="header" href="#api-1">API</a></h2>
+<h2 id="api-2"><a class="header" href="#api-2">API</a></h2>
 <pre><code>mod paragraph: sig {
     type ScrollPosition = {x: i64, y: i64};
 
@@ -3584,7 +3693,7 @@ paragraph(
 <p><img src="ui/tui/./media/paragraph_centered.png" alt="Paragraph Centered" /></p>
 <h2 id="word-wrapping"><a class="header" href="#word-wrapping">Word Wrapping</a></h2>
 <p>The paragraph widget automatically wraps long lines to fit the available width. Word boundaries are respected, so words won't be split in the middle unless they're longer than the available width.</p>
-<h2 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h2>
+<h2 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/text.html">text</a> - For creating styled text content</li>
 <li><a href="ui/tui/scroll.html">scrollbar</a> - For adding scrollbars</li>
@@ -3593,7 +3702,7 @@ paragraph(
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-gauge-widget"><a class="header" href="#the-gauge-widget">The Gauge Widget</a></h1>
 <p>The <code>gauge</code> widget displays a single value as a filled progress indicator, perfect for showing percentages, completion status, or resource usage. It provides a clear visual representation of how full or complete something is.</p>
-<h2 id="api-2"><a class="header" href="#api-2">API</a></h2>
+<h2 id="api-3"><a class="header" href="#api-3">API</a></h2>
 <pre><code>mod gauge: sig {
     /// Creates a gauge widget showing progress from 0.0 to 1.0
     val gauge: fn(
@@ -3676,7 +3785,7 @@ gauge(
 )
 </code></pre>
 <p><img src="ui/tui/./media/gauge_resource.png" alt="Resource Usage Gauge" /></p>
-<h2 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h2>
+<h2 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/linegauge.html">linegauge</a> - For horizontal line-based gauges</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For historical trend display</li>
@@ -3684,7 +3793,7 @@ gauge(
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-line-gauge-widget"><a class="header" href="#the-line-gauge-widget">The Line Gauge Widget</a></h1>
 <p>The <code>line_gauge</code> widget displays a horizontal progress indicator using line-drawing characters. It's more compact than <code>gauge</code> and ideal for dashboards where vertical space is limited.</p>
-<h2 id="api-3"><a class="header" href="#api-3">API</a></h2>
+<h2 id="api-4"><a class="header" href="#api-4">API</a></h2>
 <pre><code>mod linegauge: sig {
     type LineSet = [`Thin, `Thick, `Double];
 
@@ -3802,11 +3911,350 @@ layout(
 <li>You have more vertical space available</li>
 <li>You want larger, more prominent indicators</li>
 </ul>
-<h2 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h2>
+<h2 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/gauge.html">gauge</a> - For block-style progress indicators</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For historical trend display</li>
 <li><a href="ui/tui/barchart.html">barchart</a> - For categorical value comparison</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="the-input-widget"><a class="header" href="#the-input-widget">The Input Widget</a></h1>
+<p>The <code>input_handler</code> widget intercepts terminal input events (keyboard, mouse, resize, etc.) and allows you to handle them before they reach child widgets. This is essential for creating interactive TUI applications with keyboard navigation, mouse interactions, and custom event handling.</p>
+<h2 id="api-5"><a class="header" href="#api-5">API</a></h2>
+<pre><code class="language-graphix">type Event = [
+  `FocusGained,
+  `FocusLost,
+  `Key(KeyEvent),
+  `Mouse(MouseEvent),
+  `Paste(string),
+  `Resize(i64, i64)
+];
+
+type KeyEvent = {
+  code: KeyCode,
+  kind: KeyEventKind,
+  modifiers: Array&lt;KeyModifier&gt;,
+  state: Array&lt;KeyEventState&gt;
+};
+
+type MouseEvent = {
+  column: i64,
+  kind: MouseEventKind,
+  modifiers: Array&lt;KeyModifier&gt;,
+  row: i64
+};
+
+/// Creates an input handler that intercepts events before they reach the child
+val input_handler: fn(
+    ?#enabled: &amp;[bool, null],
+    #handle: &amp;fn(Event) -&gt; [`Stop, `Continue],
+    &amp;Tui
+) -&gt; Tui;
+</code></pre>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<p>The <code>input_handler</code> widget sits between the terminal and your UI, intercepting all input events. Your handler function receives each event and returns either:</p>
+<ul>
+<li><strong>`Stop</strong>: Event was handled, don't pass it to child widgets</li>
+<li><strong>`Continue</strong>: Event wasn't handled, pass it down to children</li>
+</ul>
+<p>This creates a hierarchical event system where parents can consume events before children see them, similar to event bubbling in web browsers.</p>
+<h2 id="event-types"><a class="header" href="#event-types">Event Types</a></h2>
+<h3 id="keyboard-events"><a class="header" href="#keyboard-events">Keyboard Events</a></h3>
+<p>Keyboard events include the key code, event kind (press/release/repeat), active modifiers, and keyboard state:</p>
+<pre><code class="language-graphix">type KeyCode = [
+  `Backspace, `Enter, `Left, `Right, `Up, `Down,
+  `Home, `End, `PageUp, `PageDown, `Tab, `BackTab,
+  `Delete, `Insert, `Esc,
+  `F(i64),              // Function keys: F(1), F(2), etc.
+  `Char(string),        // Character input
+  // ... and more
+];
+
+type KeyEventKind = [`Press, `Repeat, `Release];
+
+type KeyModifier = [`Shift, `Control, `Alt, `Super, `Hyper, `Meta];
+</code></pre>
+<h3 id="mouse-events"><a class="header" href="#mouse-events">Mouse Events</a></h3>
+<p>Mouse events include position (row/column), event kind, and modifiers:</p>
+<pre><code class="language-graphix">type MouseEventKind = [
+  `Down(MouseButton),
+  `Up(MouseButton),
+  `Drag(MouseButton),
+  `Moved,
+  `ScrollDown, `ScrollUp,
+  `ScrollLeft, `ScrollRight
+];
+
+type MouseButton = [`Left, `Right, `Middle];
+</code></pre>
+<h3 id="other-events"><a class="header" href="#other-events">Other Events</a></h3>
+<ul>
+<li><strong><code>FocusGained</code>/<code>FocusLost</code></strong>: Terminal window focus changes</li>
+<li><strong><code>Paste(string)</code></strong>: Text pasted into terminal</li>
+<li><strong><code>Resize(i64, i64)</code></strong>: Terminal window resized (width, height)</li>
+</ul>
+<h2 id="examples-10"><a class="header" href="#examples-10">Examples</a></h2>
+<h3 id="basic-keyboard-navigation"><a class="header" href="#basic-keyboard-navigation">Basic Keyboard Navigation</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::list;
+use tui::block;
+use tui::text;
+use tui::input_handler;
+
+let items = [
+    line("Apple"), line("Banana"), line("Cherry"),
+    line("Date"), line("Elderberry"), line("Fig"), line("Grape")
+];
+
+let last = array::len(items) - 1;
+let selected = 0;
+let scroll_pos = 0;
+let visible = 5;
+
+// Auto-scroll to keep selection visible
+scroll_pos &lt;- select selected {
+    s if s &lt; scroll_pos =&gt; s,
+    s if s &gt; (scroll_pos + visible - 1) =&gt; s - visible + 1,
+    _ =&gt; never()
+};
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Up if selected &gt; 0 =&gt; {
+                selected &lt;- (k ~ selected) - 1;
+                `Stop
+            },
+            k@`Down if selected &lt; last =&gt; {
+                selected &lt;- (k ~ selected) + 1;
+                `Stop
+            },
+            k@`Home =&gt; { selected &lt;- k ~ 0; `Stop },
+            k@`End =&gt; { selected &lt;- k ~ last; `Stop },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("Fruit Selection"),
+        &amp;list(
+            #highlight_style: &amp;style(#fg: `Black, #bg: `Yellow),
+            #highlight_symbol: &amp;"▶ ",
+            #selected: &amp;selected,
+            #scroll: &amp;scroll_pos,
+            &amp;items
+        )
+    )
+)
+</code></pre>
+<p>This example shows keyboard navigation in a list. Arrow keys move the selection, and the viewport automatically scrolls to keep the selection visible.</p>
+<p><img src="ui/tui/./media/list_interactive.gif" alt="Interactive List" /></p>
+<h3 id="focus-management"><a class="header" href="#focus-management">Focus Management</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::layout;
+use tui::text;
+use tui::input_handler;
+use tui::block;
+
+let focused = 0;
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Tab =&gt; {
+                focused &lt;- ((k ~ focused) + 1) % 3;
+                `Stop
+            },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+let focused_border = |i| select focused { n if n == i =&gt; `All, _ =&gt; [`Top] };
+let left_pane = block(#border:&amp;focused_border(0), &amp;text(&amp;"Left"));
+let center_pane = block(#border:&amp;focused_border(1), &amp;text(&amp;"Center"));
+let right_pane = block(#border:&amp;focused_border(2), &amp;text(&amp;"Right"));
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;layout(
+        #direction: &amp;`Horizontal,
+        #focused: &amp;focused,
+        &amp;[
+            child(#constraint: `Percentage(25), left_pane),
+            child(#constraint: `Percentage(50), center_pane),
+            child(#constraint: `Percentage(25), right_pane)
+        ]
+    )
+)
+</code></pre>
+<p>Tab cycles focus between three panes, with visual feedback via border styling.</p>
+<p><img src="ui/tui/./media/layout_focus.gif" alt="Layout Focus" /></p>
+<h3 id="scrollable-content-1"><a class="header" href="#scrollable-content-1">Scrollable Content</a></h3>
+<pre><code class="language-graphix">use tui;
+use tui::scrollbar;
+use tui::paragraph;
+use tui::block;
+use tui::text;
+use tui::input_handler;
+
+let long_text = "Very long text content...";
+let position = 0;
+let max_position = 100;
+
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Up if position &gt; 0 =&gt; {
+                position &lt;- (k ~ position) - 1;
+                `Stop
+            },
+            k@`Down if position &lt; max_position =&gt; {
+                position &lt;- (k ~ position) + 1;
+                `Stop
+            },
+            k@`PageUp if position &gt; 10 =&gt; {
+                position &lt;- (k ~ position) - 10;
+                `Stop
+            },
+            k@`PageDown if position &lt; (max_position - 10) =&gt; {
+                position &lt;- (k ~ position) + 10;
+                `Stop
+            },
+            k@`Home =&gt; { position &lt;- k ~ 0; `Stop },
+            k@`End =&gt; { position &lt;- k ~ max_position; `Stop },
+            _ =&gt; `Continue
+        },
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue
+};
+
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("Scrollable Content"),
+        &amp;scrollbar(
+            #position: &amp;position,
+            #content_length: &amp;max_position,
+            &amp;paragraph(#scroll: &amp;{x: 0, y: position}, &amp;long_text)
+        )
+    )
+)
+</code></pre>
+<p>Arrow keys and page up/down navigate through long text content.</p>
+<p><img src="ui/tui/./media/scroll_paragraph.gif" alt="Scrollable Paragraph" /></p>
+<h2 id="event-handler-pattern"><a class="header" href="#event-handler-pattern">Event Handler Pattern</a></h2>
+<p>A typical event handler uses nested <code>select</code> expressions to pattern match on event types:</p>
+<pre><code class="language-graphix">let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+    `Key(k) =&gt; select k.kind {
+        `Press =&gt; select k.code {
+            k@`Up if condition =&gt; {
+                // Handle up arrow
+                `Stop
+            },
+            k@`Down if condition =&gt; {
+                // Handle down arrow
+                `Stop
+            },
+            _ =&gt; `Continue  // Pass unhandled keys to children
+        },
+        _ =&gt; `Continue
+    },
+    `Mouse(m) =&gt; select m.kind {
+        // Handle mouse events
+        _ =&gt; `Continue
+    },
+    _ =&gt; `Continue  // Pass other events through
+};
+</code></pre>
+<p>The <code>k@</code> syntax binds the key event to <code>k</code>, allowing you to access it within the handler while the event flows through the reactive graph.</p>
+<h2 id="disabling-input"><a class="header" href="#disabling-input">Disabling Input</a></h2>
+<p>Use the optional <code>enabled</code> parameter to temporarily disable event handling:</p>
+<pre><code class="language-graphix">let input_enabled = true;
+
+input_handler(
+    #enabled: &amp;input_enabled,
+    #handle: &amp;handle_event,
+    &amp;child_widget
+)
+</code></pre>
+<p>When <code>enabled</code> is <code>false</code> or <code>null</code>, events pass through without calling the handler.</p>
+<h2 id="nesting-input-handlers"><a class="header" href="#nesting-input-handlers">Nesting Input Handlers</a></h2>
+<p>Input handlers can be nested to create hierarchical event handling:</p>
+<pre><code class="language-graphix">input_handler(
+    #handle: &amp;global_handler,  // Handles global shortcuts
+    &amp;layout([
+        input_handler(
+            #handle: &amp;left_pane_handler,  // Handles left pane input
+            &amp;left_widget
+        ),
+        input_handler(
+            #handle: &amp;right_pane_handler,  // Handles right pane input
+            &amp;right_widget
+        )
+    ])
+)
+</code></pre>
+<p>Parents process events first. If they return <code>Continue</code>, the event flows down to children.</p>
+<h2 id="common-patterns"><a class="header" href="#common-patterns">Common Patterns</a></h2>
+<h3 id="arrow-key-navigation"><a class="header" href="#arrow-key-navigation">Arrow Key Navigation</a></h3>
+<pre><code class="language-graphix">select k.code {
+    k@`Up if index &gt; 0 =&gt; {
+        index &lt;- (k ~ index) - 1;
+        `Stop
+    },
+    k@`Down if index &lt; max =&gt; {
+        index &lt;- (k ~ index) + 1;
+        `Stop
+    },
+    _ =&gt; `Continue
+}
+</code></pre>
+<h3 id="modal-keybindings"><a class="header" href="#modal-keybindings">Modal Keybindings</a></h3>
+<pre><code class="language-graphix">let mode = `Normal;
+
+select k.code {
+    k@`Char("i") if mode == `Normal =&gt; {
+        mode &lt;- k ~ `Insert;
+        `Stop
+    },
+    k@`Esc if mode == `Insert =&gt; {
+        mode &lt;- k ~ `Normal;
+        `Stop
+    },
+    _ =&gt; `Continue
+}
+</code></pre>
+<h3 id="modifier-keys"><a class="header" href="#modifier-keys">Modifier Keys</a></h3>
+<pre><code class="language-graphix">select e {
+    `Key(k) =&gt; {
+        let has_ctrl = array::member(k.modifiers, `Control);
+        select k.code {
+            k@`Char("c") if has_ctrl =&gt; {
+                // Handle Ctrl+C
+                `Stop
+            },
+            _ =&gt; `Continue
+        }
+    },
+    _ =&gt; `Continue
+}
+</code></pre>
+<h2 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h2>
+<ul>
+<li><a href="ui/tui/layout.html">layout</a> - Focus management with layouts</li>
+<li><a href="ui/tui/list.html">list</a> - Interactive list widget</li>
+<li><a href="ui/tui/table.html">table</a> - Interactive table widget</li>
+<li><a href="ui/tui/scroll.html">scroll</a> - Scrollbar widget for scrollable content</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-layout-widget"><a class="header" href="#the-layout-widget">The Layout Widget</a></h1>
 <p>The <code>layout</code> widget arranges child widgets in horizontal or vertical layouts with flexible sizing constraints. It's the primary tool for organizing complex TUI interfaces and supports focus management for interactive applications.</p>
@@ -3850,7 +4298,7 @@ layout(
 <li><strong>Ratio(num, den)</strong> - Fractional allocation (num/den)</li>
 <li><strong>Fill(n)</strong> - Takes remaining space after other constraints</li>
 </ul>
-<h2 id="examples-10"><a class="header" href="#examples-10">Examples</a></h2>
+<h2 id="examples-11"><a class="header" href="#examples-11">Examples</a></h2>
 <h3 id="basic-layout"><a class="header" href="#basic-layout">Basic Layout</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::layout;
@@ -3961,14 +4409,14 @@ layout(
 )
 </code></pre>
 <p><img src="ui/tui/./media/layout_header_footer.png" alt="Layout With Header and Footer" /></p>
-<h2 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h2>
+<h2 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/block.html">block</a> - Common child widget for layouts</li>
 <li><a href="ui/tui/../overview.html#input-handling">input_handler</a> - For handling focus changes</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-list-widget"><a class="header" href="#the-list-widget">The List Widget</a></h1>
 <p>The <code>list</code> widget displays a scrollable, selectable list of items with keyboard navigation support. It's perfect for menus, file browsers, option selectors, and any interface that requires choosing from a list of items.</p>
-<h2 id="api-4"><a class="header" href="#api-4">API</a></h2>
+<h2 id="api-6"><a class="header" href="#api-6">API</a></h2>
 <pre><code>mod list: sig {
     /// Creates a list widget from an array of lines
     val list: fn(
@@ -3991,7 +4439,7 @@ layout(
 <li><strong>repeat_highlight_symbol</strong> - Whether to repeat symbol on wrapped lines</li>
 <li><strong>style</strong> - Base style for all list items</li>
 </ul>
-<h2 id="examples-11"><a class="header" href="#examples-11">Examples</a></h2>
+<h2 id="examples-12"><a class="header" href="#examples-12">Examples</a></h2>
 <h3 id="basic-usage-10"><a class="header" href="#basic-usage-10">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::list;
@@ -4088,7 +4536,7 @@ let items = [
 list(#selected: &amp;0, &amp;items)
 </code></pre>
 <p><img src="ui/tui/./media/list_styled.png" alt="Styled List" /></p>
-<h2 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h2>
+<h2 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/table.html">table</a> - For multi-column structured data</li>
 <li><a href="ui/tui/scroll.html">scrollbar</a> - For adding scrollbars</li>
@@ -4097,7 +4545,7 @@ list(#selected: &amp;0, &amp;items)
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-scrollbar-widget"><a class="header" href="#the-scrollbar-widget">The Scrollbar Widget</a></h1>
 <p>The <code>scrollbar</code> widget adds a visual scrollbar indicator to scrollable content, making it clear when content extends beyond the visible area and showing the current scroll position.</p>
-<h2 id="api-5"><a class="header" href="#api-5">API</a></h2>
+<h2 id="api-7"><a class="header" href="#api-7">API</a></h2>
 <pre><code>mod scrollbar: sig {
     /// Wraps a widget with a scrollbar indicator
     val scrollbar: fn(
@@ -4114,7 +4562,7 @@ list(#selected: &amp;0, &amp;items)
 <li><strong>content_length</strong> - Total length of the content (auto-detected if not specified)</li>
 <li><strong>size</strong> (output) - Rendered size of the scrollbar area</li>
 </ul>
-<h2 id="examples-12"><a class="header" href="#examples-12">Examples</a></h2>
+<h2 id="examples-13"><a class="header" href="#examples-13">Examples</a></h2>
 <h3 id="basic-usage-11"><a class="header" href="#basic-usage-11">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::scrollbar;
@@ -4221,7 +4669,7 @@ scrollbar(
 )
 </code></pre>
 <p><img src="ui/tui/./media/scroll_list.png" alt="Scrollable List" /></p>
-<h2 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h2>
+<h2 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/paragraph.html">paragraph</a> - For scrollable text content</li>
 <li><a href="ui/tui/list.html">list</a> - For scrollable lists</li>
@@ -4257,7 +4705,7 @@ scrollbar(
 <ul>
 <li><strong>style</strong> - Style for this specific bar</li>
 </ul>
-<h2 id="examples-13"><a class="header" href="#examples-13">Examples</a></h2>
+<h2 id="examples-14"><a class="header" href="#examples-14">Examples</a></h2>
 <h3 id="basic-usage-12"><a class="header" href="#basic-usage-12">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::sparkline;
@@ -4358,7 +4806,7 @@ netidx publisher
 <li>Compact data visualization in lists or tables</li>
 <li>Rate of change visualization</li>
 </ul>
-<h2 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h2>
+<h2 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/chart.html">chart</a> - For detailed charts with axes</li>
 <li><a href="ui/tui/gauge.html">gauge</a> - For single current value display</li>
@@ -4401,7 +4849,7 @@ netidx publisher
 <li><strong>column_spacing</strong> - Number of spaces between columns</li>
 <li><strong>style</strong> - Base style for the table</li>
 </ul>
-<h2 id="examples-14"><a class="header" href="#examples-14">Examples</a></h2>
+<h2 id="examples-15"><a class="header" href="#examples-15">Examples</a></h2>
 <h3 id="basic-usage-13"><a class="header" href="#basic-usage-13">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::table;
@@ -4575,7 +5023,7 @@ let header = row([cell(line("PID")), cell(line("Name")), cell(line("CPU"))]);
 table(#header: &amp;header, &amp;rows)
 </code></pre>
 <p><img src="ui/tui/./media/table_realtime.gif" alt="Realtime Table" /></p>
-<h2 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h2>
+<h2 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/list.html">list</a> - For simpler single-column selection</li>
 <li><a href="ui/tui/scroll.html">scrollbar</a> - For adding scrollbars</li>
@@ -4583,7 +5031,7 @@ table(#header: &amp;header, &amp;rows)
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-tabs-widget"><a class="header" href="#the-tabs-widget">The Tabs Widget</a></h1>
 <p>The <code>tabs</code> widget creates a tabbed interface for organizing content into multiple switchable panels. Each tab has a title displayed in the tab bar and associated content that's shown when the tab is selected.</p>
-<h2 id="api-6"><a class="header" href="#api-6">API</a></h2>
+<h2 id="api-8"><a class="header" href="#api-8">API</a></h2>
 <pre><code>mod tabs: sig {
     /// Creates a tabbed interface from an array of (title, content) tuples
     val tabs: fn(
@@ -4602,7 +5050,7 @@ table(#header: &amp;header, &amp;rows)
 <li><strong>style</strong> - Base style for unselected tab titles</li>
 <li><strong>divider</strong> - String or span separating tab titles</li>
 </ul>
-<h2 id="examples-15"><a class="header" href="#examples-15">Examples</a></h2>
+<h2 id="examples-16"><a class="header" href="#examples-16">Examples</a></h2>
 <h3 id="basic-usage-14"><a class="header" href="#basic-usage-14">Basic Usage</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::tabs;
@@ -4734,7 +5182,7 @@ tabs(&amp;[
 <li><code>Tab</code> - Cycle forward through tabs</li>
 <li>Number keys - Jump directly to tab</li>
 </ul>
-<h2 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h2>
+<h2 id="see-also-17"><a class="header" href="#see-also-17">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/block.html">block</a> - For containing tabs with borders</li>
 <li><a href="ui/tui/list.html">list</a> - Common content for tabs</li>

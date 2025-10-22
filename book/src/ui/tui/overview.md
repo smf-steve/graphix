@@ -29,13 +29,10 @@ The TUI library provides all the essential building blocks:
 
 ### Input Handling
 
-Interactive components use Graphix's event system for keyboard and mouse input:
-
-```graphix
-{{#include ../../examples/tui/overview_input.gx}}
-```
-
-Events flow through the component tree, allowing parent components to handle unprocessed events from children.
+Interactive components use the input widget to handle UI events that
+flow through the widget graph from parent to child. Parents can choose
+to pass on events they receive or not. See the input widget for more
+details.
 
 ## Building Your First TUI
 
@@ -47,6 +44,8 @@ Here's a simple example that demonstrates the core concepts:
 
 This creates a bordered block with a counter that increments every second. The key insight is that when `counter` changes, the text automatically updates because of Graphix's reactive nature.
 
+![First Overview](./media/overview_first.gif)
+
 ## Styling and Theming
 
 Graphix TUIs support rich styling with:
@@ -55,6 +54,8 @@ Graphix TUIs support rich styling with:
 - **Text Effects**: Bold, italic, underline, strikethrough
 - **Background Colors**: Set background colors for any component
 - **Conditional Styling**: Use `select` expressions to change styles based on state
+
+Many widgets take optional style arguments, allowing styling to be applied at many levels.
 
 ```graphix
 {{#include ../../examples/tui/overview_styling.gx}}
