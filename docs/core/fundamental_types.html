@@ -323,13 +323,14 @@ an error), or use a <code>select</code> expression to match it's type (more on s
 then it can't be null. The set <code>['a, null]</code> (alias <code>Option&lt;'a&gt;</code>) is commonly
 used to represent things that will sometimes return <code>null</code>.</p>
 <h2 id="array"><a class="header" href="#array">Array</a></h2>
-<p>Arrays are immutable, contiguous, and homogeneous. They are parameterized,
-<code>Array&lt;string&gt;</code> indicates an array of strings. Arrays are zero indexed <code>a[0]</code> is
-the first element. Array elements can be any type, including other arrays at
-arbitrary levels of nesting. There is a special <code>array</code> (case sensitive), that
-represents the fundamental array type in the underlying value representation.
-Array literals are written like <code>[x, y, z]</code>. There are many functions in the
-<code>array</code> module of the standard library for working with arrays.</p>
+<p>Arrays are immutable, contiguous, and homogeneous. They are
+parameterized, <code>Array&lt;string&gt;</code> indicates an array of strings. Arrays
+are zero indexed <code>a[0]</code> is the first element. Array elements can be
+any type, including other arrays at arbitrary levels of nesting. There
+is a special <code>array</code> type that acts like <code>Array&lt;Any&gt;</code>, that represents
+the fundamental array type in the underlying value representation.
+Array literals are written like <code>[x, y, z]</code>. There are many functions
+in the <code>array</code> module of the standard library for working with arrays.</p>
 <h3 id="array-slicing-and-indexing"><a class="header" href="#array-slicing-and-indexing">Array Slicing and Indexing</a></h3>
 <p>Graphix supports array subslicing, the syntax will be familiar to Rust programmers.</p>
 <ul>
@@ -358,7 +359,7 @@ lot more efficient than you might expect.</p>
 <li>
 <p>Arrays are contiguous in memory, there is no funny business going on (looking
 at you lua). This means they are generally very memory efficient, each element
-is 3 machine words, and fast to access. However there are a few cases where
+is 2 machine words, and fast to access. However there are a few cases where
 this causes a problem, such as building up an array by appending one element
 at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
 another data structure for this kind of operation.</p>

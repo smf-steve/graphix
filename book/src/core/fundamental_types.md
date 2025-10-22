@@ -191,13 +191,14 @@ used to represent things that will sometimes return `null`.
 
 ## Array
 
-Arrays are immutable, contiguous, and homogeneous. They are parameterized,
-`Array<string>` indicates an array of strings. Arrays are zero indexed `a[0]` is
-the first element. Array elements can be any type, including other arrays at
-arbitrary levels of nesting. There is a special `array` (case sensitive), that
-represents the fundamental array type in the underlying value representation.
-Array literals are written like `[x, y, z]`. There are many functions in the
-`array` module of the standard library for working with arrays.
+Arrays are immutable, contiguous, and homogeneous. They are
+parameterized, `Array<string>` indicates an array of strings. Arrays
+are zero indexed `a[0]` is the first element. Array elements can be
+any type, including other arrays at arbitrary levels of nesting. There
+is a special `array` type that acts like `Array<Any>`, that represents
+the fundamental array type in the underlying value representation.
+Array literals are written like `[x, y, z]`. There are many functions
+in the `array` module of the standard library for working with arrays.
 
 ### Array Slicing and Indexing
 
@@ -229,7 +230,7 @@ Arrays.
 
 - Arrays are contiguous in memory, there is no funny business going on (looking
   at you lua). This means they are generally very memory efficient, each element
-  is 3 machine words, and fast to access. However there are a few cases where
+  is 2 machine words, and fast to access. However there are a few cases where
   this causes a problem, such as building up an array by appending one element
   at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
   another data structure for this kind of operation.
