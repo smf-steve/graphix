@@ -10,7 +10,7 @@ val scrollbar: fn(
     #position: &i64,
     ?#content_length: &i64,
     ?#size: &Size,
-    Widget
+    &Widget
 ) -> Widget;
 ```
 
@@ -28,11 +28,15 @@ val scrollbar: fn(
 {{#include ../../examples/tui/scroll_basic.gx}}
 ```
 
+![Basic Scrollbar](./media/scroll_basic.png)
+
 ### Scrollable Paragraph
 
 ```graphix
 {{#include ../../examples/tui/scroll_paragraph.gx}}
 ```
+
+![Scrollable Paragraph](./media/scroll_paragraph.gif)
 
 ### Scrollable List
 
@@ -40,37 +44,8 @@ val scrollbar: fn(
 {{#include ../../examples/tui/scroll_list.gx}}
 ```
 
-### Auto-scroll to Bottom
+![Scrollable List](./media/scroll_list.png)
 
-```graphix
-{{#include ../../examples/tui/scroll_autoscroll.gx}}
-```
-
-## Common Mistake
-
-Remember to apply the scroll position to both the scrollbar and the content:
-
-```graphix
-// Wrong - scroll position not applied to content
-scrollbar(
-    #position: &position,
-    &paragraph(&text)  // Missing #scroll parameter!
-)
-
-// Correct - scroll position applied to both
-scrollbar(
-    #position: &position,
-    &paragraph(#scroll: &{x: 0, y: position}, &text)
-)
-```
-
-## Scroll Behavior
-
-Standard scroll keys:
-- `Up`/`Down` - Scroll one line
-- `PageUp`/`PageDown` - Scroll one page (typically 10-20 lines)
-- `Home` - Scroll to top
-- `End` - Scroll to bottom
 
 ## See Also
 

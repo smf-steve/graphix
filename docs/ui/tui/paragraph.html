@@ -209,11 +209,10 @@ use tui::block;
 use tui::text;
 use tui::input_handler;
 
-{
-    let long_text = "I have got a lovely bunch of coconuts. Very long text continues here. More text. Even more text. This is a very long paragraph that will need scrolling to see all of it.";
-    let scroll_y = 0;
+let long_text = "I have got a lovely bunch of coconuts. Very long text continues here. More text. Even more text. This is a very long paragraph that will need scrolling to see all of it.";
+let scroll_y = 0;
 
-    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if scroll_y &gt; 0 =&gt; {
@@ -228,21 +227,20 @@ use tui::input_handler;
         },
         _ =&gt; `Continue
     },
-        _ =&gt; `Continue
-    };
+    _ =&gt; `Continue
+};
 
-    input_handler(
-        #handle: &amp;handle_event,
-        &amp;block(
-            #border: &amp;`All,
-            #title: &amp;line("Scrollable Text"),
-            &amp;paragraph(
-                #scroll: &amp;{x: 0, y: scroll_y},
-                &amp;long_text
-            )
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("Scrollable Text"),
+        &amp;paragraph(
+            #scroll: &amp;{x: 0, y: scroll_y},
+            &amp;long_text
         )
     )
-}
+)
 </code></pre>
 <p><img src="./media/paragraph_scrollable.gif" alt="Scrollable Paragraph" /></p>
 <h3 id="live-log-viewer"><a class="header" href="#live-log-viewer">Live Log Viewer</a></h3>

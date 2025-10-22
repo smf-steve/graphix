@@ -184,7 +184,7 @@ val calendar: fn(
     ?#show_weekday: &amp;Style,
     ?#show_surrounding: &amp;Style,
     ?#events: &amp;Array&lt;CalendarEvent&gt;,
-    Date
+    &amp;Date
 ) -&gt; Widget;
 
 /// Creates an event marker for a specific date
@@ -221,53 +221,49 @@ use tui::calendar;
 use tui::block;
 use tui::text;
 
-{
-    let today = date(2024, 5, 15);
+let today = date(2024, 5, 15);
 
-    let events = [
-        calendar_event(style(#fg: `Red), date(2024, 5, 5)),
-        calendar_event(style(#fg: `Green), date(2024, 5, 15)),
-        calendar_event(style(#fg: `Yellow), date(2024, 5, 20)),
-        calendar_event(style(#fg: `Cyan), date(2024, 5, 28))
-    ];
+let events = [
+    calendar_event(style(#fg: `Red), date(2024, 5, 5)),
+    calendar_event(style(#fg: `Green), date(2024, 5, 15)),
+    calendar_event(style(#fg: `Yellow), date(2024, 5, 20)),
+    calendar_event(style(#fg: `Cyan), date(2024, 5, 28))
+];
 
-    block(
-        #border: &amp;`All,
-        #title: &amp;line("May 2024"),
-        &amp;calendar(
-            #show_month: &amp;style(#fg: `Yellow, #add_modifier: [`Bold]),
-            #show_weekday: &amp;style(#fg: `Cyan),
-            #show_surrounding: &amp;style(#fg: `DarkGray),
-            #events: &amp;events,
-            &amp;today
-        )
+block(
+    #border: &amp;`All,
+    #title: &amp;line("May 2024"),
+    &amp;calendar(
+        #show_month: &amp;style(#fg: `Yellow, #add_modifier: [`Bold]),
+        #show_weekday: &amp;style(#fg: `Cyan),
+        #show_surrounding: &amp;style(#fg: `DarkGray),
+        #events: &amp;events,
+        &amp;today
     )
-}
+)
 </code></pre>
 <p><img src="media/calendar_events.png" alt="Calendar With Events" /></p>
 <h3 id="color-coded-events-by-type"><a class="header" href="#color-coded-events-by-type">Color-coded Events by Type</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::calendar;
 
-{
-    type EventType = [`Meeting, `Deadline, `Holiday, `Birthday];
-    type CalendarEntry = {date: Date, event_type: EventType};
+type EventType = [`Meeting, `Deadline, `Holiday, `Birthday];
+type CalendarEntry = {date: Date, event_type: EventType};
 
-    let entries = [
-        {date: date(2024, 5, 5), event_type: `Meeting},
-        {date: date(2024, 5, 10), event_type: `Deadline},
-        {date: date(2024, 5, 15), event_type: `Holiday},
-        {date: date(2024, 5, 25), event_type: `Birthday}
-    ];
+let entries = [
+    {date: date(2024, 5, 5), event_type: `Meeting},
+    {date: date(2024, 5, 10), event_type: `Deadline},
+    {date: date(2024, 5, 15), event_type: `Holiday},
+    {date: date(2024, 5, 25), event_type: `Birthday}
+];
 
-    let event1 = calendar_event(style(#fg: `Blue), date(2024, 5, 5));
-    let event2 = calendar_event(style(#fg: `Red), date(2024, 5, 10));
-    let event3 = calendar_event(style(#fg: `Green), date(2024, 5, 15));
-    let event4 = calendar_event(style(#fg: `Magenta), date(2024, 5, 25));
-    let events = [event1, event2, event3, event4];
+let event1 = calendar_event(style(#fg: `Blue), date(2024, 5, 5));
+let event2 = calendar_event(style(#fg: `Red), date(2024, 5, 10));
+let event3 = calendar_event(style(#fg: `Green), date(2024, 5, 15));
+let event4 = calendar_event(style(#fg: `Magenta), date(2024, 5, 25));
+let events = [event1, event2, event3, event4];
 
-    calendar(#events: &amp;events, &amp;date(2024, 5, 1))
-}
+calendar(#events: &amp;events, &amp;date(2024, 5, 1))
 </code></pre>
 <p><img src="media/calendar_typed.png" alt="Calendar Typed" /></p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>

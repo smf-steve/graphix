@@ -21,7 +21,7 @@ val layout: fn(
     ?#direction: &Direction,
     ?#focused: &i64,
     ?#flex: &Flex,
-    Array<Child>
+    &Array<Child>
 ) -> Widget;
 
 /// Creates a child widget with sizing constraints
@@ -51,11 +51,15 @@ val child: fn(?#constraint: Constraint, Widget) -> Child;
 {{#include ../../examples/tui/layout_basic.gx}}
 ```
 
+![Basic Layout](./media/layout_basic.png)
+
 ### Three-Pane Layout with Focus
 
 ```graphix
 {{#include ../../examples/tui/layout_focus.gx}}
 ```
+
+![Layout With Focus](./media/layout_focus.gif)
 
 ### Nested Layouts
 
@@ -63,11 +67,15 @@ val child: fn(?#constraint: Constraint, Widget) -> Child;
 {{#include ../../examples/tui/layout_nested.gx}}
 ```
 
+![Nested Layout](./media/layout_nested.png)
+
 ### Header/Content/Footer
 
 ```graphix
 {{#include ../../examples/tui/layout_header_footer.gx}}
 ```
+
+![Layout With Header and Footer](./media/layout_header_footer.png)
 
 ## See Also
 

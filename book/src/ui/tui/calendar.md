@@ -11,7 +11,7 @@ val calendar: fn(
     ?#show_weekday: &Style,
     ?#show_surrounding: &Style,
     ?#events: &Array<CalendarEvent>,
-    Date
+    &Date
 ) -> Widget;
 
 /// Creates an event marker for a specific date

@@ -6,7 +6,16 @@ The `text` widget renders styled text in the terminal. It's a fundamental buildi
 
 ```
 type Alignment = [`Left, `Center, `Right];
-type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
+type Modifier = [
+    `Bold, 
+    `Italic, 
+    `Underlined, 
+    `SlowBlink, 
+    `RapidBlink, 
+    `Reversed, 
+    `Hidden, 
+    `CrossedOut
+];
 type Color = [
     `Red, `Green, `Yellow, `Blue, `Magenta, `Cyan, `Gray, `DarkGray,
     `LightRed, `LightGreen, `LightYellow, `LightBlue, `LightMagenta, `LightCyan,

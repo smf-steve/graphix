@@ -4,25 +4,24 @@ use tui::block;
 use tui::text;
 use tui::input_handler;
 
-{
-    let items = [
-        line("Apple"), line("Banana"), line("Cherry"),
-        line("Date"), line("Elderberry"), line("Fig"), line("Grape")
-    ];
+let items = [
+    line("Apple"), line("Banana"), line("Cherry"),
+    line("Date"), line("Elderberry"), line("Fig"), line("Grape")
+];
 
-    let last = array::len(items) - 1;
-    let selected = 0;
-    let scroll_pos = 0;
-    let visible = 5;
+let last = array::len(items) - 1;
+let selected = 0;
+let scroll_pos = 0;
+let visible = 5;
 
-    // Auto-scroll to keep selection visible
-    scroll_pos <- select selected {
-        s if s < scroll_pos => s,
-        s if s > (scroll_pos + visible - 1) => s - visible + 1,
-        _ => never()
-    };
+// Auto-scroll to keep selection visible
+scroll_pos <- select selected {
+    s if s < scroll_pos => s,
+    s if s > (scroll_pos + visible - 1) => s - visible + 1,
+    _ => never()
+};
 
-    let handle_event = |e: Event| -> [`Stop, `Continue] select e {
+let handle_event = |e: Event| -> [`Stop, `Continue] select e {
     `Key(k) => select k.kind {
         `Press => select k.code {
             k@`Up if selected > 0 => {
@@ -39,21 +38,20 @@ use tui::input_handler;
         },
         _ => `Continue
     },
-        _ => `Continue
-    };
+    _ => `Continue
+};
 
-    input_handler(
-        #handle: &handle_event,
-        &block(
-            #border: &`All,
-            #title: &line("Fruit Selection"),
-            &list(
-                #highlight_style: &style(#fg: `Black, #bg: `Yellow),
-                #highlight_symbol: &"▶ ",
-                #selected: &selected,
-                #scroll: &scroll_pos,
-                &items
-            )
+input_handler(
+    #handle: &handle_event,
+    &block(
+        #border: &`All,
+        #title: &line("Fruit Selection"),
+        &list(
+            #highlight_style: &style(#fg: `Black, #bg: `Yellow),
+            #highlight_symbol: &"▶ ",
+            #selected: &selected,
+            #scroll: &scroll_pos,
+            &items
         )
     )
-}
+)

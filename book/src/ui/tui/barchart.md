@@ -12,7 +12,7 @@ val bar_chart: fn(
     ?#bar_gap: &i64,
     ?#group_gap: &i64,
     ?#style: &Style,
-    Array<BarGroup>
+    &Array<BarGroup>
 ) -> Widget;
 
 /// Creates a group of bars
@@ -23,7 +23,7 @@ val bar: fn(
     ?#style: &Style,
     ?#label: &Line,
     ?#text_value: &Line,
-    i64
+    &i64
 ) -> Bar;
 ```
 

@@ -13,7 +13,7 @@ val list: fn(
     ?#highlight_symbol: &string,
     ?#repeat_highlight_symbol: &bool,
     ?#style: &Style,
-    Array<Line>
+    &Array<Line>
 ) -> Widget;
 ```
 
@@ -34,11 +34,15 @@ val list: fn(
 {{#include ../../examples/tui/list_basic.gx}}
 ```
 
+![Basic List](./media/list_basic.png)
+
 ### Interactive List with Navigation
 
 ```graphix
 {{#include ../../examples/tui/list_interactive.gx}}
 ```
+
+![Interactive List](./media/list_interactive.gif)
 
 ### Styled Items
 
@@ -46,19 +50,7 @@ val list: fn(
 {{#include ../../examples/tui/list_styled.gx}}
 ```
 
-### Action on Selection
-
-```graphix
-{{#include ../../examples/tui/list_action.gx}}
-```
-
-## Auto-scroll Logic
-
-Keep the selected item visible:
-
-```graphix
-{{#include ../../examples/tui/list_autoscroll.gx}}
-```
+![Styled List](./media/list_styled.png)
 
 ## See Also
 

@@ -5,12 +5,11 @@ use tui::block;
 use tui::text;
 use tui::input_handler;
 
-{
-    let long_text = "Very long text content...";
-    let position = 0;
-    let max_position = 100;
+let long_text = "Very long text content...";
+let position = 0;
+let max_position = 100;
 
-    let handle_event = |e: Event| -> [`Stop, `Continue] select e {
+let handle_event = |e: Event| -> [`Stop, `Continue] select e {
     `Key(k) => select k.kind {
         `Press => select k.code {
             k@`Up if position > 0 => {
@@ -35,19 +34,18 @@ use tui::input_handler;
         },
         _ => `Continue
     },
-        _ => `Continue
-    };
+    _ => `Continue
+};
 
-    input_handler(
-        #handle: &handle_event,
-        &block(
-            #border: &`All,
-            #title: &line("Scrollable Content"),
-            &scrollbar(
-                #position: &position,
-                #content_length: &max_position,
-                &paragraph(#scroll: &{x: 0, y: position}, &long_text)
-            )
+input_handler(
+    #handle: &handle_event,
+    &block(
+        #border: &`All,
+        #title: &line("Scrollable Content"),
+        &scrollbar(
+            #position: &position,
+            #content_length: &max_position,
+            &paragraph(#scroll: &{x: 0, y: position}, &long_text)
         )
     )
-}
+)

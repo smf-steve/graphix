@@ -213,29 +213,27 @@ use tui::gauge;
 use tui::block;
 use tui::text;
 
-{
-    let clock = time::timer(duration:0.5s, true);
-    let power = 0.0;
-    power &lt;- min(1.0, (clock ~ power) + 0.01);
+let clock = time::timer(duration:0.5s, true);
+let power = 0.0;
+power &lt;- min(1.0, (clock ~ power) + 0.01);
 
-    let color = select power {
-        x if x &lt; 0.10 =&gt; `Red,
-        x if x &lt; 0.25 =&gt; `Yellow,
-        x =&gt; `Green
-    };
+let color = select power {
+    x if x &lt; 0.10 =&gt; `Red,
+    x if x &lt; 0.25 =&gt; `Yellow,
+    x =&gt; `Green
+};
 
-    let percentage = cast&lt;i64&gt;(power * 100.0)?;
+let percentage = cast&lt;i64&gt;(power * 100.0)?;
 
-    block(
-        #border: &amp;`All,
-        #title: &amp;line("Power Level"),
-        &amp;gauge(
-            #gauge_style: &amp;style(#fg: color),
-            #label: &amp;span("[percentage]%"),
-            &amp;power
-        )
+block(
+    #border: &amp;`All,
+    #title: &amp;line("Power Level"),
+    &amp;gauge(
+        #gauge_style: &amp;style(#fg: color),
+        #label: &amp;span("[percentage]%"),
+        &amp;power
     )
-}
+)
 </code></pre>
 <p><img src="./media/gauge_threshold.gif" alt="Gauge With Color" /></p>
 <h3 id="resource-usage"><a class="header" href="#resource-usage">Resource Usage</a></h3>
@@ -243,23 +241,21 @@ use tui::text;
 use tui::gauge;
 use tui::text;
 
-{
-    let used_memory = 6.5;  // GB
-    let total_memory = 16.0;  // GB
-    let usage_ratio = used_memory / total_memory;
+let used_memory = 6.5;  // GB
+let total_memory = 16.0;  // GB
+let usage_ratio = used_memory / total_memory;
 
-    let color = select usage_ratio {
-        x if x &gt; 0.9 =&gt; `Red,
-        x if x &gt; 0.7 =&gt; `Yellow,
-        _ =&gt; `Green
-    };
+let color = select usage_ratio {
+    x if x &gt; 0.9 =&gt; `Red,
+    x if x &gt; 0.7 =&gt; `Yellow,
+    _ =&gt; `Green
+};
 
-    gauge(
-        #gauge_style: &amp;style(#fg: color),
-        #label: &amp;span("[used_memory] GB / [total_memory] GB"),
-        &amp;usage_ratio
-    )
-}
+gauge(
+    #gauge_style: &amp;style(#fg: color),
+    #label: &amp;span("[used_memory] GB / [total_memory] GB"),
+    &amp;usage_ratio
+)
 </code></pre>
 <p><img src="./media/gauge_resource.png" alt="Resource Usage Gauge" /></p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>

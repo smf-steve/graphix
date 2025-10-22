@@ -20,7 +20,7 @@ val canvas: fn(
     ?#marker: &Marker,
     #x_bounds: &Bounds,
     #y_bounds: &Bounds,
-    Array<&Shape>
+    &Array<&Shape>
 ) -> Widget;
 ```
 

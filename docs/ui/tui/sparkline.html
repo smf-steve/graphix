@@ -185,7 +185,7 @@ val sparkline: fn(
     ?#max: &amp;i64,
     ?#style: &amp;Style,
     ?#direction: &amp;Direction,
-    Array&lt;[SparklineBar, f64]&gt;
+    &amp;Array&lt;[SparklineBar, f64]&gt;
 ) -&gt; Widget;
 
 /// Creates a sparkline bar with custom styling
@@ -211,32 +211,38 @@ let data = [10.0, 25.0, 40.0, 55.0, 70.0, 85.0, 100.0];
 
 sparkline(#max: &amp;100, &amp;data)
 </code></pre>
+<p><img src="./media/sparkline_basic.png" alt="Basic Sparkline" /></p>
 <h3 id="threshold-based-coloring"><a class="header" href="#threshold-based-coloring">Threshold-based Coloring</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::sparkline;
 use tui::block;
 use tui::text;
 
-{
-    let data: Array&lt;f64&gt; = {
-        let clock = time::timer(duration:0.3s, true);
-        let v = rand::rand(#clock, #start:0., #end:100.);
-        let d = [];
-        d &lt;- array::window(#n:80, clock ~ d, v);
-        d
+let data = {
+    let clock = time::timer(duration:0.3s, true);
+    let v = rand::rand(#clock, #start:0., #end:100.);
+    let d = [];
+    let color = select v {
+        v if v &lt;= 25. =&gt; `Green,
+        v if v &lt;= 50. =&gt; `Yellow,
+        _ =&gt; `Red
     };
+    let v = sparkline_bar(#style: style(#fg: color), v);
+    d &lt;- array::window(#n:80, clock ~ d, v);
+    d
+};
 
-    block(
-        #border: &amp;`All,
-        #title: &amp;line("Network Traffic Rate"),
-        &amp;sparkline(
-            #style: &amp;style(#fg: `Green),
-            #max: &amp;100,
-            &amp;data
-        )
+block(
+    #border: &amp;`All,
+    #title: &amp;line("Network Traffic Rate"),
+    &amp;sparkline(
+        #style: &amp;style(#fg: `Green),
+        #max: &amp;100,
+        &amp;data
     )
-}
+)
 </code></pre>
+<p><img src="./media/sparkline_threshold.gif" alt="Threshold Colors" /></p>
 <h3 id="multi-metric-dashboard"><a class="header" href="#multi-metric-dashboard">Multi-metric Dashboard</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::sparkline;
@@ -244,46 +250,50 @@ use tui::block;
 use tui::text;
 use tui::layout;
 
-{
-    let cpu_data = [50., 60., 55., 70., 65.];
-    let mem_data = [30., 35., 40., 38., 42.];
-    let net_data = [10., 20., 15., 25., 30.];
+let cpu_data = [50., 60., 55., 70., 65.];
+let mem_data = [30., 35., 40., 38., 42.];
+let net_data = [10., 20., 15., 25., 30.];
 
-    layout(
-        #direction: &amp;`Vertical,
-        &amp;[
-            child(#constraint: `Length(3), block(
-                #title: &amp;line("CPU"),
-                &amp;sparkline(#style: &amp;style(#fg: `Red), #max: &amp;100, &amp;cpu_data)
-            )),
-            child(#constraint: `Length(3), block(
-                #title: &amp;line("Memory"),
-                &amp;sparkline(#style: &amp;style(#fg: `Yellow), #max: &amp;100, &amp;mem_data)
-            )),
-            child(#constraint: `Length(3), block(
-                #title: &amp;line("Network"),
-                &amp;sparkline(#style: &amp;style(#fg: `Cyan), &amp;net_data)
-            ))
-        ]
-    )
-}
+layout(
+    #direction: &amp;`Vertical,
+    &amp;[
+        child(#constraint: `Percentage(33), block(
+            #title: &amp;line("CPU"),
+            &amp;sparkline(#style: &amp;style(#fg: `Red), #max: &amp;100, &amp;cpu_data)
+        )),
+        child(#constraint: `Percentage(33), block(
+            #title: &amp;line("Memory"),
+            &amp;sparkline(#style: &amp;style(#fg: `Yellow), #max: &amp;100, &amp;mem_data)
+        )),
+        child(#constraint: `Percentage(33), block(
+            #title: &amp;line("Network"),
+            &amp;sparkline(#style: &amp;style(#fg: `Cyan), &amp;net_data)
+        ))
+    ]
+)
 </code></pre>
-<h3 id="rolling-window"><a class="header" href="#rolling-window">Rolling Window</a></h3>
+<p><img src="./media/sparkline_dashboard.png" alt="Multi Sparkline Dashboard" /></p>
+<h3 id="sparkline-from-netidx"><a class="header" href="#sparkline-from-netidx">Sparkline from Netidx</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::sparkline;
 
-{
-    let data: Array&lt;f64&gt; = [];
-    let new_value = net::subscribe("/metrics/cpu")?;
+let data: Array&lt;f64&gt; = [];
+let new_value = net::subscribe("/local/metrics/cpu")?;
 
-    data &lt;- array::window(
-        #n: 60,
-        new_value ~ data,
-        cast&lt;f64&gt;(new_value)?
-    );
+data &lt;- array::window(
+    #n: 60,
+    new_value ~ data,
+    cast&lt;f64&gt;(new_value)?
+);
 
-    sparkline(#max: &amp;100, &amp;data)
-}
+sparkline(#max: &amp;100, &amp;data)
+</code></pre>
+<p><img src="./media/sparkline_rolling.gif" alt="Rolling Sparkline" /></p>
+<p>showing the output of the below shell pipeline during a netidx build,</p>
+<pre><code>top | \
+grep --line-buffered Cpu | \
+awk '{ printf("/local/metrics/cpu|f64|%s\n", $6); fflush() }' | \
+netidx publisher
 </code></pre>
 <h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
 <p>Sparklines are ideal for:</p>

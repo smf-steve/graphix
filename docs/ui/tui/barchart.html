@@ -185,7 +185,7 @@ val bar_chart: fn(
     ?#bar_gap: &amp;i64,
     ?#group_gap: &amp;i64,
     ?#style: &amp;Style,
-    Array&lt;BarGroup&gt;
+    &amp;Array&lt;BarGroup&gt;
 ) -&gt; Widget;
 
 /// Creates a group of bars
@@ -196,7 +196,7 @@ val bar: fn(
     ?#style: &amp;Style,
     ?#label: &amp;Line,
     ?#text_value: &amp;Line,
-    i64
+    &amp;i64
 ) -&gt; Bar;
 </code></pre>
 <h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>

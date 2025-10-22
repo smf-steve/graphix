@@ -186,7 +186,7 @@ val list: fn(
     ?#highlight_symbol: &amp;string,
     ?#repeat_highlight_symbol: &amp;bool,
     ?#style: &amp;Style,
-    Array&lt;Line&gt;
+    &amp;Array&lt;Line&gt;
 ) -&gt; Widget;
 </code></pre>
 <h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
@@ -214,6 +214,7 @@ list(
     &amp;items
 )
 </code></pre>
+<p><img src="./media/list_basic.png" alt="Basic List" /></p>
 <h3 id="interactive-list-with-navigation"><a class="header" href="#interactive-list-with-navigation">Interactive List with Navigation</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::list;
@@ -221,25 +222,24 @@ use tui::block;
 use tui::text;
 use tui::input_handler;
 
-{
-    let items = [
-        line("Apple"), line("Banana"), line("Cherry"),
-        line("Date"), line("Elderberry"), line("Fig"), line("Grape")
-    ];
+let items = [
+    line("Apple"), line("Banana"), line("Cherry"),
+    line("Date"), line("Elderberry"), line("Fig"), line("Grape")
+];
 
-    let last = array::len(items) - 1;
-    let selected = 0;
-    let scroll_pos = 0;
-    let visible = 5;
+let last = array::len(items) - 1;
+let selected = 0;
+let scroll_pos = 0;
+let visible = 5;
 
-    // Auto-scroll to keep selection visible
-    scroll_pos &lt;- select selected {
-        s if s &lt; scroll_pos =&gt; s,
-        s if s &gt; (scroll_pos + visible - 1) =&gt; s - visible + 1,
-        _ =&gt; never()
-    };
+// Auto-scroll to keep selection visible
+scroll_pos &lt;- select selected {
+    s if s &lt; scroll_pos =&gt; s,
+    s if s &gt; (scroll_pos + visible - 1) =&gt; s - visible + 1,
+    _ =&gt; never()
+};
 
-    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
+let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
     `Key(k) =&gt; select k.kind {
         `Press =&gt; select k.code {
             k@`Up if selected &gt; 0 =&gt; {
@@ -256,96 +256,45 @@ use tui::input_handler;
         },
         _ =&gt; `Continue
     },
-        _ =&gt; `Continue
-    };
+    _ =&gt; `Continue
+};
 
-    input_handler(
-        #handle: &amp;handle_event,
-        &amp;block(
-            #border: &amp;`All,
-            #title: &amp;line("Fruit Selection"),
-            &amp;list(
-                #highlight_style: &amp;style(#fg: `Black, #bg: `Yellow),
-                #highlight_symbol: &amp;"▶ ",
-                #selected: &amp;selected,
-                #scroll: &amp;scroll_pos,
-                &amp;items
-            )
+input_handler(
+    #handle: &amp;handle_event,
+    &amp;block(
+        #border: &amp;`All,
+        #title: &amp;line("Fruit Selection"),
+        &amp;list(
+            #highlight_style: &amp;style(#fg: `Black, #bg: `Yellow),
+            #highlight_symbol: &amp;"▶ ",
+            #selected: &amp;selected,
+            #scroll: &amp;scroll_pos,
+            &amp;items
         )
     )
-}
+)
 </code></pre>
+<p><img src="./media/list_interactive.gif" alt="Interactive List" /></p>
 <h3 id="styled-items"><a class="header" href="#styled-items">Styled Items</a></h3>
 <pre><code class="language-graphix">use tui;
 use tui::list;
 use tui::text;
 
-{
-    let make_item = |text, priority| select priority {
-        `High =&gt; line(#style: style(#fg: `Red, #add_modifier: [`Bold]), text),
-        `Medium =&gt; line(#style: style(#fg: `Yellow), text),
-        `Low =&gt; line(#style: style(#fg: `White), text)
-    };
-
-    let items = [
-        make_item("Critical bug", `High),
-        make_item("Feature request", `Medium),
-        make_item("Documentation", `Low)
-    ];
-
-    list(#selected: &amp;0, &amp;items)
-}
-</code></pre>
-<h3 id="action-on-selection"><a class="header" href="#action-on-selection">Action on Selection</a></h3>
-<pre><code class="language-graphix">use tui;
-use tui::list;
-use tui::text;
-use tui::input_handler;
-
-{
-    let selected = 0;
-    let action_triggered = never();
-
-    let items = [line("Open"), line("Save"), line("Close"), line("Exit")];
-
-    let handle_event = |e: Event| -&gt; [`Stop, `Continue] select e {
-        `Key(k) =&gt; select k.kind {
-            `Press =&gt; select k.code {
-                // ... navigation keys ...
-                k@`Enter =&gt; {
-                    action_triggered &lt;- k ~ selected;
-                    `Stop
-                },
-                _ =&gt; `Continue
-            },
-            _ =&gt; `Continue
-        },
-        _ =&gt; `Continue
-    };
-
-    select action_triggered {
-        0 =&gt; net::write("/app/action", "open")?,
-        1 =&gt; net::write("/app/action", "save")?,
-        2 =&gt; net::write("/app/action", "close")?,
-        3 =&gt; net::write("/app/action", "exit")?,
-        _ =&gt; never()
-    }
-}
-</code></pre>
-<h2 id="auto-scroll-logic"><a class="header" href="#auto-scroll-logic">Auto-scroll Logic</a></h2>
-<p>Keep the selected item visible:</p>
-<pre><code class="language-graphix">let selected = 0;
-let scroll_pos = 0;
-let visible_lines = 10;
-
-scroll_pos &lt;- select selected {
-    s if s &lt; scroll_pos =&gt; s,
-    s if s &gt;= (scroll_pos + visible_lines) =&gt; s - visible_lines + 1,
-    _ =&gt; never()
+let make_item = |text, priority| select priority {
+    `High =&gt; line(#style: style(#fg: `Red, #add_modifier: [`Bold]), text),
+    `Medium =&gt; line(#style: style(#fg: `Yellow), text),
+    `Low =&gt; line(#style: style(#fg: `White), text)
 };
 
-scroll_pos
+let items = [
+    make_item("Critical bug", `High),
+    make_item("Feature request", `Medium),
+    make_item("Documentation", `Low)
+];
+
+list(#selected: &amp;0, &amp;items)
 </code></pre>
+<p><img src="./media/list_styled.png" alt="Styled List" /></p>
 <h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
 <ul>
 <li><a href="table.html">table</a> - For multi-column structured data</li>

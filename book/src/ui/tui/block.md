@@ -15,7 +15,7 @@ val block: fn(
     ?#title_bottom: &Line,
     ?#style: &Style,
     ?#size: &Size,
-    Widget
+    &Widget
 ) -> Widget;
 ```
 

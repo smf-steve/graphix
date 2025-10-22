@@ -13,7 +13,7 @@ val chart: fn(
     ?#style: &Style,
     #x_axis: &Axis,
     #y_axis: &Axis,
-    Array<Dataset>
+    &Array<Dataset>
 ) -> Widget;
 
 /// Creates an axis configuration
@@ -30,7 +30,7 @@ val dataset: fn(
     ?#graph_type: &GraphType,
     ?#marker: &Marker,
     ?#name: &Line,
-    Array<(f64, f64)>
+    &Array<(f64, f64)>
 ) -> Dataset;
 ```
 

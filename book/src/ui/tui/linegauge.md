@@ -14,7 +14,7 @@ val line_gauge: fn(
     ?#line_set: &LineSet,
     ?#label: &Line,
     ?#style: &Style,
-    f64
+    &f64
 ) -> Widget;
 ```
 
@@ -34,11 +34,15 @@ val line_gauge: fn(
 {{#include ../../examples/tui/linegauge_basic.gx}}
 ```
 
+![Basic Line Gauge](./media/linegauge_basic.png)
+
 ### Color-coded Status
 
 ```graphix
 {{#include ../../examples/tui/linegauge_colored.gx}}
 ```
+
+![Line Gauge Color Coded](./media/linegauge_colored.gif)
 
 ### Compact Multi-metric Display
 
@@ -46,11 +50,7 @@ val line_gauge: fn(
 {{#include ../../examples/tui/linegauge_multi.gx}}
 ```
 
-### Line Set Styles
-
-```graphix
-{{#include ../../examples/tui/linegauge_styles.gx}}
-```
+![Line Gauge Multi Colored](./media/linegauge_multi.png)
 
 ## Use Cases
 

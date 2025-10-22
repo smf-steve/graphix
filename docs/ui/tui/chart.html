@@ -186,7 +186,7 @@ val chart: fn(
     ?#style: &amp;Style,
     #x_axis: &amp;Axis,
     #y_axis: &amp;Axis,
-    Array&lt;Dataset&gt;
+    &amp;Array&lt;Dataset&gt;
 ) -&gt; Widget;
 
 /// Creates an axis configuration
@@ -203,7 +203,7 @@ val dataset: fn(
     ?#graph_type: &amp;GraphType,
     ?#marker: &amp;Marker,
     ?#name: &amp;Line,
-    Array&lt;(f64, f64)&gt;
+    &amp;Array&lt;(f64, f64)&gt;
 ) -&gt; Dataset;
 </code></pre>
 <h2 id="parameters"><a class="header" href="#parameters">Parameters</a></h2>
@@ -252,46 +252,44 @@ chart(
 use tui::chart;
 use tui::text;
 
-{
-    let data: Array&lt;(f64, f64)&gt; = {
-        let clock = time::timer(duration:0.5s, true);
-        let x = 0.0;
-        x &lt;- (clock ~ x) + 1.0;
-        let y = rand::rand(#clock, #start: f64:0., #end: f64:100.);
-        let a = [];
-        a &lt;- array::window(#n: 32, clock ~ a, (x, y));
-        a
-    };
+let data: Array&lt;(f64, f64)&gt; = {
+    let clock = time::timer(duration:0.5s, true);
+    let x = 0.0;
+    x &lt;- (clock ~ x) + 1.0;
+    let y = rand::rand(#clock, #start: f64:0., #end: f64:100.);
+    let a = [];
+    a &lt;- array::window(#n: 32, clock ~ a, (x, y));
+    a
+};
 
-    let ds = dataset(
-        #style: &amp;style(#fg: `Cyan),
-        #graph_type: &amp;`Line,
-        #marker: &amp;`Dot,
-        &amp;data
-    );
+let ds = dataset(
+    #style: &amp;style(#fg: `Cyan),
+    #graph_type: &amp;`Line,
+    #marker: &amp;`Dot,
+    &amp;data
+);
 
-    let label_style = style(#fg: `Yellow);
+let label_style = style(#fg: `Yellow);
 
-    chart(
-        #style: &amp;style(#bg: `Rgb({r: 20, g: 20, b: 20})),
-        #x_axis: &amp;axis(
-            #title: line(#style: label_style, "Time (s)"),
-            #labels: [
-                line(#style: label_style, "[(data[0]$).0]"),
-                line(#style: label_style, "[(data[-1]$).0]")
-            ],
-            {min: (data[0]$).0, max: (data[-1]$).0}
-        ),
-        #y_axis: &amp;axis(
-            #title: line(#style: label_style, "Value"),
-            #labels: [
-                line("0"), line("50"), line("100")
-            ],
-            {min: 0.0, max: 100.0}
-        ),
-        &amp;[ds]
-    )
-}
+chart(
+    #style: &amp;style(#bg: `Rgb({r: 20, g: 20, b: 20})),
+    #x_axis: &amp;axis(
+        #title: line(#style: label_style, "Time (s)"),
+        #labels: [
+            line(#style: label_style, "[(data[0]$).0]"),
+            line(#style: label_style, "[(data[-1]$).0]")
+        ],
+        {min: (data[0]$).0, max: (data[-1]$).0}
+    ),
+    #y_axis: &amp;axis(
+        #title: line(#style: label_style, "Value"),
+        #labels: [
+            line("0"), line("50"), line("100")
+        ],
+        {min: 0.0, max: 100.0}
+    ),
+    &amp;[ds]
+)
 </code></pre>
 <p><img src="./media/chart_realtime.gif" alt="Real Time Chart" /></p>
 <h3 id="multiple-datasets"><a class="header" href="#multiple-datasets">Multiple Datasets</a></h3>
@@ -299,31 +297,31 @@ use tui::text;
 use tui::chart;
 use tui::text;
 
-{
-    let temp_data = [(0.0, 20.0), (1.0, 22.0), (2.0, 21.5)];
-    let humidity_data = [(0.0, 50.0), (1.0, 55.0), (2.0, 52.0)];
+let temp_data = [(0.0, 20.0), (1.0, 22.0), (2.0, 21.5)];
+let humidity_data = [(0.0, 50.0), (1.0, 55.0), (2.0, 52.0)];
 
-    let temp_ds = dataset(
-        #style: &amp;style(#fg: `Red),
-        #name: &amp;line("Temperature"),
-        &amp;temp_data
-    );
+let temp_ds = dataset(
+    #style: &amp;style(#fg: `Red),
+    #name: &amp;line("Temperature"),
+    &amp;temp_data
+);
 
-    let humidity_ds = dataset(
-        #style: &amp;style(#fg: `Blue),
-        #name: &amp;line("Humidity"),
-        &amp;humidity_data
-    );
+let humidity_ds = dataset(
+    #style: &amp;style(#fg: `Blue),
+    #name: &amp;line("Humidity"),
+    &amp;humidity_data
+);
 
-    let x_axis = axis(#labels: [line("0"), line("1"), line("2")], {min: 0.0, max: 2.0});
-    let y_axis = axis(#labels: [line("0"), line("50"), line("100")], {min: 0.0, max: 100.0});
+let x_axis =
+    axis(#labels: [line("0"), line("1"), line("2")], {min: 0.0, max: 2.0});
+let y_axis =
+    axis(#labels: [line("0"), line("50"), line("100")], {min: 0.0, max: 100.0});
 
-    chart(
-        #x_axis: &amp;x_axis,
-        #y_axis: &amp;y_axis,
-        &amp;[temp_ds, humidity_ds]
-    )
-}
+chart(
+    #x_axis: &amp;x_axis,
+    #y_axis: &amp;y_axis,
+    &amp;[temp_ds, humidity_ds]
+)
 </code></pre>
 <p><img src="./media/chart_multi.png" alt="Multi Chart" /></p>
 <h2 id="marker-comparison"><a class="header" href="#marker-comparison">Marker Comparison</a></h2>

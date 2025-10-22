@@ -179,7 +179,16 @@
 <p>The <code>text</code> widget renders styled text in the terminal. It's a fundamental building block for displaying formatted content with colors, modifiers, and multiple lines. Text is built from <code>Line</code> objects, which are in turn composed of <code>Span</code> objects.</p>
 <h2 id="function-signatures"><a class="header" href="#function-signatures">Function Signatures</a></h2>
 <pre><code>type Alignment = [`Left, `Center, `Right];
-type Modifier = [`Bold, `Italic, `Underlined, `SlowBlink, `RapidBlink, `Reversed, `Hidden, `CrossedOut];
+type Modifier = [
+    `Bold, 
+    `Italic, 
+    `Underlined, 
+    `SlowBlink, 
+    `RapidBlink, 
+    `Reversed, 
+    `Hidden, 
+    `CrossedOut
+];
 type Color = [
     `Red, `Green, `Yellow, `Blue, `Magenta, `Cyan, `Gray, `DarkGray,
     `LightRed, `LightGreen, `LightYellow, `LightBlue, `LightMagenta, `LightCyan,

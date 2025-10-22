@@ -12,7 +12,7 @@ val sparkline: fn(
     ?#max: &i64,
     ?#style: &Style,
     ?#direction: &Direction,
-    Array<[SparklineBar, f64]>
+    &Array<[SparklineBar, f64]>
 ) -> Widget;
 
 /// Creates a sparkline bar with custom styling
@@ -37,11 +37,15 @@ val sparkline_bar: fn(?#style: Style, f64) -> SparklineBar;
 {{#include ../../examples/tui/sparkline_basic.gx}}
 ```
 
+![Basic Sparkline](./media/sparkline_basic.png)
+
 ### Threshold-based Coloring
 
 ```graphix
 {{#include ../../examples/tui/sparkline_threshold.gx}}
 ```
+
+![Threshold Colors](./media/sparkline_threshold.gif)
 
 ### Multi-metric Dashboard
 
@@ -49,10 +53,22 @@ val sparkline_bar: fn(?#style: Style, f64) -> SparklineBar;
 {{#include ../../examples/tui/sparkline_dashboard.gx}}
 ```
 
-### Rolling Window
+![Multi Sparkline Dashboard](./media/sparkline_dashboard.png)
+
+### Sparkline from Netidx
 
 ```graphix
 {{#include ../../examples/tui/sparkline_rolling.gx}}
+```
+
+![Rolling Sparkline](./media/sparkline_rolling.gif)
+
+showing the output of the below shell pipeline during a netidx build,
+```
+top | \
+grep --line-buffered Cpu | \
+awk '{ printf("/local/metrics/cpu|f64|%s\n", $6); fflush() }' | \
+netidx publisher
 ```
 
 ## Use Cases
