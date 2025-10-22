@@ -432,10 +432,10 @@ use another data structure, such as a map (which would be O(n
 log(n)) if you need to build a large data structure this way.</p>
 </li>
 <li>
-<p>Array slices are zero copy. They do not allocate memory, and they do not clone
-any of the array's elements, they simply create a light weight view into the
-array. This means algorithms that progressively deconstruct an array by
-slicing are O(N) not O(N^2) and the constants are very fast.</p>
+<p>Array slices are zero copy, and also pooled. They simply create a
+light weight view into the array. This means algorithms that
+progressively deconstruct an array by slicing are O(N) not O(N^2)
+and the constants are very fast.</p>
 </li>
 </ul>
 <h2 id="tuples"><a class="header" href="#tuples">Tuples</a></h2>
