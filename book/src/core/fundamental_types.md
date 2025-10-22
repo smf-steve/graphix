@@ -230,7 +230,7 @@ Arrays.
 
 - Arrays are contiguous in memory, there is no funny business going on (looking
   at you lua). This means they are generally very memory efficient, each element
-  is 2 machine words, and fast to access. However there are a few cases where
+  is 2 machine words, and O(1) to access. However there are a few cases where
   this causes a problem, such as building up an array by appending one element
   at a time. This is sadly an O(N^2) operation on arrays. You may wish to use
   another data structure for this kind of operation.
