@@ -114,11 +114,8 @@
         literal:
           'true false null',
         built_in:
-          // Core functions
-          'print println log dbg error never all and count divide filter_err filter ' +
-          'is_err max mean min once seq or product sum uniq queue hold throttle cast ' +
-          // Common type names that should be highlighted
-          'Array Map Result Option Error String Number Int Float Bool DateTime Duration'
+          // Only include truly built-in types, not function names
+          'Array Map Result Option Error String Number Int Float Bool DateTime Duration Any'
       },
       contains: [
         // Documentation comments (must come before regular comments)
