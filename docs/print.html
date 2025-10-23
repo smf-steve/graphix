@@ -184,35 +184,41 @@ with resources in
 like Graphix are "reactive", like React or Vue, except at the language
 level instead of just as a library. A Graphix program is compiled to a
 directed graph, operations (such as +) are graph nodes, edges
-represent paths data can take through the program. Consider,</p>
+represent paths data can take through the program. A simple expression like,</p>
 <pre><code class="language-graphix">2 + 2
 </code></pre>
-<p>This compiles to a graph like,</p>
-<pre><code>const(2) ==&gt; + &lt;== const(2)
+<p>will compile to a graph like</p>
+<pre><code>         
+const(2) ──&gt; + &lt;── const(2)
+         
 </code></pre>
-<p>When executed the program will have 1 output, 4. Which is exactly what you'd
-expect and is no different from a non data flow program. We need a
-more complex example to see the difference,</p>
+<p>The semantics of simple examples like this aren't noticibly different
+from a normal programming language. However a more complex example
+such as,</p>
 <pre><code class="language-graphix">let x = cast&lt;i64&gt;(net::subscribe("/foo")?)?;
 print(x * 10)
 </code></pre>
-<p>net::subscribe, subscribes to a netidx path and returns it's value, or an error
-(more on ? later). Now lets see what happens, the graph we get from this program
-looks something like this,</p>
-<pre><code>                                   const(10) ==
-                                                |
-                                                |
-                                                v
-const("/foo") =&gt; net::subscribe =&gt; cast&lt;i64&gt; =&gt; * =&gt; print
+<p>compiles to a graph like</p>
+<pre><code>                                               const(10)
+                                                   │
+                                                   │
+                                                   ▼
+                                         
+const("/foo") ──&gt; net::subscribe ──&gt; cast&lt;i64&gt; ──&gt; * ──&gt; print
+                                         
 </code></pre>
-<p>Unlike the first example, the value of <code>net::subscribe</code> isn't a constant, it can
-change if the value published in netidx changes. Graphix programs never
-terminate on their own, they are just graphs, if one of their dependent nodes
-changes, then they update. So if the published value of "/foo" is initially 10,
-then this program will print 100, if the value of "/foo" changes to 5 then the
-output of the program will change to 50, and so on forever.</p>
-<p>This is a powerful way to think about programming, and it's especially well
-suited to building user interfaces and transforming data streams.</p>
+<p>Unlike the first example, the value of <code>net::subscribe</code> isn't a
+constant, it can change if the value published in netidx changes. If
+that happens the new value will flow through the graph and will be
+printed again. If the published value of "/foo" is initially 10, and
+then the value of "/foo" changes to 5 then the program will print.</p>
+<pre><code>100
+50
+</code></pre>
+<p>It will keep running forever, if "/foo" changes again, it will print
+more output. This is a powerful way to think about programming, and
+it's especially well suited to building user interfaces and
+transforming data streams.</p>
 <h2 id="dataflow-but-otherwise-normal"><a class="header" href="#dataflow-but-otherwise-normal">Dataflow but Otherwise Normal</a></h2>
 <p>Besides being a dataflow language Graphix tries hard to be a normal
 functional language that would feel familiar to anyone who knows
@@ -1015,13 +1021,15 @@ print(x)
 the <code>~</code> operator means, when the expression on the left updates return the
 current value of the expression on the right (called the sample operator). The
 graph we created looks like,</p>
-<pre><code>const("off") ===============&gt; "x" =======&gt; print
-                              ^
-                              |
-time::timer ====&gt; sample =====
-                 ^
-                 |
-const("on") =====
+<pre><code>const("off") ────────────────&gt; "x" ──────&gt; print
+                                 ▲
+                                 │
+                                 │
+           time::timer ──&gt; sample
+                            ▲
+                            │
+                            │
+                      const("on")
 </code></pre>
 <p>We can also build an infinite loop with connect. This won't crash the program,
 and it won't stop other parts of the program from being evaluated,</p>
@@ -1146,13 +1154,13 @@ let list = {
 <div style="break-before: page; page-break-before: always;"></div><h1 id="select"><a class="header" href="#select">Select</a></h1>
 <p>Select lets us create a graph node with multiple possible output paths that
 will choose one path for each value based on a set of conditions. Kind of like,</p>
-<pre><code>                   | if foo &gt; 0 =&gt;  ...
-                   |
-                   |
-ref(foo) =&gt; select | if foo &lt; 0 =&gt; ...
-                   |
-                   |
-                   | otherwise =&gt; ...
+<pre><code>                     ┌─────────────────────&gt; if foo &gt; 0 =&gt; ...
+                     │
+                     │
+ref(foo) ──&gt; select ─┼─────────────────────&gt; if foo &lt; 0 =&gt; ...
+                     │
+                     │
+                     └─────────────────────&gt; otherwise =&gt; ...
 </code></pre>
 <p>is written as</p>
 <pre><code class="language-graphix">select foo {

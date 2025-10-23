@@ -178,13 +178,13 @@
                         <h1 id="select"><a class="header" href="#select">Select</a></h1>
 <p>Select lets us create a graph node with multiple possible output paths that
 will choose one path for each value based on a set of conditions. Kind of like,</p>
-<pre><code>                   | if foo &gt; 0 =&gt;  ...
-                   |
-                   |
-ref(foo) =&gt; select | if foo &lt; 0 =&gt; ...
-                   |
-                   |
-                   | otherwise =&gt; ...
+<pre><code>                     ┌─────────────────────&gt; if foo &gt; 0 =&gt; ...
+                     │
+                     │
+ref(foo) ──&gt; select ─┼─────────────────────&gt; if foo &lt; 0 =&gt; ...
+                     │
+                     │
+                     └─────────────────────&gt; otherwise =&gt; ...
 </code></pre>
 <p>is written as</p>
 <pre><code class="language-graphix">select foo {

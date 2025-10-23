@@ -18,13 +18,15 @@ current value of the expression on the right (called the sample operator). The
 graph we created looks like,
 
 ```
-const("off") ===============> "x" =======> print
-                              ^
-                              |
-time::timer ====> sample =====
-                 ^
-                 |
-const("on") =====
+const("off") ────────────────> "x" ──────> print
+                                 ▲
+                                 │
+                                 │
+           time::timer ──> sample
+                            ▲
+                            │
+                            │
+                      const("on")
 ```
 
 We can also build an infinite loop with connect. This won't crash the program,

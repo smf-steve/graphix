@@ -7,47 +7,56 @@ with resources in
 like Graphix are "reactive", like React or Vue, except at the language
 level instead of just as a library. A Graphix program is compiled to a
 directed graph, operations (such as +) are graph nodes, edges
-represent paths data can take through the program. Consider,
+represent paths data can take through the program. A simple expression like,
 
 ```graphix
 2 + 2
 ```
 
-This compiles to a graph like,
+will compile to a graph like
+
 ```
-const(2) ==> + <== const(2)
+         
+const(2) ──> + <── const(2)
+         
 ```
 
-When executed the program will have 1 output, 4. Which is exactly what you'd
-expect and is no different from a non data flow program. We need a
-more complex example to see the difference,
+The semantics of simple examples like this aren't noticibly different
+from a normal programming language. However a more complex example
+such as,
 
 ```graphix
 let x = cast<i64>(net::subscribe("/foo")?)?;
 print(x * 10)
 ```
 
-net::subscribe, subscribes to a netidx path and returns it's value, or an error
-(more on ? later). Now lets see what happens, the graph we get from this program
-looks something like this,
+compiles to a graph like
 
 ```
-                                   const(10) ==
-                                                |
-                                                |
-                                                v
-const("/foo") => net::subscribe => cast<i64> => * => print
+                                               const(10)
+                                                   │
+                                                   │
+                                                   ▼
+                                         
+const("/foo") ──> net::subscribe ──> cast<i64> ──> * ──> print
+                                         
 ```
 
-Unlike the first example, the value of `net::subscribe` isn't a constant, it can
-change if the value published in netidx changes. Graphix programs never
-terminate on their own, they are just graphs, if one of their dependent nodes
-changes, then they update. So if the published value of "/foo" is initially 10,
-then this program will print 100, if the value of "/foo" changes to 5 then the
-output of the program will change to 50, and so on forever.
+Unlike the first example, the value of `net::subscribe` isn't a
+constant, it can change if the value published in netidx changes. If
+that happens the new value will flow through the graph and will be
+printed again. If the published value of "/foo" is initially 10, and
+then the value of "/foo" changes to 5 then the program will print.
 
-This is a powerful way to think about programming, and it's especially well
-suited to building user interfaces and transforming data streams.
+```
+100
+50
+```
+
+It will keep running forever, if "/foo" changes again, it will print
+more output. This is a powerful way to think about programming, and
+it's especially well suited to building user interfaces and
+transforming data streams.
 
 ## Dataflow but Otherwise Normal
 
