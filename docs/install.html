@@ -181,11 +181,21 @@ environment. See <a href="https://www.rust-lang.org/tools/install">here</a> for
 instructions on how to do that for your platform. Once you have that set up, you
 can just run</p>
 <p><code>cargo install graphix-shell</code></p>
-<p>That should build the <code>graphix</code> command and install it in your ~/.cargo/bin
-directory. On linux you may need to install kerberos headers, as well as clang
-libs for gssapi to build properly (on linux). On debian/ubuntu install
-<code>libclang-dev</code>, and <code>libkrb5-dev</code>. On other distributions the names will be
-similar.</p>
+<p>That should build the <code>graphix</code> command and install it in your
+~/.cargo/bin directory. On linux you need to install kerberos headers,
+as well as clang libs for gssapi to build properly. On debian/ubuntu
+install <code>libclang-dev</code>, and <code>libkrb5-dev</code>. On other distributions the
+names will be similar.</p>
+<h2 id="netidx"><a class="header" href="#netidx">Netidx</a></h2>
+<p>Graphix uses netidx to import and export data streams. So it is
+recommended that you set up at least a machine local installation of
+netidx when installing Graphix. Otherwise separate Graphix processes
+won't be able to communicate with each other and it will be difficult
+to get any data into Graphix.</p>
+<p>See <a href="https://netidx.github.io/netidx-book">here</a> for details</p>
+<p>If you don't want to set up netidx Graphix will still work, it just
+won't be able to use the net module to send anything outside the
+current process.</p>
 
                     </main>
 

@@ -25,7 +25,7 @@ Takes two strings, returns a string.
 
 ## Type Parameters (Generics)
 
-Type parameters (like generics in other languages) are written with a single quote followed by a letter: `'a`, `'b`, `'e`, etc.
+Type parameters (like generics in other languages) are written with a single quote followed by an identifier: `'a`, `'b`, `'e`, etc.
 
 ### Simple Type Parameters
 
@@ -54,16 +54,6 @@ This function takes:
 
 The types `'a` and `'b` can be the same or different.
 
-### Type Constraints
-
-Sometimes type parameters have constraints:
-
-```graphix
-val sum: fn(@args: Number) -> Number
-```
-
-Here, the arguments must be of type `Number`, which is a set containing all numeric types (`i32`, `i64`, `f64`, etc.). See [Fundamental Types](./fundamental_types.md) for the built-in type sets.
-
 ## Optional Labeled Arguments
 
 Arguments prefixed with `?#` are optional and labeled:
@@ -78,14 +68,6 @@ This function can be called in two ways:
 text("Hello")                           // style uses default value
 text(#style: my_style, "Hello")        // style is specified
 ```
-
-When an optional argument has a default value, it's shown like this:
-
-```graphix
-val repeat: fn(?#count: i64 = 10, string) -> string
-```
-
-If you don't provide `#count`, it defaults to `10`.
 
 ### Order Flexibility
 
@@ -261,6 +243,65 @@ sum([1, 2], [3, 4])
 sum(1, [2, 3], 4)
 ```
 
+### Function Constraints
+
+Type variables in functions can have constraints:
+
+```graphix
+let sum<'a: Number>(@args: 'a) -> 'a
+```
+
+This is subtly different from the `sum` examples earlier. This says,
+`sum` is a function that takes any number of arguments of the same
+type and returns the same type, and that type must be some kind of
+number.
+
+### Auto Parameters
+
+The compiler often infers type variables (and constrains them) by
+itself during the type inference process.
+
+if we compile a function with no type constraints, such as:
+
+```graphix
+let f = |x, y| x + y
+```
+
+It's type will be something like:
+
+```graphix
+val f: fn<
+  '_2073: Error<ErrChain<`ArithError(string)>>, 
+  '_2069: Number, 
+  '_2067: Number, 
+  '_2071: Number
+>('_2067, '_2069) -> '_2071 throws '_2073
+```
+
+The compiler has inferred a bunch of properties here,
+
+- both arguments must be of type `Number`, that's what the constraints
+on `'_2067: Number` and `_2069: Number` mean.
+- both arguments need not be the same type, hence they are different type variables
+- the return type will also be a number, hence `'_2071: Number`, but
+  it may not be the same type of number as either of the arguments.
+- the function may throw an arithmetic exception, hence the constraint
+  on `'_2073`
+
+In the shell this rather imposing type signature is made even more
+complex by the shell also telling you what type variables are
+currently bound to, or `unbound` if they aren't bound. So in the shell this pops out as,
+
+```graphix
+〉f
+-: fn<'_2073: unbound: Error<ErrChain<`ArithError(string)>>, '_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number>('_2067: unbound, '_2069: unbound) -> '_2071: unbound throws '_2073: unbound
+```
+
+The constraint `'_2069: unbound: Number` is read as. _2069 is not
+currently bound to a type but is constrained to type `Number`. This is
+all useful information, even though it's intimidating at first it's
+worth putting in the work to learn to decipher it.
+
 ## Putting It All Together
 
 Let's decode some complex real-world signatures:
@@ -309,7 +350,7 @@ val queue: fn(#clock: Any, 'a) -> 'a
 ```
 
 Breaking it down:
-- `#clock: Any` - required labeled argument of any type (typically an event source)
+- `#clock: Any` - required labeled argument of any type, just used as an event source
 - `'a` - a value of any type
 - `-> 'a` - returns values of the same type
 
@@ -335,6 +376,7 @@ Breaking it down:
 | Notation | Meaning | Example |
 |----------|---------|---------|
 | `'a`, `'b`, `'e` | Type parameter (generic) | `fn('a) -> 'a` |
+| `'_23`, `'_24`, `'_25` | Inferred type parameter (generic) | `fn('_23) -> '_23` |
 | `?#param` | Optional labeled argument | `fn(?#x: i64 = 0)` |
 | `#param` | Required labeled argument | `fn(#x: i64)` |
 | `@args` | Variadic (any number of args) | `fn(@args: i64)` |

@@ -192,7 +192,7 @@
 </code></pre>
 <p>Takes two strings, returns a string.</p>
 <h2 id="type-parameters-generics"><a class="header" href="#type-parameters-generics">Type Parameters (Generics)</a></h2>
-<p>Type parameters (like generics in other languages) are written with a single quote followed by a letter: <code>'a</code>, <code>'b</code>, <code>'e</code>, etc.</p>
+<p>Type parameters (like generics in other languages) are written with a single quote followed by an identifier: <code>'a</code>, <code>'b</code>, <code>'e</code>, etc.</p>
 <h3 id="simple-type-parameters"><a class="header" href="#simple-type-parameters">Simple Type Parameters</a></h3>
 <pre><code class="language-graphix">val identity: fn('a) -&gt; 'a
 </code></pre>
@@ -210,11 +210,6 @@
 <li>Returns an array of type <code>'b</code></li>
 </ul>
 <p>The types <code>'a</code> and <code>'b</code> can be the same or different.</p>
-<h3 id="type-constraints"><a class="header" href="#type-constraints">Type Constraints</a></h3>
-<p>Sometimes type parameters have constraints:</p>
-<pre><code class="language-graphix">val sum: fn(@args: Number) -&gt; Number
-</code></pre>
-<p>Here, the arguments must be of type <code>Number</code>, which is a set containing all numeric types (<code>i32</code>, <code>i64</code>, <code>f64</code>, etc.). See <a href="./fundamental_types.html">Fundamental Types</a> for the built-in type sets.</p>
 <h2 id="optional-labeled-arguments"><a class="header" href="#optional-labeled-arguments">Optional Labeled Arguments</a></h2>
 <p>Arguments prefixed with <code>?#</code> are optional and labeled:</p>
 <pre><code class="language-graphix">val text: fn(?#style: Style, string) -&gt; Widget
@@ -223,10 +218,6 @@
 <pre><code class="language-graphix">text("Hello")                           // style uses default value
 text(#style: my_style, "Hello")        // style is specified
 </code></pre>
-<p>When an optional argument has a default value, it's shown like this:</p>
-<pre><code class="language-graphix">val repeat: fn(?#count: i64 = 10, string) -&gt; string
-</code></pre>
-<p>If you don't provide <code>#count</code>, it defaults to <code>10</code>.</p>
 <h3 id="order-flexibility"><a class="header" href="#order-flexibility">Order Flexibility</a></h3>
 <p>Labeled arguments can be provided in any order, but must come before positional arguments:</p>
 <pre><code class="language-graphix">val widget: fn(?#width: i64, ?#height: i64, string) -&gt; Widget
@@ -324,6 +315,48 @@ val find: fn(Array&lt;string&gt;, string) -&gt; Option&lt;string&gt;
 sum([1, 2], [3, 4])
 sum(1, [2, 3], 4)
 </code></pre>
+<h3 id="function-constraints"><a class="header" href="#function-constraints">Function Constraints</a></h3>
+<p>Type variables in functions can have constraints:</p>
+<pre><code class="language-graphix">let sum&lt;'a: Number&gt;(@args: 'a) -&gt; 'a
+</code></pre>
+<p>This is subtly different from the <code>sum</code> examples earlier. This says,
+<code>sum</code> is a function that takes any number of arguments of the same
+type and returns the same type, and that type must be some kind of
+number.</p>
+<h3 id="auto-parameters"><a class="header" href="#auto-parameters">Auto Parameters</a></h3>
+<p>The compiler often infers type variables (and constrains them) by
+itself during the type inference process.</p>
+<p>if we compile a function with no type constraints, such as:</p>
+<pre><code class="language-graphix">let f = |x, y| x + y
+</code></pre>
+<p>It's type will be something like:</p>
+<pre><code class="language-graphix">val f: fn&lt;
+  '_2073: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;, 
+  '_2069: Number, 
+  '_2067: Number, 
+  '_2071: Number
+&gt;('_2067, '_2069) -&gt; '_2071 throws '_2073
+</code></pre>
+<p>The compiler has inferred a bunch of properties here,</p>
+<ul>
+<li>both arguments must be of type <code>Number</code>, that's what the constraints
+on <code>'_2067: Number</code> and <code>_2069: Number</code> mean.</li>
+<li>both arguments need not be the same type, hence they are different type variables</li>
+<li>the return type will also be a number, hence <code>'_2071: Number</code>, but
+it may not be the same type of number as either of the arguments.</li>
+<li>the function may throw an arithmetic exception, hence the constraint
+on <code>'_2073</code></li>
+</ul>
+<p>In the shell this rather imposing type signature is made even more
+complex by the shell also telling you what type variables are
+currently bound to, or <code>unbound</code> if they aren't bound. So in the shell this pops out as,</p>
+<pre><code class="language-graphix">〉f
+-: fn&lt;'_2073: unbound: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;, '_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number&gt;('_2067: unbound, '_2069: unbound) -&gt; '_2071: unbound throws '_2073: unbound
+</code></pre>
+<p>The constraint <code>'_2069: unbound: Number</code> is read as. _2069 is not
+currently bound to a type but is constrained to type <code>Number</code>. This is
+all useful information, even though it's intimidating at first it's
+worth putting in the work to learn to decipher it.</p>
 <h2 id="putting-it-all-together"><a class="header" href="#putting-it-all-together">Putting It All Together</a></h2>
 <p>Let's decode some complex real-world signatures:</p>
 <h3 id="example-1-tui-table-widget"><a class="header" href="#example-1-tui-table-widget">Example 1: TUI Table Widget</a></h3>
@@ -366,7 +399,7 @@ sum(1, [2, 3], 4)
 </code></pre>
 <p>Breaking it down:</p>
 <ul>
-<li><code>#clock: Any</code> - required labeled argument of any type (typically an event source)</li>
+<li><code>#clock: Any</code> - required labeled argument of any type, just used as an event source</li>
 <li><code>'a</code> - a value of any type</li>
 <li><code>-&gt; 'a</code> - returns values of the same type</li>
 </ul>
@@ -390,6 +423,7 @@ sum(1, [2, 3], 4)
 <h2 id="quick-reference-table"><a class="header" href="#quick-reference-table">Quick Reference Table</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Notation</th><th>Meaning</th><th>Example</th></tr></thead><tbody>
 <tr><td><code>'a</code>, <code>'b</code>, <code>'e</code></td><td>Type parameter (generic)</td><td><code>fn('a) -&gt; 'a</code></td></tr>
+<tr><td><code>'_23</code>, <code>'_24</code>, <code>'_25</code></td><td>Inferred type parameter (generic)</td><td><code>fn('_23) -&gt; '_23</code></td></tr>
 <tr><td><code>?#param</code></td><td>Optional labeled argument</td><td><code>fn(?#x: i64 = 0)</code></td></tr>
 <tr><td><code>#param</code></td><td>Required labeled argument</td><td><code>fn(#x: i64)</code></td></tr>
 <tr><td><code>@args</code></td><td>Variadic (any number of args)</td><td><code>fn(@args: i64)</code></td></tr>

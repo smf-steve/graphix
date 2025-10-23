@@ -23,6 +23,8 @@ graphix
 You'll see a prompt that looks like this:
 
 ```
+Welcome to the graphix shell
+Press ctrl-c to cancel, ctrl-d to exit, and tab for help
 〉
 ```
 

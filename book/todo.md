@@ -1,8 +1,50 @@
-# Graphix Book TODO List
+# Graphix TODO List
 
-This document tracks improvements and additions needed for the Graphix language documentation.
+This document tracks improvements and additions needed for both the Graphix compiler/implementation and the language documentation.
 
 **Last Updated**: 2025-10-23
+
+---
+
+# Compiler/Implementation TODOs
+
+## High Priority
+
+### Investigate Legacy Stdlib Arithmetic Functions
+- [ ] Review and test legacy stdlib functions for correct error handling
+- **Context**: Functions like `divide`, `product`, `sum` were written before the type system existed
+- **Investigation needed**:
+  - How do they handle division by zero?
+  - How do they handle overflow/underflow?
+  - Do they use the `throws` mechanism correctly?
+  - Are error types properly specified in signatures?
+  - Do they match the documented arithmetic error behavior in fundamental_types.md?
+- **Action**: Fix incorrect behavior, update type signatures, ensure consistency with language semantics
+- **Effort**: 2-4 hours (research + fixes + tests)
+- **Files**:
+  - `graphix-stdlib/src/core.rs` (implementation)
+  - `graphix-stdlib/src/core.gx` (signatures)
+  - Tests to verify correct behavior
+  - `book/src/stdlib/core.md` (documentation updates after fixes)
+
+## Medium Priority
+
+### Module System Completeness
+- [ ] Add module renaming on use
+- [ ] Add access control (public/private)
+- **Context**: Mentioned as "work in progress" in modules/overview.md
+- **Effort**: Unknown (depends on design decisions)
+
+## Lower Priority
+
+### Future Features
+- [ ] Desktop GUI widget support (mentioned in ui/overview.md)
+- [ ] Web UI target (mentioned in ui/overview.md)
+- [ ] Mobile UI target (mentioned in ui/overview.md)
+
+---
+
+# Book/Documentation TODOs
 
 ## Completed ✅
 
