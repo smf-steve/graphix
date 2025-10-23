@@ -179,12 +179,12 @@
 <p>Structs allow you to define a type that groups any number of fields together as
 one data object. The fields are accessible by name anywhere in the program. For
 example,</p>
-<pre><code>{ foo: string, bar: i64 }
+<pre><code class="language-graphix">{ foo: string, bar: i64 }
 </code></pre>
 <p>defines a struct with two fields, <code>foo</code> and <code>bar</code>. <code>foo</code> has type <code>string</code> and
 <code>bar</code> has type <code>i64</code>. We can assign a struct of this type to a variable, and
 pass it around just like any other data object. For example,</p>
-<pre><code>let s = { foo: "I am foo", bar: 42 }
+<pre><code class="language-graphix">let s = { foo: "I am foo", bar: 42 }
 println("the struct s is [s]")
 </code></pre>
 <p>will print</p>
@@ -192,13 +192,13 @@ println("the struct s is [s]")
 </code></pre>
 <h2 id="field-references"><a class="header" href="#field-references">Field References</a></h2>
 <p>Struct fields can be referenced with the .field notation. That is,</p>
-<pre><code>〉s.foo
+<pre><code class="language-graphix">〉s.foo
 -: string
 "I am foo"
 </code></pre>
 <p>A more complex expression that results in a struct (such as a function call),
 must be placed in parenthesis before the .field. For example,</p>
-<pre><code>〉let f = || s
+<pre><code class="language-graphix">〉let f = || s
 〉(f()).foo
 -: string
 "I am foo"
@@ -207,10 +207,10 @@ must be placed in parenthesis before the .field. For example,</p>
 <p>Structs are not mutable, like everything else in Graphix. However There is a
 quick way create a new struct from an existing struct with only some fields
 changed. This is called functional struct update syntax. For example,</p>
-<pre><code>{ s with bar: 21 }
+<pre><code class="language-graphix">{ s with bar: 21 }
 </code></pre>
 <p>Will create a new struct with all the same fields as <code>s</code> except <code>bar</code> which will be set to 21. e.g.</p>
-<pre><code>〉{ s with bar: 21 }
+<pre><code class="language-graphix">〉{ s with bar: 21 }
 -: {bar: i64, foo: string}
 {bar: 21, foo: "I am foo"}
 </code></pre>
@@ -227,7 +227,7 @@ backed, they are also memory pooled, and so making a new struct does not usually
 allocate any memory, but instead reuses objects from the pool.</p>
 <p>The <code>cast</code> operator can cast an unsorted array of pairs where the first element
 is a string to a struct type. For example,</p>
-<pre><code>〉cast&lt;{foo: string, bar: i64}&gt;([["foo", "I am foo"], ["bar", 42]])$
+<pre><code class="language-graphix">〉cast&lt;{foo: string, bar: i64}&gt;([["foo", "I am foo"], ["bar", 42]])$
 -: {bar: i64, foo: string}
 {bar: 42, foo: "I am foo"}
 </code></pre>
@@ -280,6 +280,7 @@ network as long as the two sides agree on what the type is supposed to be.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

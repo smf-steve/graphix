@@ -2,7 +2,7 @@
 
 Use allows you to bring names in modules into your current scope so they can be used without prefixing.
 
-```
+```graphix
 net::subscribe(...); // call subscribe in the net module
 use net;
 subscribe(...) // same function
@@ -10,7 +10,7 @@ subscribe(...) // same function
 
 Use is valid anywhere expressions are valid
 
-```
+```graphix
 let list = {
   use array;
   map([1, 2, 3, 4, 5], |x| x * 2)
@@ -20,7 +20,7 @@ list
 
 will print `[2, 4, 6, 8, 10]`
 
-```
+```graphix
 let list = {
   use array;
   map([1, 2, 3, 4, 5], |x| x * 2)
@@ -40,7 +40,7 @@ Caused by:
 
 Use shadows earlier declarations in it's scope. Consider,
 
-```
+```graphix
 let map = |a, f| "hello you called map!";
 let list = {
   use array;

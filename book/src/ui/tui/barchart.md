@@ -4,7 +4,7 @@ The `barchart` widget displays categorical data as vertical bars, supporting gro
 
 ## APIs
 
-```
+```graphix
 mod barchart: sig {
     /// Creates a bar chart from bar groups
     val bar_chart: fn(

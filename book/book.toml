@@ -7,3 +7,7 @@ title = "The Graphix Programming Language"
 
 [output.html]
 site-url = "/graphix/"
+additional-js = ["theme/graphix-highlight.js"]
+
+[output.html.playground]
+editable = false

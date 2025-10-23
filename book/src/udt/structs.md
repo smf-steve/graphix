@@ -4,7 +4,7 @@ Structs allow you to define a type that groups any number of fields together as
 one data object. The fields are accessible by name anywhere in the program. For
 example,
 
-```
+```graphix
 { foo: string, bar: i64 }
 ```
 
@@ -12,7 +12,7 @@ defines a struct with two fields, `foo` and `bar`. `foo` has type `string` and
 `bar` has type `i64`. We can assign a struct of this type to a variable, and
 pass it around just like any other data object. For example,
 
-```
+```graphix
 let s = { foo: "I am foo", bar: 42 }
 println("the struct s is [s]")
 ```
@@ -27,7 +27,7 @@ the struct s is {bar: 42, foo: "I am foo"}
 
 Struct fields can be referenced with the .field notation. That is,
 
-```
+```graphix
 〉s.foo
 -: string
 "I am foo"
@@ -36,7 +36,7 @@ Struct fields can be referenced with the .field notation. That is,
 A more complex expression that results in a struct (such as a function call),
 must be placed in parenthesis before the .field. For example,
 
-```
+```graphix
 〉let f = || s
 〉(f()).foo
 -: string
@@ -49,13 +49,13 @@ Structs are not mutable, like everything else in Graphix. However There is a
 quick way create a new struct from an existing struct with only some fields
 changed. This is called functional struct update syntax. For example,
 
-```
+```graphix
 { s with bar: 21 }
 ```
 
 Will create a new struct with all the same fields as `s` except `bar` which will be set to 21. e.g.
 
-```
+```graphix
 〉{ s with bar: 21 }
 -: {bar: i64, foo: string}
 {bar: 21, foo: "I am foo"}
@@ -78,7 +78,7 @@ allocate any memory, but instead reuses objects from the pool.
 The `cast` operator can cast an unsorted array of pairs where the first element
 is a string to a struct type. For example,
 
-```
+```graphix
 〉cast<{foo: string, bar: i64}>([["foo", "I am foo"], ["bar", 42]])$
 -: {bar: i64, foo: string}
 {bar: 42, foo: "I am foo"}

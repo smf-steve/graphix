@@ -4,7 +4,7 @@ In a single file, you can define modules inline. Expressions in modules are semi
 colon separated. expressions defined in a module may be referred to directly
 e.g. `m::name` or by bringing the module into scope with `use m`.
 
-```
+```graphix
 mod m {
   let hello = "hello world";
   let goodbye = "goodbye world"

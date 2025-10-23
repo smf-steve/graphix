@@ -6,7 +6,7 @@ look no further than the `Tui` type in `graphix-shell`. Tui's are a set of
 mutually recursive types that define the tree structure of a UI. For a less
 overwhelming example consider a classic,
 
-```
+```graphix
 type List<'a> = [
   `Cons('a, List<'a>),
   `Nil
@@ -19,7 +19,7 @@ be either a cons cell or nil. If you've never heard the term "cons" and "nil"
 they come from lisp, the original functional programming language from the late
 1950s. Anyway, lets define some functions to work on our new list type,
 
-```
+```graphix
 type List<'a> = [
   `Cons('a, List<'a>),
   `Nil
@@ -53,7 +53,7 @@ let rec fold = |l: List<'a>, init: 'b, f: fn('b, 'a) -> 'b| -> 'b select l {
 You can probably see where functional programming gets it's (partly deserved)
 reputation for being elegant and simple. Lets try them out,
 
-```
+```graphix
 let l = cons(cons(cons(cons(`Nil, 1), 2), 3), 4);
 l
 ```
@@ -67,7 +67,7 @@ eric@mazikeen ~/p/graphix (main) [1]> target/debug/graphix ~/test.gx
 
 Lets try something more complex,
 
-```
+```graphix
 map(l, |x| x * x)
 ```
 
@@ -80,7 +80,7 @@ eric@mazikeen ~/p/graphix (main)> target/debug/graphix ~/test.gx
 
 as expected. Finally lets sum the list with fold,
 
-```
+```graphix
 fold(l, 0, |acc, v| acc + v)
 ```
 

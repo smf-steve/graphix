@@ -5,7 +5,7 @@ pointer in C. This is kind of an odd thing to have in a very high level language
 like Graphix, but there are good reasons for it. Before we get into those lets
 see what one looks like.
 
-```
+```graphix
 〉let v = &1
 〉v
 -: &i64
@@ -18,7 +18,7 @@ is a reference to an `i64`. Just like a function when printed the reference id
 is printed, not the value it refers to. We get the value that this reference 727
 refers to with the deref operator *.
 
-```
+```graphix
 〉*v
 -: i64
 1
@@ -37,7 +37,7 @@ depended on it would have no way of knowing what changed, and thus would have to
 do whatever huge amount of work it is supposed to do all over again. Consider a
 constrained GUI type with just labels and boxes,
 
-```
+```graphix
 type Gui = [
   `Label(string),
   `Box(Array<Gui>)
@@ -52,7 +52,7 @@ widgets we had created and rebuild the entire UI from scratch. We'd like to be
 able to just update the label text that changed, and we can, with a small change
 to the type.
 
-```
+```graphix
 type Gui = [
   `Label(&string),
   `Box(Array<Gui>)
@@ -73,13 +73,13 @@ Suppose we want to write a function that can update the value a passed in
 reference refers to, instead of the reference itself (which we can also do). We
 can do that with,
 
-```
+```graphix
 *r <- "new value"
 ```
 
 Consider,
 
-```
+```graphix
 let f = |x: &i64| *x <- once(*x) + 1;
 let v = 0;
 f(&v);

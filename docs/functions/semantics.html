@@ -181,13 +181,13 @@ as "polymorphic graph templates", in that they allow you to specify a part of
 the graph once, and then use it multiple times with different types each time.
 Most of the time this difference in semantics doesn't matter. Most of the time.
 Consider,</p>
-<pre><code>let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+<pre><code class="language-graphix">let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 f(n, 1)
 </code></pre>
 <p>What happens here? Does <code>f</code> get "called" every time <code>n</code> updates? Does it only
 work for the first <code>n</code>? Does it explode? Lets transform it like the compiler
 would in order to understand it better,</p>
-<pre><code>let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+<pre><code class="language-graphix">let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 </code></pre>
 <p>The "arguments" to the function call were plugged into the holes in the graph
@@ -195,7 +195,7 @@ template and then the whole template is copied to the call site, and from then
 on the graph runs as normal.</p>
 <p>Lets revisit an earlier example where we used select and connect to find the
 length of an array. Suppose we want to generalize that into a function,</p>
-<pre><code>let len = |a: Array&lt;'a&gt;| {
+<pre><code class="language-graphix">let len = |a: Array&lt;'a&gt;| {
   let sum = 0;
   select a {
     [x, tl..] =&gt; {
@@ -208,7 +208,7 @@ length of an array. Suppose we want to generalize that into a function,</p>
 </code></pre>
 <p>Lets just ignore the <code>'a</code> for now. Here we have a function that takes an array
 with any element type and returns it's length. Brilliant, lets call it,</p>
-<pre><code>let a = [1, 2, 3, 4, 5];
+<pre><code class="language-graphix">let a = [1, 2, 3, 4, 5];
 len(a)
 </code></pre>
 <p>and when we run this we get,</p>
@@ -217,7 +217,7 @@ len(a)
 </code></pre>
 <p>That's the right answer. Are we done? Noooooooo. No we are not done. Lets see
 what happens if we do,</p>
-<pre><code>let a = [1, 2, 3, 4, 5];
+<pre><code class="language-graphix">let a = [1, 2, 3, 4, 5];
 a &lt;- [1, 2, 3];
 a &lt;- [1, 2];
 len(a)
@@ -251,7 +251,7 @@ make Graphix as much like a normal language as possible, but this is where we
 depart from that possibility. The general idea is, we need to queue updates to
 the outer <code>a</code> until we're done processing the current one. For that we have a
 builtin called <code>queue</code>, here is the correct implementation</p>
-<pre><code>let len = |a: Array&lt;'a&gt;| {
+<pre><code class="language-graphix">let len = |a: Array&lt;'a&gt;| {
   let clock = once(null);
   let q = queue(#clock, a);
   let sum = 0;
@@ -333,6 +333,7 @@ correct answer,</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

@@ -184,7 +184,7 @@ For example we can create two structs of type <code>T</code> that each contain a
 implementation of <code>f</code>, and we can use them interchangibly with any function that
 accepts a <code>T</code>. In this simple example we create one implementation of <code>f</code> that
 increments the count, and one that decrements it.</p>
-<pre><code>type T = { count: i64, f: fn(T) -&gt; T };
+<pre><code class="language-graphix">type T = { count: i64, f: fn(T) -&gt; T };
 let ts: Array&lt;T&gt; = [
   { count: 0, f: |t: T| {t with count: t.count + 1} },
   { count: 0, f: |t: T| {t with count: t.count - 1} }
@@ -247,6 +247,7 @@ same outcomes as OOP.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

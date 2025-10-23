@@ -31,9 +31,12 @@ This document tracks improvements and additions needed for both the Graphix comp
 
 ### Module System Completeness
 - [ ] Add module renaming on use
-- [ ] Add access control (public/private)
+- [ ] Add gxi module signatures
 - **Context**: Mentioned as "work in progress" in modules/overview.md
 - **Effort**: Unknown (depends on design decisions)
+
+### Type System
+- [ ] Once gxi files/module sigs are added add abstract types
 
 ## Lower Priority
 
@@ -46,24 +49,9 @@ This document tracks improvements and additions needed for both the Graphix comp
 
 # Book/Documentation TODOs
 
-## Completed ✅
-
-- [x] Create `style.md` documentation for TUI styling
-- [x] Create `input.md` documentation for input handling
-- [x] Create Getting Started tutorial (`getting_started.md`)
-- [x] Create Reading Type Signatures guide (`core/reading_types.md`)
-
----
-
 ## Phase 1: Critical Fixes (Highest Priority)
 
 These issues block usability or create confusion:
-
-### 1.1 Fix Table of Contents Structure
-- [ ] Move `error.md` to `./core/error.md` in SUMMARY.md
-- **Rationale**: Error handling is a core language feature, not a top-level topic
-- **Effort**: 5 minutes
-- **Files**: `book/src/SUMMARY.md`, `book/src/error.md` → `book/src/core/error.md`
 
 ### 1.2 Complete Embedding Overview
 - [ ] Write a proper introduction to the Embedding section
@@ -74,57 +62,6 @@ These issues block usability or create confusion:
   - Link to the three subsections
 - **Effort**: 1 hour
 - **File**: `book/src/embedding/overview.md`
-
-### 1.3 Clarify Installation Instructions
-- [ ] Update install.md with:
-  - Explicit statement about crates.io publication status
-  - If not published, add git installation: `cargo install --git https://github.com/...`
-  - Add troubleshooting subsection for common issues
-  - Verify platform-specific dependency names
-- **Effort**: 30 minutes
-- **File**: `book/src/install.md`
-
-### 1.4 Sanitize Example Outputs
-- [ ] Replace `/home/eric/` paths in error examples with generic paths
-- **Find**: `grep -r "/home/eric" book/src/`
-- **Replace with**: `/home/user/` or just `~/`
-- **Effort**: 15 minutes
-- **Files**: Multiple (mainly core language sections)
-
----
-
-## Phase 2: Essential Content (High Priority)
-
-Core documentation that users expect:
-
-### 2.1 Add "Getting Started" Tutorial ✅
-- [x] Create new section between "Installing" and "Core Language"
-- [x] Content: REPL basics, first file, reactive model
-- **Status**: COMPLETED
-
-### 2.2 Add Type Signature Reading Guide ✅
-- [x] Create guide for understanding function signatures
-- [x] Content: All notation explained with examples
-- **Status**: COMPLETED
-
-### 2.3 Standardize API Documentation Format
-- [ ] Review all widget docs and stdlib docs for consistent format
-- **Standard**: All should use `mod name: sig { ... }` wrapper
-- **Check**: All TUI widget files, stdlib files
-- **Effort**: 2-3 hours (mostly mechanical)
-- **Files**: All files in `book/src/ui/tui/` and `book/src/stdlib/`
-
-### 2.4 Explain z32 and v32 Types
-- [ ] Document these in fundamental_types.md
-- **Research**: What are z32 and v32? (appear in core.md Sint/Uint but not documented)
-- **Effort**: 30 minutes to 1 hour (depending on research needed)
-- **File**: `book/src/core/fundamental_types.md`
-
-### 2.5 Fix Intro Incomplete Sentence
-- [ ] Complete "like the popular UI library" comparison
-- **Suggestion**: "like React or Vue, except at the language level instead of just as a library"
-- **Effort**: 2 minutes
-- **File**: `book/src/intro.md`
 
 ---
 

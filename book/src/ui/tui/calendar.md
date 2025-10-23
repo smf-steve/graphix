@@ -4,7 +4,7 @@ The `calendar` widget displays a monthly calendar view with support for highligh
 
 ## APIs
 
-```
+```graphix
 mod calendar: sig {
     /// Creates a calendar widget displaying a month
     val calendar: fn(

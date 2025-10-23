@@ -31,7 +31,7 @@ the types in the operation, representing that either type could be returned. If
 you try to pass this result to a function that wants a specific numeric type, it
 will fail at compile time.
 
-```
+```graphix
 〉1. + 1
 -: [i64, f64]
 2
@@ -49,7 +49,7 @@ Division by zero is raised as an error to the nearest error handler (more on
 that later) and will be printed to stderr by the shell if it is never handled.
 Overflow and underflow are handled by wrapping,
 
-```
+```graphix
 〉0 / 0
 
 thread 'tokio-runtime-worker' panicked at /home/eric/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/mod.rs:319:5:
@@ -68,6 +68,23 @@ occurs. However the particular arith operation that caused the error will not
 update, which may cause problems depending on what your program is doing with
 it.
 
+#### v32, z32, v64, z64
+
+These number types are the same as the normal types except when they
+are sent over the wire via netidx (or written to a file) they use
+variable width encoding instead of normal encoding. The number of
+bytes used varies for 64 bit numbers to between 1 and 10. Small
+numbers (below 127) are encoded in 1 byte, larger number use more
+bytes. The type correspondence is,
+
+| Compact | Normal |
+|---------|--------|
+| v32     | u32    |
+| z32     | i32    |
+| v64     | u64    |
+| z64     | i64    |
+
+
 ### Number Sets
 
 There are a few sets of number types that classify numbers into various kinds.
@@ -83,7 +100,7 @@ type is `bool`.
 Boolean expressions using `&&`, `||`, and `!` are supported. These operators
 only operate on `bool`. They can be grouped with parenthesis. For example,
 
-```
+```graphix
 〉true && false
 -: bool
 false
@@ -107,7 +124,7 @@ A time duration. The type name is `duration`, and the literals are written as,
 `duration:1.0s`, `duration:1.0ms`, `duration:1.0us`, `duration:1.0ns`. Durations
 can be added, and can be multiplied and divided by scalars.
 
-```
+```graphix
 〉duration:1.0s + duration:1.0s
 -: duration
 2.s
@@ -126,7 +143,7 @@ are written in RFC3339 format inside quotes. For example,
 `datetime:"2020-01-01T00:00:00Z"`. You can add and subtract `duration` from
 `datetime`.
 
-```
+```graphix
 〉datetime:"2020-01-01T00:00:00Z" + duration:30.s
 -: datetime
 2020-01-01 00:00:30 UTC
@@ -134,7 +151,7 @@ are written in RFC3339 format inside quotes. For example,
 
 You can enter `datetime` literals in local time and they will be converted to UTC. For example,
 
-```
+```graphix
 〉datetime:"2020-01-01T00:00:00-04:00"
 -: datetime
 2020-01-01 04:00:00 UTC
@@ -154,7 +171,7 @@ characters.
 String literals can contain expressions that will be evaluated and joined to the string,
 such expressions are surrounded by unescaped `[]` in the string. For example,
 
-```
+```graphix
 〉let row = 1
 〉let column = 999
 〉"/foo/bar/[row]/[column]"
@@ -166,7 +183,7 @@ Values in an interpolation need not be strings, they will be cast to a string
 when they are used. You can write a literal `[` or `]` in a string by escaping
 it.
 
-```
+```graphix
 〉"this is a string with a \[ and a \] but it isn't an interpolation"
 -: string
 "this is a string with a [ and a ] but it isn't an interpolation"
@@ -247,7 +264,7 @@ Tuples are written `(x, y)`, they can be of arbitrary length, and each element
 may have a different type. Tuples may be indexed using numeric field indexes.
 Consider
 
-```
+```graphix
 let x = (1, 2, 3, 4);
 x.0
 ```
@@ -266,7 +283,7 @@ module
 
 Maps can be constructed using the `{key => value}` syntax:
 
-```
+```graphix
 〉{"a" => 1, "b" => 2, "c" => 3}
 -: Map<'_1893: string, '_1895: i64>
 {"a" => 1, "b" => 2, "c" => 3}
@@ -275,7 +292,7 @@ Maps can be constructed using the `{key => value}` syntax:
 Keys and values can be any Graphix type, for example here is a map where the key
 is a `Map<string, i64>`.
 
-```
+```graphix
 {{"foo" => 42} => "foo", {"bar" => 42} => "bar"}
 -: Map<'_1919: Map<'_1915: string, '_1917: i64>, '_1921: string>
 {{"bar" => 42} => "bar", {"foo" => 42} => "foo"}
@@ -285,7 +302,7 @@ is a `Map<string, i64>`.
 
 Maps can be indexed using the `map{key}` syntax to retrieve values:
 
-```
+```graphix
 〉let m = {"a" => 1, "b" => 2, "c" => 3}
 〉m{"b"}
 -: ['_1907: i64, Error<`MapKeyError(string)>]
@@ -294,7 +311,7 @@ Maps can be indexed using the `map{key}` syntax to retrieve values:
 
 If a key is not present in the map, indexing returns a `MapKeyError`:
 
-```
+```graphix
 〉m{"missing"}
 -: ['_1907: i64, Error<`MapKeyError(string)>]
 error:["MapKeyError", "map key \"missing\" not found"]
@@ -313,11 +330,11 @@ O(log(N)) performance for all operations regardless of map size.
 ## Error
 
 Error is the built in error type. It carries a type parameter indicating the
-type of error, for example ```Error<`MapKeyError(string)>``` is an error that
-carries a ``` `MapKeyError ``` variant. You can access the inner error value
+type of error, for example `Error<`MapKeyError(string)>` is an error that
+carries a `` `MapKeyError `` variant. You can access the inner error value
 using `e.0` e.g.,
 
-```
+```graphix
 〉let e = error(`MapKeyError("no such key"))
 〉e.0
 -: `MapKeyError(string)

@@ -178,7 +178,7 @@
                         <h1 id="the-bar-chart-widget"><a class="header" href="#the-bar-chart-widget">The Bar Chart Widget</a></h1>
 <p>The <code>barchart</code> widget displays categorical data as vertical bars, supporting grouped bars, custom styling, and dynamic updates. It's ideal for comparing values across categories, showing rankings, or displaying resource usage.</p>
 <h2 id="apis"><a class="header" href="#apis">APIs</a></h2>
-<pre><code>mod barchart: sig {
+<pre><code class="language-graphix">mod barchart: sig {
     /// Creates a bar chart from bar groups
     val bar_chart: fn(
         ?#max: &amp;i64,
@@ -340,6 +340,7 @@ bar_chart(&amp;[bar_group(bars)])
         <script src="../../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../../theme/graphix-highlight.js"></script>
 
 
 

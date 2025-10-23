@@ -23,14 +23,14 @@ m.gx  test.gx
 `test.gx` is the program that we will run, `m.gx` is a module it will load.
 
 `test.gx`
-```
+```graphix
 mod m;
 
 m::hello
 ```
 
 `m.gx`
-```
+```graphix
 let hello = "hello world"
 ```
 
@@ -126,19 +126,19 @@ eric@katana ~/t/ex1> find .
 ```
 
 `test.gx` is the root of the hierarchy
-```
+```graphix
 mod m;
 
 m::n::hello
 ```
 
 `m/mod.gx` is the root of module `m`
-```
+```graphix
 mod n
 ```
 
 `m/n.gx` is the `m::n` module
-```
+```graphix
 let hello = "hello world"
 ```
 

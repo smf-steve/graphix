@@ -8,7 +8,7 @@ this by defining a module signature. We can also define what the dynamically
 loaded module is allowed to reference, in order to prevent it from just calling
 any function it likes (aka it's sandboxed). Lets dive right in with an example,
 
-```
+```graphix
 // the module source, which we will publish in netidx
 let path = "/local/foo";
 let source = "

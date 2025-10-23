@@ -179,26 +179,26 @@
 <p>Functions are first class values. They can be stored in variables, in data
 structures, and they can be passed around to other functions. Etc. They are
 defined with the syntax,</p>
-<pre><code>|arg0, arg1, ...| body
+<pre><code class="language-graphix">|arg0, arg1, ...| body
 </code></pre>
 <p>This is often combined with a let bind to make a named function.</p>
-<pre><code>let f = |x, y| x + y + 1
+<pre><code class="language-graphix">let f = |x, y| x + y + 1
 </code></pre>
 <p><code>f</code> is now bound to the lambda that adds it's two arguments and 1. You can also
 use structure patterns in function arguments as long as the pattern will always
 match.</p>
-<pre><code>let g =|(x, y), z| x + y + z
+<pre><code class="language-graphix">let g =|(x, y), z| x + y + z
 </code></pre>
 <p>Type annotations can be used to constrain the argument types and the return
 type,</p>
-<pre><code>let g = |(x, y): (f64, f64), z: f64| -&gt; f64 x + y + z
+<pre><code class="language-graphix">let g = |(x, y): (f64, f64), z: f64| -&gt; f64 x + y + z
 </code></pre>
 <p>Functions are called with the following syntax.</p>
-<pre><code>f(1, 1)
+<pre><code class="language-graphix">f(1, 1)
 </code></pre>
 <p>Would return 3. If the function is stored in a data structure, then sometimes
 you need parenthesis to call it.</p>
-<pre><code>(s.f)(1, 1)
+<pre><code class="language-graphix">(s.f)(1, 1)
 </code></pre>
 <p>Would call the function <code>f</code> in the struct <code>s</code>.</p>
 
@@ -248,6 +248,7 @@ you need parenthesis to call it.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

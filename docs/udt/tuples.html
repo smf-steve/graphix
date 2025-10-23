@@ -178,18 +178,18 @@
                         <h1 id="tuples"><a class="header" href="#tuples">Tuples</a></h1>
 <p>Tuples are like structs where the field names are numbers, or like Arrays where
 every element can be a different type and the length is known at compile time. For example,</p>
-<pre><code>(string, i64, f64)
+<pre><code class="language-graphix">(string, i64, f64)
 </code></pre>
 <p>Is an example of a three tuple.</p>
 <h2 id="field-accessors"><a class="header" href="#field-accessors">Field Accessors</a></h2>
 <p>You can access the fields of a tuple by their field number, e.g. .0, .1, .2, etc.</p>
-<pre><code>〉let t = (1, 2, 3)
+<pre><code class="language-graphix">〉let t = (1, 2, 3)
 〉t.0 == 1
 -: bool
 true
 </code></pre>
 <p>Tuple fields may also be bound in a pattern match in a let bind, a select arm, or a function argument. For example,</p>
-<pre><code>〉let (f0, f1, f2) = t
+<pre><code class="language-graphix">〉let (f0, f1, f2) = t
 〉f0
 -: i64
 1
@@ -241,6 +241,7 @@ true
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

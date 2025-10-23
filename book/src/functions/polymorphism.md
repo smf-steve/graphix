@@ -5,7 +5,7 @@ types are inferred at each call site, and thus may differ from one site to
 another. Any internal constraints are calculated when the definition is compiled
 and are enforced at each call site. For example consider,
 
-```
+```graphix
 〉let f = |x, y| x + y
 〉f
 -: fn<'_2073: unbound: Error<ErrChain<`ArithError(string)>>, '_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number>('_2067: unbound, '_2069: unbound) -> '_2071: unbound throws '_2073: unbound
@@ -65,7 +65,7 @@ types within the `try catch`.
 
 We can indeed call `f` with different number types, and it works just fine,
 
-```
+```graphix
 〉f(1.0, 1)
 -: Number
 2
@@ -73,7 +73,7 @@ We can indeed call `f` with different number types, and it works just fine,
 
 The type we get back really depends on the values we pass. For example,
 
-```
+```graphix
 〉f(1.1212, 1)
 -: Number
 2.1212
@@ -91,7 +91,7 @@ any type of number to `f`, it has to be the same type for both arguments, and
 the return type will be the same as the argument type. We can say that using
 type annotations.
 
-```
+```graphix
 〉let f = 'a: Number |x: 'a, y: 'a| -> 'a x + y
 〉f
 -: fn<'a: unbound: Number, '_2101: unbound: Error<ErrChain<`ArithError(string)>>>('a: unbound, 'a: unbound) -> 'a: unbound throws '_2101: unbound
@@ -120,7 +120,7 @@ fn<'a: Number,
 We just have two variables now, `'a` representing both argument types and the
 return type, and `'_2101` representing the throws type. We can still call this `f` with any number type,
 
-```
+```graphix
 〉f(1.212, 2.0)
 -: f64
 3.2119999999999997
@@ -128,7 +128,7 @@ return type, and `'_2101` representing the throws type. We can still call this `
 
 However notice that we get back the explicit type we passed in,
 
-```
+```graphix
 〉f(2, 2)
 -: i64
 4
@@ -136,7 +136,7 @@ However notice that we get back the explicit type we passed in,
 
 In one case `f64`, in the other `i64`. We can't pass numbers of different types,
 
-```
+```graphix
 〉f(1, 1.2)
 error: in expr
 
@@ -154,7 +154,7 @@ Since functions are first class, they can take other functions as arguments, and
 even return functions. These relationships can be often inferred automatically
 without issue, but sometimes annotations are required.
 
-```
+```graphix
 〉 let apply = |x: 'a, f: fn('a) -> 'b throws 'e| -> 'b throws 'e f(x)
 〉 apply
 -: fn<'e: unbound: _>('a: unbound, fn('a: unbound) -> 'b: unbound throws 'e: unbound) -> 'b: unbound throws 'e: unbound

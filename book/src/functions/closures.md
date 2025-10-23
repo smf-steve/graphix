@@ -4,7 +4,7 @@ Functions can reference variables outside of their definition. These variables
 are captured by the function definition, and remain valid no matter where the
 closure is called. For example,
 
-```
+```graphix
 let f = {
   let v = cast<i64>(net::subscribe("/local/foo")$)$;
   |n| v + n

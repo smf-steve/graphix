@@ -4,7 +4,7 @@ The `list` widget displays a scrollable, selectable list of items with keyboard 
 
 ## API
 
-```
+```graphix
 mod list: sig {
     /// Creates a list widget from an array of lines
     val list: fn(

@@ -179,7 +179,7 @@
 <p>Functions can reference variables outside of their definition. These variables
 are captured by the function definition, and remain valid no matter where the
 closure is called. For example,</p>
-<pre><code>let f = {
+<pre><code class="language-graphix">let f = {
   let v = cast&lt;i64&gt;(net::subscribe("/local/foo")$)$;
   |n| v + n
 };
@@ -235,6 +235,7 @@ in OOP.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

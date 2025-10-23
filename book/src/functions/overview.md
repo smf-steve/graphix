@@ -4,13 +4,13 @@ Functions are first class values. They can be stored in variables, in data
 structures, and they can be passed around to other functions. Etc. They are
 defined with the syntax,
 
-```
+```graphix
 |arg0, arg1, ...| body
 ```
 
 This is often combined with a let bind to make a named function.
 
-```
+```graphix
 let f = |x, y| x + y + 1
 ```
 
@@ -18,28 +18,28 @@ let f = |x, y| x + y + 1
 use structure patterns in function arguments as long as the pattern will always
 match.
 
-```
+```graphix
 let g =|(x, y), z| x + y + z
 ```
 
 Type annotations can be used to constrain the argument types and the return
 type,
 
-```
+```graphix
 let g = |(x, y): (f64, f64), z: f64| -> f64 x + y + z
 ```
 
 Functions are called with the following syntax.
 
 
-```
+```graphix
 f(1, 1)
 ```
 
 Would return 3. If the function is stored in a data structure, then sometimes
 you need parenthesis to call it.
 
-```
+```graphix
 (s.f)(1, 1)
 ```
 

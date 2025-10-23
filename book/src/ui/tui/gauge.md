@@ -4,7 +4,7 @@ The `gauge` widget displays a single value as a filled progress indicator, perfe
 
 ## API
 
-```
+```graphix
 mod gauge: sig {
     /// Creates a gauge widget showing progress from 0.0 to 1.0
     val gauge: fn(

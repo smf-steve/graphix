@@ -201,7 +201,7 @@ without casting, however the return type of the operation will be the set of all
 the types in the operation, representing that either type could be returned. If
 you try to pass this result to a function that wants a specific numeric type, it
 will fail at compile time.</p>
-<pre><code>〉1. + 1
+<pre><code class="language-graphix">〉1. + 1
 -: [i64, f64]
 2
 〉let f = |x: i64| x * 10
@@ -216,7 +216,7 @@ Caused by:
 <p>Division by zero is raised as an error to the nearest error handler (more on
 that later) and will be printed to stderr by the shell if it is never handled.
 Overflow and underflow are handled by wrapping,</p>
-<pre><code>〉0 / 0
+<pre><code class="language-graphix">〉0 / 0
 
 thread 'tokio-runtime-worker' panicked at /home/eric/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/mod.rs:319:5:
 attempt to divide by zero
@@ -232,6 +232,20 @@ runtime, it is safe to continue using the shell and runtime if such an error
 occurs. However the particular arith operation that caused the error will not
 update, which may cause problems depending on what your program is doing with
 it.</p>
+<h4 id="v32-z32-v64-z64"><a class="header" href="#v32-z32-v64-z64">v32, z32, v64, z64</a></h4>
+<p>These number types are the same as the normal types except when they
+are sent over the wire via netidx (or written to a file) they use
+variable width encoding instead of normal encoding. The number of
+bytes used varies for 64 bit numbers to between 1 and 10. Small
+numbers (below 127) are encoded in 1 byte, larger number use more
+bytes. The type correspondence is,</p>
+<div class="table-wrapper"><table><thead><tr><th>Compact</th><th>Normal</th></tr></thead><tbody>
+<tr><td>v32</td><td>u32</td></tr>
+<tr><td>z32</td><td>i32</td></tr>
+<tr><td>v64</td><td>u64</td></tr>
+<tr><td>z64</td><td>i64</td></tr>
+</tbody></table>
+</div>
 <h3 id="number-sets"><a class="header" href="#number-sets">Number Sets</a></h3>
 <p>There are a few sets of number types that classify numbers into various kinds.
 <code>Number</code> being the most broad, it contains all the number types. <code>Int</code> contains
@@ -242,7 +256,7 @@ only integers, <code>Real</code> contains only reals (decimal plus the two float
 type is <code>bool</code>.</p>
 <p>Boolean expressions using <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code> are supported. These operators
 only operate on <code>bool</code>. They can be grouped with parenthesis. For example,</p>
-<pre><code>〉true &amp;&amp; false
+<pre><code class="language-graphix">〉true &amp;&amp; false
 -: bool
 false
 〉true || false
@@ -262,7 +276,7 @@ Caused by:
 <p>A time duration. The type name is <code>duration</code>, and the literals are written as,
 <code>duration:1.0s</code>, <code>duration:1.0ms</code>, <code>duration:1.0us</code>, <code>duration:1.0ns</code>. Durations
 can be added, and can be multiplied and divided by scalars.</p>
-<pre><code>〉duration:1.0s + duration:1.0s
+<pre><code class="language-graphix">〉duration:1.0s + duration:1.0s
 -: duration
 2.s
 〉duration:1.0s * 50
@@ -277,12 +291,12 @@ can be added, and can be multiplied and divided by scalars.</p>
 are written in RFC3339 format inside quotes. For example,
 <code>datetime:"2020-01-01T00:00:00Z"</code>. You can add and subtract <code>duration</code> from
 <code>datetime</code>.</p>
-<pre><code>〉datetime:"2020-01-01T00:00:00Z" + duration:30.s
+<pre><code class="language-graphix">〉datetime:"2020-01-01T00:00:00Z" + duration:30.s
 -: datetime
 2020-01-01 00:00:30 UTC
 </code></pre>
 <p>You can enter <code>datetime</code> literals in local time and they will be converted to UTC. For example,</p>
-<pre><code>〉datetime:"2020-01-01T00:00:00-04:00"
+<pre><code class="language-graphix">〉datetime:"2020-01-01T00:00:00-04:00"
 -: datetime
 2020-01-01 04:00:00 UTC
 </code></pre>
@@ -296,7 +310,7 @@ characters.</p>
 <h3 id="string-interpolation"><a class="header" href="#string-interpolation">String Interpolation</a></h3>
 <p>String literals can contain expressions that will be evaluated and joined to the string,
 such expressions are surrounded by unescaped <code>[]</code> in the string. For example,</p>
-<pre><code>〉let row = 1
+<pre><code class="language-graphix">〉let row = 1
 〉let column = 999
 〉"/foo/bar/[row]/[column]"
 -: string
@@ -305,7 +319,7 @@ such expressions are surrounded by unescaped <code>[]</code> in the string. For 
 <p>Values in an interpolation need not be strings, they will be cast to a string
 when they are used. You can write a literal <code>[</code> or <code>]</code> in a string by escaping
 it.</p>
-<pre><code>〉"this is a string with a \[ and a \] but it isn't an interpolation"
+<pre><code class="language-graphix">〉"this is a string with a \[ and a \] but it isn't an interpolation"
 -: string
 "this is a string with a [ and a ] but it isn't an interpolation"
 </code></pre>
@@ -376,7 +390,7 @@ and the constants are very fast.</p>
 <p>Tuples are written <code>(x, y)</code>, they can be of arbitrary length, and each element
 may have a different type. Tuples may be indexed using numeric field indexes.
 Consider</p>
-<pre><code>let x = (1, 2, 3, 4);
+<pre><code class="language-graphix">let x = (1, 2, 3, 4);
 x.0
 </code></pre>
 <p>Will print 1.</p>
@@ -388,25 +402,25 @@ There are many functions for working with maps in the <code>map</code> standard 
 module</p>
 <h3 id="map-literals"><a class="header" href="#map-literals">Map Literals</a></h3>
 <p>Maps can be constructed using the <code>{key =&gt; value}</code> syntax:</p>
-<pre><code>〉{"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
+<pre><code class="language-graphix">〉{"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
 -: Map&lt;'_1893: string, '_1895: i64&gt;
 {"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
 </code></pre>
 <p>Keys and values can be any Graphix type, for example here is a map where the key
 is a <code>Map&lt;string, i64&gt;</code>.</p>
-<pre><code>{{"foo" =&gt; 42} =&gt; "foo", {"bar" =&gt; 42} =&gt; "bar"}
+<pre><code class="language-graphix">{{"foo" =&gt; 42} =&gt; "foo", {"bar" =&gt; 42} =&gt; "bar"}
 -: Map&lt;'_1919: Map&lt;'_1915: string, '_1917: i64&gt;, '_1921: string&gt;
 {{"bar" =&gt; 42} =&gt; "bar", {"foo" =&gt; 42} =&gt; "foo"}
 </code></pre>
 <h3 id="map-indexing"><a class="header" href="#map-indexing">Map Indexing</a></h3>
 <p>Maps can be indexed using the <code>map{key}</code> syntax to retrieve values:</p>
-<pre><code>〉let m = {"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
+<pre><code class="language-graphix">〉let m = {"a" =&gt; 1, "b" =&gt; 2, "c" =&gt; 3}
 〉m{"b"}
 -: ['_1907: i64, Error&lt;`MapKeyError(string)&gt;]
 2
 </code></pre>
 <p>If a key is not present in the map, indexing returns a <code>MapKeyError</code>:</p>
-<pre><code>〉m{"missing"}
+<pre><code class="language-graphix">〉m{"missing"}
 -: ['_1907: i64, Error&lt;`MapKeyError(string)&gt;]
 error:["MapKeyError", "map key \"missing\" not found"]
 </code></pre>
@@ -419,10 +433,9 @@ rather than allocating new memory.</p>
 O(log(N)) performance for all operations regardless of map size.</p>
 <h2 id="error"><a class="header" href="#error">Error</a></h2>
 <p>Error is the built in error type. It carries a type parameter indicating the
-type of error, for example <code>Error&lt;`MapKeyError(string)&gt;</code> is an error that
-carries a <code>`MapKeyError</code> variant. You can access the inner error value
+type of error, for example <code>Error&lt;</code>MapKeyError(string)&gt;<code>is an error that carries a ``</code>MapKeyError `` variant. You can access the inner error value
 using <code>e.0</code> e.g.,</p>
-<pre><code>〉let e = error(`MapKeyError("no such key"))
+<pre><code class="language-graphix">〉let e = error(`MapKeyError("no such key"))
 〉e.0
 -: `MapKeyError(string)
 `MapKeyError("no such key")
@@ -476,6 +489,7 @@ handling.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

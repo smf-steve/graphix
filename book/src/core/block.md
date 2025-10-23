@@ -8,7 +8,7 @@ it is illegal for a block to have just one expression (it will not parse).
 You can use blocks to hide intermediate variables from outer scopes, and to
 group code together in a logical way.
 
-```
+```graphix
 let important_thing = {
   let x = 0;
   let y = x + 1;

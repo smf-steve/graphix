@@ -15,7 +15,7 @@ ref(foo) => select | if foo < 0 => ...
 
 is written as
 
-```
+```graphix
 select foo {
   n if n > 0 => ...,
   n if n < 0 => ...,
@@ -39,7 +39,7 @@ they will be unsubscribed and unpublished until it is selected again).
 
 Consider we want to select from a value of type `[Array<i64>, i64, null]`,
 
-```
+```graphix
 let x: [Array<i64>, i64, null] = null;
 x <- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
 x <- time::timer(duration:2.s, false) ~ 7;
@@ -66,7 +66,7 @@ If you read this carefully you can see that the compiler is building up a set of
 types that we did match, and checking that it contains the argument type. This
 goes both ways, a match case that could never match is also an error.
 
-```
+```graphix
 let x: [Array<i64>, i64, null] = null;
 x <- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
 x <- time::timer(duration:2.s, false) ~ 7;
@@ -100,7 +100,7 @@ subtract from the argument type set. You are required to match without a guard
 at some point. No analysis is done to determine if your guard covers the entire
 range of a type.
 
-```
+```graphix
 let x: [Array<i64>, i64, null] = null;
 x <- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
 x <- time::timer(duration:2.s, false) ~ 7;
@@ -146,7 +146,7 @@ Suppose we want to classify arrays that have at least two elements vs arrays
 that don't, and we want to return a variant with a triple of the first two
 elements and the rest of the array or `Short with the whole array.
 
-```
+```graphix
 let a = [1, 2, 3, 4];
 a <- [1];
 a <- [5, 6];
@@ -200,7 +200,7 @@ Struct patterns, like tuple patterns, are pretty simple.
 
 Consider
 
-```
+```graphix
 let a = {x: 54, y: 23};
 a <- {x: 21, y: 88};
 a <- {x: 5, y: 42};
@@ -244,7 +244,7 @@ cases this program would compile, but it wouldn't work. You can easily fix this
 by naming the type, and for larger structs it's often worth it if you only need
 a few fields.
 
-```
+```graphix
 type T = {x: i64, y: i64};
 let a = {x: 54, y: 23};
 a <- {x: 21, y: 88};
@@ -280,7 +280,7 @@ The type alias just makes the code less verbose without changing the semantics.
 
 Variant patterns match variants. Consider,
 
-```
+```graphix
 let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
 v <- `Arg(42);
 v <- `MoreArg("hello world", 42);
@@ -302,7 +302,7 @@ eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
 
 Variant patterns enforce the same kinds of match case checking as all the other pattern types
 
-```
+```graphix
 let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
 v <- `Arg(42);
 v <- `MoreArg("hello world", 42);
@@ -338,7 +338,7 @@ multiple alternative patterns in one arm. I plan to add this at some point.
 
 Using select and connect together is one way to iterate in Graphix. Consider,
 
-```
+```graphix
 let a = [1, 2, 3, 4, 5];
 let len = 0;
 select a {

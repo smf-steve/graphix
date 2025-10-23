@@ -183,7 +183,7 @@ know ahead of time what interface the dynamically loaded module will have. We do
 this by defining a module signature. We can also define what the dynamically
 loaded module is allowed to reference, in order to prevent it from just calling
 any function it likes (aka it's sandboxed). Lets dive right in with an example,</p>
-<pre><code>// the module source, which we will publish in netidx
+<pre><code class="language-graphix">// the module source, which we will publish in netidx
 let path = "/local/foo";
 let source = "
     let add = |x| x + 1;
@@ -306,6 +306,7 @@ ignored, and will be inaccessible to the loading program.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

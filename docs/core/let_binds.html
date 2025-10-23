@@ -178,32 +178,32 @@
                         <h1 id="let-binds"><a class="header" href="#let-binds">Let Binds</a></h1>
 <p>Let bindings introduce names that are visible in their scope after they are
 defined.</p>
-<pre><code>let x = 2 + 2 + x; // compile error x isn't defined yet
+<pre><code class="language-graphix">let x = 2 + 2 + x; // compile error x isn't defined yet
 let y = x + 1 // ok
 </code></pre>
 <p>The same name can be used again in the same scope, it will shadow the previous
 value.</p>
-<pre><code>let x = 1;
+<pre><code class="language-graphix">let x = 1;
 let x = x + 1; // ok uses the previous definition
 x == 2 // true
 </code></pre>
 <p>You can annotate the binding with a type, which will then be enforced at compile
 time. Sometimes this is necessary in order to help type inference.</p>
-<pre><code>let x: Number = 1; // note x will be of type Number even though it's an i64
+<pre><code class="language-graphix">let x: Number = 1; // note x will be of type Number even though it's an i64
 let y: string = x + 1; // compile time type error
 </code></pre>
 <p>You can use patterns in let binds as long as they will always match.</p>
-<pre><code>let (x, y) = (3, "hello"); // binds x to 3 and y to "hello"
+<pre><code class="language-graphix">let (x, y) = (3, "hello"); // binds x to 3 and y to "hello"
 x == 3; // true
 y == "hello" // true
 </code></pre>
 <p>You can mix type annotations with pattern matches</p>
-<pre><code>let (x, y): (i64, string) = (3, "hello")
+<pre><code class="language-graphix">let (x, y): (i64, string) = (3, "hello")
 </code></pre>
 <p>You can assign documentation to a let bind using a <code>///</code> comment. Documentation
 will be displayed in the shell when the user tab completes and will be made
 available by the lsp server.</p>
-<pre><code>// this is a normal comment
+<pre><code class="language-graphix">// this is a normal comment
 let x = 1;
 /// this is documentation for y
 let y = 2;
@@ -255,6 +255,7 @@ let y = 2;
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

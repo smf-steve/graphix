@@ -6,7 +6,7 @@ cycle in the graph. Connect is the only graph operator in Graphix, it allows you
 to connect one part of the graph to another by name, causing the output of the
 right side to flow to the name on the left side. Consider,
 
-```
+```graphix
 let x = "off"
 x <- time::timer(duration:1.0s, false) ~ "on"
 print(x)
@@ -30,7 +30,7 @@ const("on") =====
 We can also build an infinite loop with connect. This won't crash the program,
 and it won't stop other parts of the program from being evaluated,
 
-```
+```graphix
 let x = 0;
 x <- x + 1;
 print(x)
@@ -56,7 +56,7 @@ When combined with other operations, specifically select, connect becomes a
 powerful general looping construct, and is the only way to write a loop in
 Graphix. A quick example,
 
-```
+```graphix
 let count = {
   let x = 0;
   select x {

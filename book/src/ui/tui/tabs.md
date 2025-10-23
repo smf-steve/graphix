@@ -4,7 +4,7 @@ The `tabs` widget creates a tabbed interface for organizing content into multipl
 
 ## API
 
-```
+```graphix
 mod tabs: sig {
     /// Creates a tabbed interface from an array of (title, content) tuples
     val tabs: fn(

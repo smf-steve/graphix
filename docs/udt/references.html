@@ -180,7 +180,7 @@
 pointer in C. This is kind of an odd thing to have in a very high level language
 like Graphix, but there are good reasons for it. Before we get into those lets
 see what one looks like.</p>
-<pre><code>〉let v = &amp;1
+<pre><code class="language-graphix">〉let v = &amp;1
 〉v
 -: &amp;i64
 727
@@ -190,7 +190,7 @@ any value. Note that the type isn't <code>i64</code> anymore but <code>&amp;i64<
 is a reference to an <code>i64</code>. Just like a function when printed the reference id
 is printed, not the value it refers to. We get the value that this reference 727
 refers to with the deref operator *.</p>
-<pre><code>〉*v
+<pre><code class="language-graphix">〉*v
 -: i64
 1
 </code></pre>
@@ -205,7 +205,7 @@ entire object (or at least a substantial part of it), and any function that
 depended on it would have no way of knowing what changed, and thus would have to
 do whatever huge amount of work it is supposed to do all over again. Consider a
 constrained GUI type with just labels and boxes,</p>
-<pre><code>type Gui = [
+<pre><code class="language-graphix">type Gui = [
   `Label(string),
   `Box(Array&lt;Gui&gt;)
 ]
@@ -217,7 +217,7 @@ then every time a label text changed anywhere we'd have to destroy all the
 widgets we had created and rebuild the entire UI from scratch. We'd like to be
 able to just update the label text that changed, and we can, with a small change
 to the type.</p>
-<pre><code>type Gui = [
+<pre><code class="language-graphix">type Gui = [
   `Label(&amp;string),
   `Box(Array&lt;Gui&gt;)
 ]
@@ -233,10 +233,10 @@ label, exactly what we wanted.</p>
 <p>Suppose we want to write a function that can update the value a passed in
 reference refers to, instead of the reference itself (which we can also do). We
 can do that with,</p>
-<pre><code>*r &lt;- "new value"
+<pre><code class="language-graphix">*r &lt;- "new value"
 </code></pre>
 <p>Consider,</p>
-<pre><code>let f = |x: &amp;i64| *x &lt;- once(*x) + 1;
+<pre><code class="language-graphix">let f = |x: &amp;i64| *x &lt;- once(*x) + 1;
 let v = 0;
 f(&amp;v);
 println("[v]")
@@ -295,6 +295,7 @@ even though the original bind of <code>v</code> isn't even in a scope that <code
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

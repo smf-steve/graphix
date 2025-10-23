@@ -193,12 +193,12 @@ m.gx  test.gx
 </code></pre>
 <p><code>test.gx</code> is the program that we will run, <code>m.gx</code> is a module it will load.</p>
 <p><code>test.gx</code></p>
-<pre><code>mod m;
+<pre><code class="language-graphix">mod m;
 
 m::hello
 </code></pre>
 <p><code>m.gx</code></p>
-<pre><code>let hello = "hello world"
+<pre><code class="language-graphix">let hello = "hello world"
 </code></pre>
 <p>running this we get,</p>
 <pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/tmp/ex/test.gx
@@ -275,15 +275,15 @@ file called <code>n.gx</code></p>
 ./test.gx
 </code></pre>
 <p><code>test.gx</code> is the root of the hierarchy</p>
-<pre><code>mod m;
+<pre><code class="language-graphix">mod m;
 
 m::n::hello
 </code></pre>
 <p><code>m/mod.gx</code> is the root of module <code>m</code></p>
-<pre><code>mod n
+<pre><code class="language-graphix">mod n
 </code></pre>
 <p><code>m/n.gx</code> is the <code>m::n</code> module</p>
-<pre><code>let hello = "hello world"
+<pre><code class="language-graphix">let hello = "hello world"
 </code></pre>
 <p>if we run the program we get,</p>
 <pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/tmp/ex1/test.gx
@@ -344,6 +344,7 @@ to replicate the above example we'd publish,</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

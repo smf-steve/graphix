@@ -4,7 +4,7 @@ The `scrollbar` widget adds a visual scrollbar indicator to scrollable content, 
 
 ## API
 
-```
+```graphix
 mod scrollbar: sig {
     /// Wraps a widget with a scrollbar indicator
     val scrollbar: fn(

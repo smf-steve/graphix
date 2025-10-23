@@ -1,9 +1,0 @@
-use tui;
-use tui::text;
-
-{
-    let position = 0;
-
-    // Example showing input handling structure - returns dummy text widget
-    text(&"Input handler example")
-}

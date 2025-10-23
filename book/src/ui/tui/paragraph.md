@@ -4,7 +4,7 @@ The `paragraph` widget displays multi-line text with automatic word wrapping and
 
 ## API
 
-```
+```graphix
 mod paragraph: sig {
     type ScrollPosition = {x: i64, y: i64};
 

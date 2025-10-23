@@ -6,7 +6,7 @@ the graph once, and then use it multiple times with different types each time.
 Most of the time this difference in semantics doesn't matter. Most of the time.
 Consider,
 
-```
+```graphix
 let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
 f(n, 1)
 ```
@@ -15,7 +15,7 @@ What happens here? Does `f` get "called" every time `n` updates? Does it only
 work for the first `n`? Does it explode? Lets transform it like the compiler
 would in order to understand it better,
 
-```
+```graphix
 let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 ```
@@ -27,7 +27,7 @@ on the graph runs as normal.
 Lets revisit an earlier example where we used select and connect to find the
 length of an array. Suppose we want to generalize that into a function,
 
-```
+```graphix
 let len = |a: Array<'a>| {
   let sum = 0;
   select a {
@@ -43,7 +43,7 @@ let len = |a: Array<'a>| {
 Lets just ignore the `'a` for now. Here we have a function that takes an array
 with any element type and returns it's length. Brilliant, lets call it,
 
-```
+```graphix
 let a = [1, 2, 3, 4, 5];
 len(a)
 ```
@@ -58,7 +58,7 @@ eric@katana ~ [1]> proj/graphix/target/debug/graphix ./test.gx
 That's the right answer. Are we done? Noooooooo. No we are not done. Lets see
 what happens if we do,
 
-```
+```graphix
 let a = [1, 2, 3, 4, 5];
 a <- [1, 2, 3];
 a <- [1, 2];
@@ -98,7 +98,7 @@ depart from that possibility. The general idea is, we need to queue updates to
 the outer `a` until we're done processing the current one. For that we have a
 builtin called `queue`, here is the correct implementation
 
-```
+```graphix
 let len = |a: Array<'a>| {
   let clock = once(null);
   let q = queue(#clock, a);

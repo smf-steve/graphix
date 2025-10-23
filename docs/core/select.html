@@ -187,7 +187,7 @@ ref(foo) =&gt; select | if foo &lt; 0 =&gt; ...
                    | otherwise =&gt; ...
 </code></pre>
 <p>is written as</p>
-<pre><code>select foo {
+<pre><code class="language-graphix">select foo {
   n if n &gt; 0 =&gt; ...,
   n if n &lt; 0 =&gt; ...,
   n =&gt; ...
@@ -205,7 +205,7 @@ until it is selected (and if it has netidx subscriptions or published values
 they will be unsubscribed and unpublished until it is selected again).</p>
 <h2 id="matching-types"><a class="header" href="#matching-types">Matching Types</a></h2>
 <p>Consider we want to select from a value of type <code>[Array&lt;i64&gt;, i64, null]</code>,</p>
-<pre><code>let x: [Array&lt;i64&gt;, i64, null] = null;
+<pre><code class="language-graphix">let x: [Array&lt;i64&gt;, i64, null] = null;
 x &lt;- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
 x &lt;- time::timer(duration:2.s, false) ~ 7;
 select x {
@@ -226,7 +226,7 @@ Caused by:
 <p>If you read this carefully you can see that the compiler is building up a set of
 types that we did match, and checking that it contains the argument type. This
 goes both ways, a match case that could never match is also an error.</p>
-<pre><code>let x: [Array&lt;i64&gt;, i64, null] = null;
+<pre><code class="language-graphix">let x: [Array&lt;i64&gt;, i64, null] = null;
 x &lt;- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
 x &lt;- time::timer(duration:2.s, false) ~ 7;
 select x {
@@ -253,7 +253,7 @@ match.</p>
 subtract from the argument type set. You are required to match without a guard
 at some point. No analysis is done to determine if your guard covers the entire
 range of a type.</p>
-<pre><code>let x: [Array&lt;i64&gt;, i64, null] = null;
+<pre><code class="language-graphix">let x: [Array&lt;i64&gt;, i64, null] = null;
 x &lt;- time::timer(duration:1.s, false) ~ [1, 2, 3, 4, 5];
 x &lt;- time::timer(duration:2.s, false) ~ 7;
 select x {
@@ -289,7 +289,7 @@ of the examples.</p>
 <p>Suppose we want to classify arrays that have at least two elements vs arrays
 that don't, and we want to return a variant with a triple of the first two
 elements and the rest of the array or `Short with the whole array.</p>
-<pre><code>let a = [1, 2, 3, 4];
+<pre><code class="language-graphix">let a = [1, 2, 3, 4];
 a &lt;- [1];
 a &lt;- [5, 6];
 select a {
@@ -336,7 +336,7 @@ it, or ignore it with <code>_</code>. e.g.</p>
 <li><code>{ x, .. }</code> you don't have to write every field</li>
 </ul>
 <p>Consider</p>
-<pre><code>let a = {x: 54, y: 23};
+<pre><code class="language-graphix">let a = {x: 54, y: 23};
 a &lt;- {x: 21, y: 88};
 a &lt;- {x: 5, y: 42};
 a &lt;- {x: 23, y: 32};
@@ -371,7 +371,7 @@ here, because the last match is exhaustive, if we didn't check for unused match
 cases this program would compile, but it wouldn't work. You can easily fix this
 by naming the type, and for larger structs it's often worth it if you only need
 a few fields.</p>
-<pre><code>type T = {x: i64, y: i64};
+<pre><code class="language-graphix">type T = {x: i64, y: i64};
 let a = {x: 54, y: 23};
 a &lt;- {x: 21, y: 88};
 a &lt;- {x: 5, y: 42};
@@ -397,7 +397,7 @@ of <code>a</code>. We could in fact write our patterns without the alias,</p>
 <p>The type alias just makes the code less verbose without changing the semantics.</p>
 <h3 id="variant-patterns"><a class="header" href="#variant-patterns">Variant Patterns</a></h3>
 <p>Variant patterns match variants. Consider,</p>
-<pre><code>let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
+<pre><code class="language-graphix">let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
 v &lt;- `Arg(42);
 v &lt;- `MoreArg("hello world", 42);
 select v {
@@ -413,7 +413,7 @@ select v {
 "it's big `MoreArg(\"hello world\", 42) with args \"hello world\" and 42"
 </code></pre>
 <p>Variant patterns enforce the same kinds of match case checking as all the other pattern types</p>
-<pre><code>let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
+<pre><code class="language-graphix">let v: [`Bare, `Arg(i64), `MoreArg(string, i64)] = `Bare;
 v &lt;- `Arg(42);
 v &lt;- `MoreArg("hello world", 42);
 select v {
@@ -438,7 +438,7 @@ the special pattern <code>_</code> means match anything and don't bind it to a v
 multiple alternative patterns in one arm. I plan to add this at some point.</p>
 <h2 id="select-and-connect"><a class="header" href="#select-and-connect">Select and Connect</a></h2>
 <p>Using select and connect together is one way to iterate in Graphix. Consider,</p>
-<pre><code>let a = [1, 2, 3, 4, 5];
+<pre><code class="language-graphix">let a = [1, 2, 3, 4, 5];
 let len = 0;
 select a {
   [x, tl..] =&gt; {
@@ -502,6 +502,7 @@ how we would do something with every element of an array (see <code>array::map</
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

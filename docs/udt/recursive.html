@@ -181,7 +181,7 @@ modeling tool for repeating structure. If you want to see an advanced example
 look no further than the <code>Tui</code> type in <code>graphix-shell</code>. Tui's are a set of
 mutually recursive types that define the tree structure of a UI. For a less
 overwhelming example consider a classic,</p>
-<pre><code>type List&lt;'a&gt; = [
+<pre><code class="language-graphix">type List&lt;'a&gt; = [
   `Cons('a, List&lt;'a&gt;),
   `Nil
 ]
@@ -191,7 +191,7 @@ is empty (nil), or it is a cons cell with a <code>'a</code> and a list, which it
 be either a cons cell or nil. If you've never heard the term "cons" and "nil"
 they come from lisp, the original functional programming language from the late
 1950s. Anyway, lets define some functions to work on our new list type,</p>
-<pre><code>type List&lt;'a&gt; = [
+<pre><code class="language-graphix">type List&lt;'a&gt; = [
   `Cons('a, List&lt;'a&gt;),
   `Nil
 ];
@@ -222,7 +222,7 @@ let rec fold = |l: List&lt;'a&gt;, init: 'b, f: fn('b, 'a) -&gt; 'b| -&gt; 'b se
 </code></pre>
 <p>You can probably see where functional programming gets it's (partly deserved)
 reputation for being elegant and simple. Lets try them out,</p>
-<pre><code>let l = cons(cons(cons(cons(`Nil, 1), 2), 3), 4);
+<pre><code class="language-graphix">let l = cons(cons(cons(cons(`Nil, 1), 2), 3), 4);
 l
 </code></pre>
 <p>running this we get,</p>
@@ -230,14 +230,14 @@ l
 `Cons(4, `Cons(3, `Cons(2, `Cons(1, `Nil))))
 </code></pre>
 <p>Lets try something more complex,</p>
-<pre><code>map(l, |x| x * x)
+<pre><code class="language-graphix">map(l, |x| x * x)
 </code></pre>
 <p>results in</p>
 <pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
 `Cons(16, `Cons(9, `Cons(4, `Cons(1, `Nil))))
 </code></pre>
 <p>as expected. Finally lets sum the list with fold,</p>
-<pre><code>fold(l, 0, |acc, v| acc + v)
+<pre><code class="language-graphix">fold(l, 0, |acc, v| acc + v)
 </code></pre>
 <p>and as expected we get,</p>
 <pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
@@ -293,6 +293,7 @@ only multiplies the power even further.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 

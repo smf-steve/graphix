@@ -181,7 +181,7 @@ structure, a file, or even sent across the network to another instance of the
 same program. Here we build a struct that maintains a count, and a function to
 operate on the count, returning a new struct of the same type with a different
 count.</p>
-<pre><code>type T = { count: i64, f: fn(T) -&gt; T };
+<pre><code class="language-graphix">type T = { count: i64, f: fn(T) -&gt; T };
 let t = { count: 0, f: |t: T| {t with count: t.count + 1} };
 (t.f)(t)
 </code></pre>
@@ -237,6 +237,7 @@ function.</p>
         <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
+        <script src="../theme/graphix-highlight.js"></script>
 
 
 
