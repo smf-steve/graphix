@@ -3,12 +3,8 @@
  * For use with highlight.js in mdbook
  */
 
-console.log('Graphix highlighter: Script loaded');
-
 (function() {
   'use strict';
-
-  console.log('Graphix highlighter: IIFE started');
 
   function graphix(hljs) {
     // Type parameter pattern: 'a, 'b, 'r, 'e, etc.
@@ -191,19 +187,14 @@ console.log('Graphix highlighter: Script loaded');
 
   // Register the language with highlight.js
   // This script is loaded via additional-js, so hljs is already available
-  console.log('Graphix highlighter: Checking for hljs...', typeof hljs);
-
   if (typeof hljs !== 'undefined') {
-    console.log('Graphix highlighter: hljs found, registering language');
     hljs.registerLanguage('graphix', graphix);
     hljs.registerLanguage('gx', graphix); // Also register the 'gx' alias
-    console.log('Graphix highlighter: Language registered');
 
     // Wait a bit for book.js to finish its initial highlighting pass
     // then re-highlight all graphix code blocks with our newly registered language
     setTimeout(function() {
       var blocks = document.querySelectorAll('code.language-graphix, code.language-gx');
-      console.log('Graphix highlighter: Found ' + blocks.length + ' code blocks to highlight');
 
       blocks.forEach(function(block) {
         // Clear any existing highlighting
@@ -211,19 +202,18 @@ console.log('Graphix highlighter: Script loaded');
         block.classList.remove('hljs');
         block.innerHTML = block.textContent; // Reset to plain text
 
-        // Apply our highlighting
-        hljs.highlightElement(block);
-        console.log('Highlighted block:', block);
+        // Apply our highlighting (use highlightBlock for older hljs versions)
+        if (typeof hljs.highlightElement === 'function') {
+          hljs.highlightElement(block);
+        } else if (typeof hljs.highlightBlock === 'function') {
+          hljs.highlightBlock(block);
+        }
       });
     }, 100);
-  } else {
-    console.error('Graphix highlighter: hljs not found!');
   }
 
   // Export for use in Node.js/CommonJS environments
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = graphix;
   }
-
-  console.log('Graphix highlighter: IIFE completed');
 })();
