@@ -1,6 +1,7 @@
 # Embedding and Extending Graphix
 
-Graphix is designed to be easy to embed in rust applications and extend with rust.
+There are multiple ways you can embed Graphix in your application and
+extend it with rust code.
 
 ## Writing built-in functions in rust
 
