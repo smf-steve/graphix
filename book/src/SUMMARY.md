@@ -2,8 +2,10 @@
 
 - [Intro to Graphix](./intro.md)
 - [Installing Graphix](./install.md)
+- [Getting Started](./getting_started.md)
 - [Core Language](./core/overview.md)
   - [Fundamental Types](./core/fundamental_types.md)
+  - [Reading Type Signatures](./core/reading_types.md)
   - [Let Binds](./core/let_binds.md)
   - [Connect](./core/connect.md)
   - [Blocks](./core/block.md)

@@ -12,7 +12,7 @@ use netidx::{
     subscriber::{Subscriber, SubscriberBuilder},
     InternalOnly,
 };
-use std::{path::PathBuf, str::FromStr, time::Duration};
+use std::{cell::OnceCell, path::PathBuf, str::FromStr, sync::OnceLock, time::Duration};
 
 #[derive(Debug, Clone, Copy)]
 enum RawFlag {
@@ -130,24 +130,40 @@ struct Params {
 
 impl Params {
     async fn get_pub_sub(&self) -> Result<(Publisher, Subscriber)> {
-        let cfg = match &self.config {
-            None => Config::load_default()?,
-            Some(p) => Config::load(p)?,
+        let res = async {
+            let cfg = match &self.config {
+                None => Config::load_default()?,
+                Some(p) => Config::load(p)?,
+            };
+            let auth = match &self.auth {
+                None => cfg.default_auth(),
+                Some(a) => a.clone(),
+            };
+            let publisher = PublisherBuilder::new(cfg.clone())
+                .bind_cfg(self.bind)
+                .build()
+                .await
+                .context("creating publisher")?;
+            let subscriber = SubscriberBuilder::new(cfg)
+                .desired_auth(auth)
+                .build()
+                .context("creating subscriber")?;
+            Ok::<_, anyhow::Error>((publisher, subscriber))
         };
-        let auth = match &self.auth {
-            None => cfg.default_auth(),
-            Some(a) => a.clone(),
-        };
-        let publisher = PublisherBuilder::new(cfg.clone())
-            .bind_cfg(self.bind)
-            .build()
-            .await
-            .context("creating publisher")?;
-        let subscriber = SubscriberBuilder::new(cfg)
-            .desired_auth(auth)
-            .build()
-            .context("creating subscriber")?;
-        Ok((publisher, subscriber))
+        match res.await {
+            Ok(ps) => Ok(ps),
+            Err(e) => {
+                eprintln!("netidx initialization failed {e:?}");
+                eprintln!("netidx will be process internal only");
+                eprintln!("to fix this see https://netidx.github.io/netidx-book");
+                static NETIDX: OnceLock<InternalOnly> = OnceLock::new();
+                if let Err(_) = NETIDX.set(InternalOnly::new().await?) {
+                    panic!("BUG: NETIDX static set multiple times")
+                }
+                let env = NETIDX.get().unwrap();
+                Ok((env.publisher().clone(), env.subscriber().clone()))
+            }
+        }
     }
 }
 

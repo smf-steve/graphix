@@ -239,6 +239,171 @@ directory. On linux you may need to install kerberos headers, as well as clang
 libs for gssapi to build properly (on linux). On debian/ubuntu install
 <code>libclang-dev</code>, and <code>libkrb5-dev</code>. On other distributions the names will be
 similar.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>Welcome to Graphix! This tutorial will get you up and running in about 10-15 minutes. You'll learn how to use the interactive REPL, write your first expressions, and create a simple reactive program.</p>
+<p>By the end of this guide, you'll understand the basics of Graphix's reactive dataflow model and be ready to explore the language in depth.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>Make sure you've already <a href="./install.html">installed Graphix</a>. You can verify your installation by running:</p>
+<pre><code class="language-bash">graphix --version
+</code></pre>
+<h2 id="starting-the-repl"><a class="header" href="#starting-the-repl">Starting the REPL</a></h2>
+<p>The Graphix shell provides an interactive Read-Eval-Print Loop (REPL) where you can experiment with the language. Start it by running <code>graphix</code> with no arguments:</p>
+<pre><code class="language-bash">graphix
+</code></pre>
+<p>You'll see a prompt that looks like this:</p>
+<pre><code>〉
+</code></pre>
+<p>The REPL evaluates expressions and shows you both the type and the value. The output format is:</p>
+<pre><code>-: Type
+value
+</code></pre>
+<p>Let's try it!</p>
+<h2 id="your-first-expressions"><a class="header" href="#your-first-expressions">Your First Expressions</a></h2>
+<h3 id="arithmetic"><a class="header" href="#arithmetic">Arithmetic</a></h3>
+<p>Type some simple arithmetic at the prompt:</p>
+<pre><code class="language-graphix">〉2 + 2
+-: i64
+4
+</code></pre>
+<p>The <code>-: i64</code> line tells you the result is a 64-bit integer, and <code>4</code> is
+the value. You may be wondering why you don't get the 〉 prompt after
+running this expression. This is because, being a dataflow language,
+expressions are pipelines that can output more than one value, they
+will run until you stop them by hitting ctrl-c. Do this now to get the
+prompt back.</p>
+<p>Since ctrl-c is used to stop the currently running pipeline, if you
+want to exit the REPL press ctrl-d.</p>
+<p>Try a more complex expression:</p>
+<pre><code class="language-graphix">〉10 * 5 + 3
+-: i64
+53
+〉2.5 * 4.0
+-: f64
+10.0
+</code></pre>
+<p>Notice that integer arithmetic produces <code>i64</code> (integer) results, while floating-point arithmetic produces <code>f64</code> (float) results.</p>
+<h3 id="strings"><a class="header" href="#strings">Strings</a></h3>
+<p>Strings are written in double quotes:</p>
+<pre><code class="language-graphix">〉"Hello, Graphix!"
+-: string
+"Hello, Graphix!"
+</code></pre>
+<h3 id="string-interpolation"><a class="header" href="#string-interpolation">String Interpolation</a></h3>
+<p>Graphix supports string interpolation using square brackets. Any expression inside <code>[...]</code> in a string will be evaluated and inserted:</p>
+<pre><code class="language-graphix">〉"The answer is [2 + 2]"
+-: string
+"The answer is 4"
+〉"2 + 2 = [2 + 2], and 10 * 5 = [10 * 5]"
+-: string
+"2 + 2 = 4, and 10 * 5 = 50"
+</code></pre>
+<p>This is incredibly useful for building dynamic strings!</p>
+<h2 id="variables-with-let-binds"><a class="header" href="#variables-with-let-binds">Variables with Let Binds</a></h2>
+<p>Use <code>let</code> to create named bindings:</p>
+<pre><code class="language-graphix">〉let x = 42
+〉x
+-: i64
+42
+〉let name = "World"
+〉"Hello, [name]!"
+-: string
+"Hello, World!"
+</code></pre>
+<p>You can reuse the same name to create a new binding (this is called shadowing):</p>
+<pre><code class="language-graphix">〉let x = 10
+〉let x = x + 5
+〉x
+-: i64
+15
+</code></pre>
+<p>The second <code>let x</code> creates a new binding that references the previous value of <code>x</code>.</p>
+<h2 id="functions"><a class="header" href="#functions">Functions</a></h2>
+<p>Functions in Graphix are first-class values. Create them with the lambda syntax <code>|args| body</code>:</p>
+<pre><code class="language-graphix">〉let double = |x| x * 2
+〉double(21)
+-: i64
+42
+</code></pre>
+<p>You can add type annotations if you want to be explicit:</p>
+<pre><code class="language-graphix">〉let add = |x: i64, y: i64| x + y
+〉add(10, 32)
+-: i64
+42
+</code></pre>
+<p>Functions can capture variables from their surrounding scope:</p>
+<pre><code class="language-graphix">〉let multiplier = 3
+〉let times_three = |x| x * multiplier
+〉times_three(14)
+-: i64
+42
+</code></pre>
+<h2 id="creating-your-first-file"><a class="header" href="#creating-your-first-file">Creating Your First File</a></h2>
+<p>Now let's write a real Graphix program! Create a file called <code>hello.gx</code> with this content:</p>
+<pre><code class="language-graphix">use tui;
+use tui::text;
+
+let count = 0;
+let timer = time::timer(duration:1.s, true);
+count &lt;- timer ~ (count + 1);
+
+text(&amp;"Count: [count]")
+</code></pre>
+<p>This program demonstrates Graphix's reactive nature:</p>
+<ul>
+<li>We start with <code>count = 0</code></li>
+<li><code>time::timer(duration:1.s, true)</code> creates a timer that fires every second</li>
+<li>The <code>~</code> operator samples the right side when the left side updates</li>
+<li><code>count &lt;- ...</code> schedules an update to <code>count</code> for the next cycle</li>
+<li>Every second, <code>count</code> increments and the text automatically updates</li>
+<li>The last expression creates a text widget displaying the count</li>
+</ul>
+<h2 id="running-your-file"><a class="header" href="#running-your-file">Running Your File</a></h2>
+<p>Run your program with:</p>
+<pre><code class="language-bash">graphix hello.gx
+</code></pre>
+<p>You'll see a terminal UI that displays the count increasing every second! The screen updates automatically because Graphix tracks dependencies and propagates changes through the dataflow graph.</p>
+<p>To stop the program, press <code>Ctrl+C</code>.</p>
+<h2 id="a-simpler-example"><a class="header" href="#a-simpler-example">A Simpler Example</a></h2>
+<p>If you want to see the reactive behavior without the TUI, try this simpler version (<code>counter.gx</code>):</p>
+<pre><code class="language-graphix">let count = 0;
+let timer = time::timer(duration:1.s, true);
+count &lt;- timer ~ (count + 1);
+"Count: [count]"
+</code></pre>
+<p>Run it with <code>graphix counter.gx</code> and you'll see the count printed to the console every second.</p>
+<h2 id="understanding-the-output"><a class="header" href="#understanding-the-output">Understanding the Output</a></h2>
+<p>In Graphix programs:</p>
+<ul>
+<li><strong>The last value</strong> is what determines what the shell displays
+<ul>
+<li>If it's a <code>Widget</code> type (like our text example), then it is rendered as a TUI</li>
+<li>Otherwise, the value is printed to the console every time it updates</li>
+</ul>
+</li>
+<li><strong>Use <code>print</code> or <code>println</code></strong> for explicit output during execution</li>
+<li><strong>Programs run forever</strong> unless they explicitly exit - they're reactive graphs that respond to events</li>
+</ul>
+<h3 id="the-dataflow-model"><a class="header" href="#the-dataflow-model">The Dataflow Model</a></h3>
+<p>The key insight: when <code>timer</code> updates, it triggers an update to <code>count</code> (via the <code>&lt;-</code> connect operator), which triggers an update to the text widget. The entire chain reacts automatically. You describe <em>what</em> should happen, not <em>when</em> or <em>how</em> to update things.</p>
+<p>This is very different from traditional imperative programming where you'd need loops and manual state management. In Graphix, you build a graph of dependencies and the runtime handles updates for you.</p>
+<h2 id="try-it-yourself"><a class="header" href="#try-it-yourself">Try It Yourself</a></h2>
+<p>Experiment with these ideas:</p>
+<ol>
+<li>Modify the counter to count down instead of up</li>
+<li>Make it count by 2s or 10s instead of 1s</li>
+<li>Change the timer interval to 0.5 seconds</li>
+<li>Display multiple values that update independently</li>
+<li>Try arithmetic on the count (show doubled value, squared value, etc.)</li>
+</ol>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<p>Now that you've experienced Graphix's reactive nature, you're ready to dive deeper:</p>
+<ul>
+<li><strong><a href="./core/overview.html">Core Language</a></strong> - Learn the fundamental language constructs</li>
+<li><strong><a href="./functions/overview.html">Functions</a></strong> - Master functions, closures, and higher-order programming</li>
+<li><strong><a href="./ui/overview.html">Building UIs</a></strong> - Create rich terminal user interfaces</li>
+<li><strong><a href="./stdlib/overview.html">Standard Library</a></strong> - Explore built-in functions and modules</li>
+</ul>
+<p>The best way to learn Graphix is to experiment! Keep the REPL open as you read through the documentation and try out the examples. Every code snippet in this book is designed to be runnable.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="core-language"><a class="header" href="#core-language">Core Language</a></h1>
 <p>This section documents the core language constructs in Graphix.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fundamental-types"><a class="header" href="#fundamental-types">Fundamental Types</a></h1>
@@ -359,7 +524,7 @@ supported, <code>"this is \" a string with a quote and a \n"</code>. Non printab
 characters such as newline will be escaped by default when strings are printed
 to the console, you can use <code>print</code> to print the raw string including control
 characters.</p>
-<h3 id="string-interpolation"><a class="header" href="#string-interpolation">String Interpolation</a></h3>
+<h3 id="string-interpolation-1"><a class="header" href="#string-interpolation-1">String Interpolation</a></h3>
 <p>String literals can contain expressions that will be evaluated and joined to the string,
 such expressions are surrounded by unescaped <code>[]</code> in the string. For example,</p>
 <pre><code>〉let row = 1
@@ -495,6 +660,253 @@ using <code>e.0</code> e.g.,</p>
 </code></pre>
 <p>More information about dealing with errors is available in the section on error
 handling.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="reading-type-signatures"><a class="header" href="#reading-type-signatures">Reading Type Signatures</a></h1>
+<p>Throughout this book and in the standard library documentation, you'll encounter function type signatures. This guide will help you understand what they mean. Don't try to memorize everything here - just use this as a reference when you encounter unfamiliar notation.</p>
+<h2 id="basic-function-signatures"><a class="header" href="#basic-function-signatures">Basic Function Signatures</a></h2>
+<p>The simplest function signature looks like this:</p>
+<pre><code class="language-graphix">val double: fn(i64) -&gt; i64
+</code></pre>
+<p>This breaks down into:</p>
+<ul>
+<li><code>fn(...)</code> - this is a function</li>
+<li><code>i64</code> - takes one parameter of type i64 (64-bit integer)</li>
+<li><code>-&gt; i64</code> - returns a value of type i64</li>
+</ul>
+<p>Another example:</p>
+<pre><code class="language-graphix">val concat: fn(string, string) -&gt; string
+</code></pre>
+<p>Takes two strings, returns a string.</p>
+<h2 id="type-parameters-generics"><a class="header" href="#type-parameters-generics">Type Parameters (Generics)</a></h2>
+<p>Type parameters (like generics in other languages) are written with a single quote followed by a letter: <code>'a</code>, <code>'b</code>, <code>'e</code>, etc.</p>
+<h3 id="simple-type-parameters"><a class="header" href="#simple-type-parameters">Simple Type Parameters</a></h3>
+<pre><code class="language-graphix">val identity: fn('a) -&gt; 'a
+</code></pre>
+<p>This means: "takes a value of any type <code>'a</code> and returns a value of the same type <code>'a</code>". The <code>identity</code> function could work with integers, strings, or any other type.</p>
+<pre><code class="language-graphix">val first: fn(Array&lt;'a&gt;) -&gt; 'a
+</code></pre>
+<p>This means: "takes an array of any type <code>'a</code> and returns a single element of type <code>'a</code>". If you pass an <code>Array&lt;string&gt;</code>, you get back a <code>string</code>. If you pass an <code>Array&lt;i64&gt;</code>, you get back an <code>i64</code>.</p>
+<h3 id="multiple-type-parameters"><a class="header" href="#multiple-type-parameters">Multiple Type Parameters</a></h3>
+<pre><code class="language-graphix">val map: fn(Array&lt;'a&gt;, fn('a) -&gt; 'b) -&gt; Array&lt;'b&gt;
+</code></pre>
+<p>This function takes:</p>
+<ul>
+<li>An array of type <code>'a</code></li>
+<li>A function that transforms <code>'a</code> into <code>'b</code></li>
+<li>Returns an array of type <code>'b</code></li>
+</ul>
+<p>The types <code>'a</code> and <code>'b</code> can be the same or different.</p>
+<h3 id="type-constraints"><a class="header" href="#type-constraints">Type Constraints</a></h3>
+<p>Sometimes type parameters have constraints:</p>
+<pre><code class="language-graphix">val sum: fn(@args: Number) -&gt; Number
+</code></pre>
+<p>Here, the arguments must be of type <code>Number</code>, which is a set containing all numeric types (<code>i32</code>, <code>i64</code>, <code>f64</code>, etc.). See <a href="core/./fundamental_types.html">Fundamental Types</a> for the built-in type sets.</p>
+<h2 id="optional-labeled-arguments"><a class="header" href="#optional-labeled-arguments">Optional Labeled Arguments</a></h2>
+<p>Arguments prefixed with <code>?#</code> are optional and labeled:</p>
+<pre><code class="language-graphix">val text: fn(?#style: Style, string) -&gt; Widget
+</code></pre>
+<p>This function can be called in two ways:</p>
+<pre><code class="language-graphix">text("Hello")                           // style uses default value
+text(#style: my_style, "Hello")        // style is specified
+</code></pre>
+<p>When an optional argument has a default value, it's shown like this:</p>
+<pre><code class="language-graphix">val repeat: fn(?#count: i64 = 10, string) -&gt; string
+</code></pre>
+<p>If you don't provide <code>#count</code>, it defaults to <code>10</code>.</p>
+<h3 id="order-flexibility"><a class="header" href="#order-flexibility">Order Flexibility</a></h3>
+<p>Labeled arguments can be provided in any order, but must come before positional arguments:</p>
+<pre><code class="language-graphix">val widget: fn(?#width: i64, ?#height: i64, string) -&gt; Widget
+
+// All of these are valid:
+widget("text")
+widget(#width: 100, "text")
+widget(#height: 50, #width: 100, "text")
+widget(#height: 50, "text")
+</code></pre>
+<h2 id="required-labeled-arguments"><a class="header" href="#required-labeled-arguments">Required Labeled Arguments</a></h2>
+<p>Arguments with <code>#</code> but no <code>?</code> are required but labeled:</p>
+<pre><code class="language-graphix">val input_handler: fn(
+    #handle: fn(Event) -&gt; Response,
+    &amp;Widget
+) -&gt; Widget
+</code></pre>
+<p>You must provide <code>#handle</code>, but it doesn't have to be in the first position. However, it must come before the unlabeled <code>&amp;Widget</code> argument:</p>
+<pre><code class="language-graphix">input_handler(#handle: my_handler, &amp;my_widget)
+</code></pre>
+<h2 id="variadic-arguments"><a class="header" href="#variadic-arguments">Variadic Arguments</a></h2>
+<p>The <code>@args</code> notation means a function accepts any number of arguments:</p>
+<pre><code class="language-graphix">val sum: fn(@args: i64) -&gt; i64
+</code></pre>
+<p>You can call this with any number of integers:</p>
+<pre><code class="language-graphix">sum(1, 2, 3)
+sum(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+</code></pre>
+<h3 id="variadic-with-required-arguments"><a class="header" href="#variadic-with-required-arguments">Variadic with Required Arguments</a></h3>
+<p>Sometimes a function requires at least one argument:</p>
+<pre><code class="language-graphix">val max: fn('a, @args: 'a) -&gt; 'a
+</code></pre>
+<p>The first <code>'a</code> is required, then any number of additional arguments of the same type.</p>
+<h2 id="reference-types"><a class="header" href="#reference-types">Reference Types</a></h2>
+<p>An ampersand <code>&amp;</code> before a type means "reference to" rather than the value itself:</p>
+<pre><code class="language-graphix">val text: fn(&amp;string) -&gt; Widget
+</code></pre>
+<p>This takes a <em>reference</em> to a string, not the string value directly. References are important for:</p>
+<ol>
+<li><strong>Efficiency</strong> - avoid copying large data structures</li>
+<li><strong>Reactivity</strong> - updating a referenced value triggers updates without rebuilding entire structures</li>
+</ol>
+<p>Create a reference with <code>&amp;</code> and dereference (get the value) with <code>*</code>:</p>
+<pre><code class="language-graphix">let s = "Hello";
+let r = &amp;s;      // r is a reference to s
+let v = *r;      // v is the value "Hello"
+</code></pre>
+<p>In function signatures, <code>&amp;T</code> in a parameter position means the function expects a reference. In widget examples, you'll often see:</p>
+<pre><code class="language-graphix">block(#title: &amp;line("My Title"), &amp;my_widget)
+</code></pre>
+<p>The <code>&amp;line(...)</code> creates a reference to the line, and <code>&amp;my_widget</code> is a reference to the widget.</p>
+<p>For a deeper dive, see <a href="core/../udt/references.html">References</a>.</p>
+<h2 id="error-types-throws"><a class="header" href="#error-types-throws">Error Types (throws)</a></h2>
+<p>When a function can throw errors, the signature includes <code>throws</code>:</p>
+<pre><code class="language-graphix">val divide: fn(i64, i64) -&gt; i64 throws `DivideByZero
+</code></pre>
+<p>This function returns <code>i64</code> if successful, but might throw a <code>DivideByZero</code> error.</p>
+<h3 id="multiple-error-types"><a class="header" href="#multiple-error-types">Multiple Error Types</a></h3>
+<p>A function can throw multiple error types:</p>
+<pre><code class="language-graphix">val parse_and_divide: fn(string, string) -&gt; i64 throws [`ParseError, `DivideByZero]
+</code></pre>
+<h3 id="generic-error-types"><a class="header" href="#generic-error-types">Generic Error Types</a></h3>
+<p>Often error types are parameterized:</p>
+<pre><code class="language-graphix">val filter: fn('a, fn('a) -&gt; bool throws 'e) -&gt; 'a throws 'e
+</code></pre>
+<p>This means: the <code>filter</code> function itself doesn't throw errors, but if the function you pass to it throws errors of type <code>'e</code>, then <code>filter</code> will also throw those same errors.</p>
+<h3 id="result-type"><a class="header" href="#result-type">Result Type</a></h3>
+<p>The <code>Result</code> type is a convenient way to represent success or error:</p>
+<pre><code class="language-graphix">type Result&lt;'r, 'e&gt; = ['r, Error&lt;'e&gt;]
+</code></pre>
+<p>So a function signature like:</p>
+<pre><code class="language-graphix">val parse: fn(string) -&gt; Result&lt;i64, `ParseError&gt;
+</code></pre>
+<p>Returns either an <code>i64</code> (success) or an <code>Error&lt;</code>ParseError&gt;` (failure).</p>
+<p>See <a href="core/./error.html">Error Handling</a> for complete details on working with errors.</p>
+<h2 id="set-types"><a class="header" href="#set-types">Set Types</a></h2>
+<p>Square brackets <code>[...]</code> denote a set type - the value can be any one of the types in the set:</p>
+<pre><code class="language-graphix">val process: fn([i64, string]) -&gt; string
+</code></pre>
+<p>This function accepts either an <code>i64</code> or a <code>string</code>, and returns a <code>string</code>.</p>
+<h3 id="optional-types-nullable"><a class="header" href="#optional-types-nullable">Optional Types (Nullable)</a></h3>
+<p>The pattern <code>[T, null]</code> means "T or nothing":</p>
+<pre><code class="language-graphix">val find: fn(Array&lt;string&gt;, string) -&gt; [string, null]
+</code></pre>
+<p>Returns a string if found, <code>null</code> if not found. This is aliased as <code>Option&lt;T&gt;</code>:</p>
+<pre><code class="language-graphix">type Option&lt;'a&gt; = ['a, null]
+val find: fn(Array&lt;string&gt;, string) -&gt; Option&lt;string&gt;
+</code></pre>
+<h3 id="nested-sets"><a class="header" href="#nested-sets">Nested Sets</a></h3>
+<p>Types can nest arbitrarily:</p>
+<pre><code class="language-graphix">val sum: fn(@args: [Number, Array&lt;[Number, Array&lt;Number&gt;]&gt;]) -&gt; Number
+</code></pre>
+<p>This accepts numbers, arrays of numbers, or even arrays of (numbers or arrays of numbers). The flexibility allows you to call:</p>
+<pre><code class="language-graphix">sum(1, 2, 3)
+sum([1, 2], [3, 4])
+sum(1, [2, 3], 4)
+</code></pre>
+<h2 id="putting-it-all-together"><a class="header" href="#putting-it-all-together">Putting It All Together</a></h2>
+<p>Let's decode some complex real-world signatures:</p>
+<h3 id="example-1-tui-table-widget"><a class="header" href="#example-1-tui-table-widget">Example 1: TUI Table Widget</a></h3>
+<pre><code class="language-graphix">val table: fn(
+    ?#header: &amp;Row,
+    ?#selected: &amp;i64,
+    ?#row_highlight_style: &amp;Style,
+    ?#highlight_symbol: &amp;string,
+    &amp;Array&lt;&amp;Row&gt;
+) -&gt; Widget
+</code></pre>
+<p>Breaking it down:</p>
+<ul>
+<li><code>?#header: &amp;Row</code> - optional labeled argument, reference to a Row</li>
+<li><code>?#selected: &amp;i64</code> - optional labeled argument, reference to selected index</li>
+<li><code>?#row_highlight_style: &amp;Style</code> - optional labeled argument, reference to a Style</li>
+<li><code>?#highlight_symbol: &amp;string</code> - optional labeled argument, reference to symbol string</li>
+<li><code>&amp;Array&lt;&amp;Row&gt;</code> - required unlabeled argument, reference to array of row references</li>
+<li><code>-&gt; Widget</code> - returns a Widget</li>
+</ul>
+<p>All parameters are references because the table needs to react to changes without rebuilding.</p>
+<h3 id="example-2-filter-function"><a class="header" href="#example-2-filter-function">Example 2: Filter Function</a></h3>
+<pre><code class="language-graphix">val filter: fn('a, fn('a) -&gt; bool throws 'e) -&gt; 'a throws 'e
+</code></pre>
+<p>Breaking it down:</p>
+<ul>
+<li><code>'a</code> - a value of any type</li>
+<li><code>fn('a) -&gt; bool throws 'e</code> - a predicate function that:
+<ul>
+<li>Takes the same type <code>'a</code></li>
+<li>Returns bool</li>
+<li>Might throw errors of type <code>'e</code></li>
+</ul>
+</li>
+<li><code>-&gt; 'a</code> - returns the same type as input</li>
+<li><code>throws 'e</code> - propagates any errors from the predicate</li>
+</ul>
+<h3 id="example-3-queue-function"><a class="header" href="#example-3-queue-function">Example 3: Queue Function</a></h3>
+<pre><code class="language-graphix">val queue: fn(#clock: Any, 'a) -&gt; 'a
+</code></pre>
+<p>Breaking it down:</p>
+<ul>
+<li><code>#clock: Any</code> - required labeled argument of any type (typically an event source)</li>
+<li><code>'a</code> - a value of any type</li>
+<li><code>-&gt; 'a</code> - returns values of the same type</li>
+</ul>
+<p>Call it like: <code>queue(#clock: my_timer, my_value)</code></p>
+<h3 id="example-4-array-map"><a class="header" href="#example-4-array-map">Example 4: Array Map</a></h3>
+<pre><code class="language-graphix">val map: fn(Array&lt;'a&gt;, fn('a) -&gt; 'b throws 'e) -&gt; Array&lt;'b&gt; throws 'e
+</code></pre>
+<p>Breaking it down:</p>
+<ul>
+<li><code>Array&lt;'a&gt;</code> - array of any type <code>'a</code></li>
+<li><code>fn('a) -&gt; 'b throws 'e</code> - transformation function that:
+<ul>
+<li>Takes type <code>'a</code> (array element type)</li>
+<li>Returns type <code>'b</code> (result element type)</li>
+<li>Might throw errors of type <code>'e</code></li>
+</ul>
+</li>
+<li><code>-&gt; Array&lt;'b&gt;</code> - returns array of transformed type</li>
+<li><code>throws 'e</code> - propagates errors from the transform function</li>
+</ul>
+<h2 id="quick-reference-table"><a class="header" href="#quick-reference-table">Quick Reference Table</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Notation</th><th>Meaning</th><th>Example</th></tr></thead><tbody>
+<tr><td><code>'a</code>, <code>'b</code>, <code>'e</code></td><td>Type parameter (generic)</td><td><code>fn('a) -&gt; 'a</code></td></tr>
+<tr><td><code>?#param</code></td><td>Optional labeled argument</td><td><code>fn(?#x: i64 = 0)</code></td></tr>
+<tr><td><code>#param</code></td><td>Required labeled argument</td><td><code>fn(#x: i64)</code></td></tr>
+<tr><td><code>@args</code></td><td>Variadic (any number of args)</td><td><code>fn(@args: i64)</code></td></tr>
+<tr><td><code>&amp;T</code></td><td>Reference to type T</td><td><code>fn(&amp;string)</code></td></tr>
+<tr><td><code>throws 'e</code></td><td>Can throw errors of type 'e</td><td><code>fn() -&gt; i64 throws 'e</code></td></tr>
+<tr><td><code>[T, U]</code></td><td>T or U (set/union type)</td><td><code>[i64, null]</code></td></tr>
+<tr><td><code>-&gt;</code></td><td>Returns</td><td><code>fn(i64) -&gt; string</code></td></tr>
+<tr><td><code>Array&lt;T&gt;</code></td><td>Array of T</td><td><code>Array&lt;string&gt;</code></td></tr>
+<tr><td><code>Map&lt;K, V&gt;</code></td><td>Map with keys K, values V</td><td><code>Map&lt;string, i64&gt;</code></td></tr>
+<tr><td><code>Error&lt;'e&gt;</code></td><td>Error containing type 'e</td><td><code>Error&lt;\</code>ParseError&gt;`</td></tr>
+<tr><td><code>Result&lt;'r, 'e&gt;</code></td><td>Success 'r or Error 'e</td><td><code>Result&lt;i64, \</code>Err&gt;`</td></tr>
+<tr><td><code>Option&lt;'a&gt;</code></td><td>Value 'a or null</td><td><code>Option&lt;string&gt;</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="tips-for-reading-signatures"><a class="header" href="#tips-for-reading-signatures">Tips for Reading Signatures</a></h2>
+<ol>
+<li><strong>Start with the basics</strong> - identify parameters and return type</li>
+<li><strong>Look for type parameters</strong> - they tell you about genericity</li>
+<li><strong>Check for optional/labeled args</strong> - they indicate flexibility in calling</li>
+<li><strong>Note reference types</strong> - important for reactivity</li>
+<li><strong>Watch for throws</strong> - you'll need error handling</li>
+<li><strong>Don't panic at complexity</strong> - break it down piece by piece</li>
+</ol>
+<p>Remember: you don't need to memorize these patterns. As you use Graphix, you'll naturally become familiar with common signatures. This guide is here whenever you need a reminder!</p>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="core/./fundamental_types.html">Fundamental Types</a> - Built-in types and type sets</li>
+<li><a href="core/../functions/overview.html">Functions</a> - Creating and using functions</li>
+<li><a href="core/./error.html">Error Handling</a> - Working with errors and the throws system</li>
+<li><a href="core/../udt/references.html">References</a> - Deep dive into reference types</li>
+<li><a href="core/../udt/overview.html">User Defined Types</a> - Structural typing and custom types</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="let-binds"><a class="header" href="#let-binds">Let Binds</a></h1>
 <p>Let bindings introduce names that are visible in their scope after they are
 defined.</p>
@@ -1055,7 +1467,7 @@ anything, otherwise it returns nothing. This is a concise way of writing,</p>
 <p>can instead be written as,</p>
 <pre><code>might_fail(1, 2, 3)$
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="functions"><a class="header" href="#functions">Functions</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="functions-1"><a class="header" href="#functions-1">Functions</a></h1>
 <p>Functions are first class values. They can be stored in variables, in data
 structures, and they can be passed around to other functions. Etc. They are
 defined with the syntax,</p>
@@ -2518,7 +2930,7 @@ val shuffle: fn(Array&lt;'a&gt;) -&gt; Array&lt;'a&gt;;
 <li><strong>Mobile UIs</strong>: Touch-based interfaces with gesture handling</li>
 </ul>
 <p>The core concepts of reactive data flow, component composition, and declarative styling will apply across all UI targets.</p>
-<h2 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h2>
+<h2 id="getting-started-1"><a class="header" href="#getting-started-1">Getting Started</a></h2>
 <p>The Graphix shell will automatically build a UI if the last value in your module has type <code>tui::Widget</code> (or in the future <code>gui::Widget</code>). You can try out the examples in this book by pasting them in a file, or even typing (the short ones) into the interactive REPL. Each TUI component has detailed documentation in the following sections, including complete API references and practical examples.</p>
 <p>You can also study and run the examples in <code>graphix-shell/examples/</code>. Start with simple components like <code>text.gx</code> and <code>block.gx</code>, then work your way up to more complex examples like <code>browser.gx</code> and <code>table-advanced.gx</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="terminal-user-interfaces-tuis"><a class="header" href="#terminal-user-interfaces-tuis">Terminal User Interfaces (TUIs)</a></h1>
@@ -2773,7 +3185,7 @@ style(#add_modifier: [`Bold, `Italic])
 <li><strong>Bold</strong>: Universally supported</li>
 <li><strong>Italic</strong>: Support varies; some terminals display as inverse or underline</li>
 </ul>
-<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<h2 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/text.html">text</a> - Using styles with text, spans, and lines</li>
 <li><a href="ui/tui/block.html">block</a> - Styling block borders and titles</li>
@@ -2893,7 +3305,7 @@ let bars = [
 bar_chart(&amp;[bar_group(bars)])
 </code></pre>
 <p><img src="ui/tui/./media/barchart_colored.png" alt="Colored Bar Chart" /></p>
-<h2 id="see-also-1"><a class="header" href="#see-also-1">See Also</a></h2>
+<h2 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/chart.html">chart</a> - For continuous data visualization</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For compact trend display</li>
@@ -2982,7 +3394,7 @@ block(
 )
 </code></pre>
 <p><img src="ui/tui/./media/block_dynamic_title.png" alt="Block With Dynamic Title" /></p>
-<h2 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h2>
+<h2 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/layout.html">layout</a> - For arranging multiple blocks</li>
 <li><a href="ui/tui/paragraph.html">paragraph</a> - Common content for blocks</li>
@@ -3062,7 +3474,7 @@ input_handler(
 )
 </code></pre>
 <p><img src="ui/tui/./media/browser_navigation.gif" alt="Browser With Navigation" /></p>
-<h2 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h2>
+<h2 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/list.html">list</a> - For simpler selection interfaces</li>
 <li><a href="ui/tui/table.html">table</a> - For tabular data display</li>
@@ -3161,7 +3573,7 @@ let events = [event1, event2, event3, event4];
 calendar(#events: &amp;events, &amp;date(2024, 5, 1))
 </code></pre>
 <p><img src="ui/tui/media/calendar_typed.png" alt="Calendar Typed" /></p>
-<h2 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h2>
+<h2 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/table.html">table</a> - For tabular date-based data</li>
 <li><a href="ui/tui/list.html">list</a> - For event lists</li>
@@ -3302,7 +3714,7 @@ canvas(
 <li>Y increases upward</li>
 <li>Shapes outside bounds are clipped</li>
 </ul>
-<h2 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h2>
+<h2 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/chart.html">chart</a> - For pre-built line charts</li>
 <li><a href="ui/tui/barchart.html">barchart</a> - For bar-based visualizations</li>
@@ -3464,7 +3876,7 @@ chart(
 <li><strong>Braille</strong>: Smoothest curves, medium performance, best visual quality</li>
 <li><strong>Block</strong>: High contrast, medium performance</li>
 </ul>
-<h2 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h2>
+<h2 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/barchart.html">barchart</a> - For categorical data visualization</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For compact inline charts</li>
@@ -3588,7 +4000,7 @@ text(&amp;[
 <li><code>SlowBlink</code>, <code>RapidBlink</code> (terminal support varies)</li>
 <li><code>Reversed</code>, <code>Hidden</code></li>
 </ul>
-<h2 id="see-also-7"><a class="header" href="#see-also-7">See Also</a></h2>
+<h2 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/paragraph.html">paragraph</a> - For wrapped and scrollable text</li>
 <li><a href="ui/tui/block.html">block</a> - For containing text with borders</li>
@@ -3700,7 +4112,7 @@ paragraph(
 <p><img src="ui/tui/./media/paragraph_centered.png" alt="Paragraph Centered" /></p>
 <h2 id="word-wrapping"><a class="header" href="#word-wrapping">Word Wrapping</a></h2>
 <p>The paragraph widget automatically wraps long lines to fit the available width. Word boundaries are respected, so words won't be split in the middle unless they're longer than the available width.</p>
-<h2 id="see-also-8"><a class="header" href="#see-also-8">See Also</a></h2>
+<h2 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/text.html">text</a> - For creating styled text content</li>
 <li><a href="ui/tui/scroll.html">scrollbar</a> - For adding scrollbars</li>
@@ -3792,7 +4204,7 @@ gauge(
 )
 </code></pre>
 <p><img src="ui/tui/./media/gauge_resource.png" alt="Resource Usage Gauge" /></p>
-<h2 id="see-also-9"><a class="header" href="#see-also-9">See Also</a></h2>
+<h2 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/linegauge.html">linegauge</a> - For horizontal line-based gauges</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For historical trend display</li>
@@ -3918,7 +4330,7 @@ layout(
 <li>You have more vertical space available</li>
 <li>You want larger, more prominent indicators</li>
 </ul>
-<h2 id="see-also-10"><a class="header" href="#see-also-10">See Also</a></h2>
+<h2 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/gauge.html">gauge</a> - For block-style progress indicators</li>
 <li><a href="ui/tui/sparkline.html">sparkline</a> - For historical trend display</li>
@@ -4256,7 +4668,7 @@ select k.code {
     _ =&gt; `Continue
 }
 </code></pre>
-<h2 id="see-also-11"><a class="header" href="#see-also-11">See Also</a></h2>
+<h2 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/layout.html">layout</a> - Focus management with layouts</li>
 <li><a href="ui/tui/list.html">list</a> - Interactive list widget</li>
@@ -4416,7 +4828,7 @@ layout(
 )
 </code></pre>
 <p><img src="ui/tui/./media/layout_header_footer.png" alt="Layout With Header and Footer" /></p>
-<h2 id="see-also-12"><a class="header" href="#see-also-12">See Also</a></h2>
+<h2 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/block.html">block</a> - Common child widget for layouts</li>
 <li><a href="ui/tui/../overview.html#input-handling">input_handler</a> - For handling focus changes</li>
@@ -4543,7 +4955,7 @@ let items = [
 list(#selected: &amp;0, &amp;items)
 </code></pre>
 <p><img src="ui/tui/./media/list_styled.png" alt="Styled List" /></p>
-<h2 id="see-also-13"><a class="header" href="#see-also-13">See Also</a></h2>
+<h2 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/table.html">table</a> - For multi-column structured data</li>
 <li><a href="ui/tui/scroll.html">scrollbar</a> - For adding scrollbars</li>
@@ -4676,7 +5088,7 @@ scrollbar(
 )
 </code></pre>
 <p><img src="ui/tui/./media/scroll_list.png" alt="Scrollable List" /></p>
-<h2 id="see-also-14"><a class="header" href="#see-also-14">See Also</a></h2>
+<h2 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/paragraph.html">paragraph</a> - For scrollable text content</li>
 <li><a href="ui/tui/list.html">list</a> - For scrollable lists</li>
@@ -4813,7 +5225,7 @@ netidx publisher
 <li>Compact data visualization in lists or tables</li>
 <li>Rate of change visualization</li>
 </ul>
-<h2 id="see-also-15"><a class="header" href="#see-also-15">See Also</a></h2>
+<h2 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/chart.html">chart</a> - For detailed charts with axes</li>
 <li><a href="ui/tui/gauge.html">gauge</a> - For single current value display</li>
@@ -5030,7 +5442,7 @@ let header = row([cell(line("PID")), cell(line("Name")), cell(line("CPU"))]);
 table(#header: &amp;header, &amp;rows)
 </code></pre>
 <p><img src="ui/tui/./media/table_realtime.gif" alt="Realtime Table" /></p>
-<h2 id="see-also-16"><a class="header" href="#see-also-16">See Also</a></h2>
+<h2 id="see-also-17"><a class="header" href="#see-also-17">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/list.html">list</a> - For simpler single-column selection</li>
 <li><a href="ui/tui/scroll.html">scrollbar</a> - For adding scrollbars</li>
@@ -5189,7 +5601,7 @@ tabs(&amp;[
 <li><code>Tab</code> - Cycle forward through tabs</li>
 <li>Number keys - Jump directly to tab</li>
 </ul>
-<h2 id="see-also-17"><a class="header" href="#see-also-17">See Also</a></h2>
+<h2 id="see-also-18"><a class="header" href="#see-also-18">See Also</a></h2>
 <ul>
 <li><a href="ui/tui/block.html">block</a> - For containing tabs with borders</li>
 <li><a href="ui/tui/list.html">list</a> - Common content for tabs</li>
