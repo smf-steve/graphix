@@ -12,7 +12,7 @@ use netidx::{
     subscriber::{Subscriber, SubscriberBuilder},
     InternalOnly,
 };
-use std::{cell::OnceCell, path::PathBuf, str::FromStr, sync::OnceLock, time::Duration};
+use std::{path::PathBuf, str::FromStr, sync::OnceLock, time::Duration};
 
 #[derive(Debug, Clone, Copy)]
 enum RawFlag {
