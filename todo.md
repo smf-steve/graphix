@@ -27,6 +27,15 @@ This document tracks improvements and additions needed for both the Graphix comp
   - Tests to verify correct behavior
   - `book/src/stdlib/core.md` (documentation updates after fixes)
 
+## Standardize Queuing
+- [ ] remove queueing from core::filter
+- [ ] implement a queuing adapter `fn('a, fn('a) -> 'b) -> 'b` that
+      automatically queues input in front of f until f generates an
+      output
+
+## Eliminate Double Typecheck at call sites
+- [ ] implement Clone for nodes so we can instantiate the node tree of a function and just clone it
+
 ## Medium Priority
 
 ### Module System Completeness
