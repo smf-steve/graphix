@@ -182,10 +182,21 @@ instructions on how to do that for your platform. Once you have that set up, you
 can just run</p>
 <p><code>cargo install graphix-shell</code></p>
 <p>That should build the <code>graphix</code> command and install it in your
-~/.cargo/bin directory. On linux you need to install kerberos headers,
-as well as clang libs for gssapi to build properly. On debian/ubuntu
-install <code>libclang-dev</code>, and <code>libkrb5-dev</code>. On other distributions the
-names will be similar.</p>
+~/.cargo/bin directory. Windows and Mac OS should work out of the box
+as long as you have the prerequisites for rust installed.</p>
+<h2 id="linux-prerequisites"><a class="header" href="#linux-prerequisites">Linux Prerequisites</a></h2>
+<h3 id="debianubuntu"><a class="header" href="#debianubuntu">Debian/Ubuntu</a></h3>
+<p>You need to install</p>
+<ul>
+<li>clang</li>
+<li>libkrb5-dev</li>
+</ul>
+<h3 id="on-fedora"><a class="header" href="#on-fedora">On Fedora</a></h3>
+<p>You need to install</p>
+<ul>
+<li>clang-devel</li>
+<li>krb5-devel</li>
+</ul>
 <h2 id="netidx"><a class="header" href="#netidx">Netidx</a></h2>
 <p>Graphix uses netidx to import and export data streams. So it is
 recommended that you set up at least a machine local installation of

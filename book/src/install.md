@@ -8,10 +8,24 @@ can just run
 `cargo install graphix-shell`
 
 That should build the `graphix` command and install it in your
-~/.cargo/bin directory. On linux you need to install kerberos headers,
-as well as clang libs for gssapi to build properly. On debian/ubuntu
-install `libclang-dev`, and `libkrb5-dev`. On other distributions the
-names will be similar.
+~/.cargo/bin directory. Windows and Mac OS should work out of the box
+as long as you have the prerequisites for rust installed.
+
+## Linux Prerequisites
+
+### Debian/Ubuntu
+
+You need to install
+
+- clang
+- libkrb5-dev
+
+### On Fedora
+
+You need to install
+
+- clang-devel
+- krb5-devel
 
 ## Netidx
 
