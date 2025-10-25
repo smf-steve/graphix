@@ -244,7 +244,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Group<R, E> {
 
 This implements `array::group`, which given an argument, stores that
 argument's updates internally, and creates an array out of them when
-the predicate returns true. It's type is 
+the predicate returns true. It's type is
 
 ```fn('a, fn(i64, 'a) -> bool) -> Array<'a>```
 
@@ -277,7 +277,7 @@ things with this hook however.
 ### BindIds and Refs
 
 `BindId` is a very fundamental type in compiler guts. The
-[Event`](https://docs.rs/graphix-compiler/latest/graphix_compiler/struct.Event.html)
+[`Event`](https://docs.rs/graphix-compiler/latest/graphix_compiler/struct.Event.html)
 struct contains two tables indexed by it. The most important is
 `variables`. Every bound variable has a `BindId`. If a variable has
 updated this cycle, then it's updated value will be in the `variables`

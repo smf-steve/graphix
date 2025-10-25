@@ -63,7 +63,7 @@ let min = |@args| 'min
 
 The special form function body `'min` references a built-in rust
 function.
-  
+
 See [Writing Built in Functions](./builtins.md) for details.
 
 ## Building Stand Alone Graphix Applications

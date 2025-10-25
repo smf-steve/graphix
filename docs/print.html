@@ -6078,7 +6078,30 @@ have to do is typecheck our generated call site. You can do powerful
 things with this hook however.</p>
 <h3 id="bindids-and-refs"><a class="header" href="#bindids-and-refs">BindIds and Refs</a></h3>
 <p><code>BindId</code> is a very fundamental type in compiler guts. The
-[Event<code>](https://docs.rs/graphix-compiler/latest/graphix_compiler/struct.Event.html) struct contains two tables indexed by it. The most important is </code>variables<code>. Every bound variable has a </code>BindId<code>. If a variable has updated this cycle, then it's updated value will be in the </code>variables<code>table indexed by it's</code>BindId<code>. In order to call this predicate function we actually create three different variables and store their </code>BindIds<code>as</code>xid<code>, </code>nid<code>, and </code>pid<code>. </code>gen::ref<code>returns a reference</code>Node<code>and the</code>BindId<code>of the variable it is referencing. Since those ref nodes become the arguments to the predicate call site we create,</code>xid<code>and</code>nid<code>allow us to control the arguments passed into the function. We just have to set</code>xid<code>and</code>nid<code>in</code>Event::variables<code>before we update the predicate in order to</code>call<code>the function. This may cause it to update immediatly, or, it may depend on something else that needs to update before it will update. Either way, once we've set</code>xid<code>and</code>nid<code>once and called update on the predicate we've done our duty (it may never update, and that's ok). That just leaves</code>pid<code>, what is it for? Well, earlier it was mentioned that functions are always late bound. This is how that works. The lambda argument we were passed </code>from[1]<code>, whatever kind of node it is, will ultimately update and return a </code>LambdaId<code>, which is an index into a table in the context where all compiled functions actually reside. So every cycle we need to call update on this node just like any other node, because the </code>LambdaId<code>of the function we are supposed to be calling might change, and if that happens the call site we created with</code>genn::apply` needs
+<a href="https://docs.rs/graphix-compiler/latest/graphix_compiler/struct.Event.html"><code>Event</code></a>
+struct contains two tables indexed by it. The most important is
+<code>variables</code>. Every bound variable has a <code>BindId</code>. If a variable has
+updated this cycle, then it's updated value will be in the <code>variables</code>
+table indexed by it's <code>BindId</code>. In order to call this predicate
+function we actually create three different variables and store their
+<code>BindIds</code> as <code>xid</code>, <code>nid</code>, and <code>pid</code>. <code>gen::ref</code> returns a reference
+<code>Node</code> and the <code>BindId</code> of the variable it is referencing. Since those
+ref nodes become the arguments to the predicate call site we create,
+<code>xid</code> and <code>nid</code> allow us to control the arguments passed into the
+function. We just have to set <code>xid</code> and <code>nid</code> in <code>Event::variables</code>
+before we update the predicate in order to <code>call</code> the function. This
+may cause it to update immediatly, or, it may depend on something else
+that needs to update before it will update. Either way, once we've set
+<code>xid</code> and <code>nid</code> once and called update on the predicate we've done our
+duty (it may never update, and that's ok). That just leaves <code>pid</code>,
+what is it for? Well, earlier it was mentioned that functions are
+always late bound. This is how that works. The lambda argument we were
+passed <code>from[1]</code>, whatever kind of node it is, will ultimately update
+and return a <code>LambdaId</code>, which is an index into a table in the context
+where all compiled functions actually reside. So every cycle we need
+to call update on this node just like any other node, because the
+<code>LambdaId</code> of the function we are supposed to be calling might change,
+and if that happens the call site we created with <code>genn::apply</code> needs
 to know about it. Luckily we don't have to handle any of the wonderful
 details of late binding beyond this simple passing through of updates,
 the call site will take care of that.</p>
