@@ -122,7 +122,7 @@ flags you can change the compilers behavior in this respect.
 ## The $ Operator, aka Or Never
 
 The `$` operator goes in the same position as `?`, and is best described as "or
-never". It the expression on it's left is a non error, then `$` doesn't do
+never". If the expression on it's left is a non error, then `$` doesn't do
 anything, otherwise it returns nothing. This is a concise way of writing,
 
 ```graphix
@@ -137,3 +137,6 @@ can instead be written as,
 ```graphix
 might_fail(1, 2, 3)$
 ```
+
+The `$` operator should be used cautiously, as it silently ignores
+errors, however often it is useful.
