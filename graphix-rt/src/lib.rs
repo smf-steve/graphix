@@ -9,11 +9,12 @@ use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
 use derive_builder::Builder;
 use enumflags2::BitFlags;
+use fxhash::FxHashSet;
 use graphix_compiler::{
     env::Env,
-    expr::{ExprId, ModuleResolver},
+    expr::{ExprId, ModPath, ModuleResolver},
     typ::{FnType, Type},
-    BindId, CFlag, Event, ExecCtx, NoUserEvent, UserEvent,
+    BindId, CFlag, Event, ExecCtx, NoUserEvent, Scope, UserEvent,
 };
 use log::error;
 use netidx::{
@@ -140,6 +141,7 @@ pub struct Ref<X: GXExt> {
     pub last: Option<Value>,
     pub bid: BindId,
     pub target_bid: Option<BindId>,
+    pub typ: Type,
     rt: GXHandle<X>,
 }
 
@@ -160,6 +162,17 @@ impl<X: GXExt> Ref<X> {
         }
         Ok(())
     }
+
+    /// If the expr id refers to this ref, then set `last` to `v` and return a
+    /// mutable reference to `last`, otherwise return None.
+    pub fn update(&mut self, id: ExprId, v: &Value) -> Option<&mut Value> {
+        if self.id == id {
+            self.last = Some(v.clone());
+            self.last.as_mut()
+        } else {
+            None
+        }
+    }
 }
 
 pub struct TRef<X: GXExt, T: FromValue> {
@@ -173,6 +186,9 @@ impl<X: GXExt, T: FromValue> TRef<X, T> {
         Ok(TRef { r, t })
     }
 
+    /// If the expr id refers to this tref, then convert the value into a `T`
+    /// update `t` and return a mutable reference to the new `T`, otherwise
+    /// return None. Return an Error if the conversion failed.
     pub fn update(&mut self, id: ExprId, v: &Value) -> Result<Option<&mut T>> {
         if self.r.id == id {
             let v = v.clone().cast_to()?;
@@ -235,6 +251,88 @@ impl<X: GXExt> Callable<X> {
             .0
             .send(ToGX::Call { id: self.id, args })
             .map_err(|_| anyhow!("runtime is dead"))
+    }
+}
+
+enum DeferredCall {
+    Call(ValArray, oneshot::Sender<Result<()>>),
+    CallUnchecked(ValArray, oneshot::Sender<Result<()>>),
+}
+
+pub struct NamedCallable<X: GXExt> {
+    fname: Ref<X>,
+    current: Option<Callable<X>>,
+    ids: FxHashSet<ExprId>,
+    deferred: Vec<DeferredCall>,
+    h: GXHandle<X>,
+}
+
+impl<X: GXExt> NamedCallable<X> {
+    /// Update the named callable function
+    ///
+    /// This method does two things,
+    /// - Handle late binding. When the name ref updates to an actual function
+    ///   compile the real call site
+    /// - Return Ok(Some(v)) when the called function returns
+    pub async fn update<'a>(
+        &mut self,
+        id: ExprId,
+        v: &'a Value,
+    ) -> Result<Option<&'a Value>> {
+        match self.fname.update(id, v) {
+            Some(v) => {
+                let callable = self.h.compile_callable(v.clone()).await?;
+                self.ids.insert(callable.expr);
+                for dc in self.deferred.drain(..) {
+                    match dc {
+                        DeferredCall::Call(args, reply) => {
+                            let _ = reply.send(callable.call(args).await);
+                        }
+                        DeferredCall::CallUnchecked(args, reply) => {
+                            let _ = reply.send(callable.call_unchecked(args).await);
+                        }
+                    }
+                }
+                self.current = Some(callable);
+                Ok(None)
+            }
+            None if self.ids.contains(&id) => Ok(Some(v)),
+            None => Ok(None),
+        }
+    }
+
+    /// call the function with the specified args
+    ///
+    /// The type and arity will be checked before the call is made. You must
+    /// keep calling `update` while waiting for this method, because if the
+    /// function you are calling is late bound your call will not happen until
+    /// the function is defined.
+    pub async fn call(&mut self, args: ValArray) -> Result<()> {
+        match &self.current {
+            Some(c) => c.call(args).await,
+            None => {
+                let (tx, rx) = oneshot::channel();
+                self.deferred.push(DeferredCall::Call(args, tx));
+                rx.await?
+            }
+        }
+    }
+
+    /// call the function with the specified args
+    ///
+    /// The type and arity will not be checked before the call is made. You must
+    /// keep calling `update` while waiting for this method, because if the
+    /// function you are calling is late bound your call will not happen until
+    /// the function is defined.
+    pub async fn call_unchecked(&mut self, args: ValArray) -> Result<()> {
+        match &self.current {
+            Some(c) => c.call(args).await,
+            None => {
+                let (tx, rx) = oneshot::channel();
+                self.deferred.push(DeferredCall::CallUnchecked(args, tx));
+                rx.await?
+            }
+        }
     }
 }
 
@@ -362,15 +460,56 @@ impl<X: GXExt> GXHandle<X> {
             .await??)
     }
 
-    /// Compile an expression that will output the value of the ref specifed by
-    /// id.
+    /// Compile a callable interface to a late bound function by name.
     ///
-    /// This is the same as the deref (*) operator in graphix. When the returned
-    /// `Ref` is dropped the compiled code will be deleted.
+    /// This allows you to call a function by name. Because of late binding it
+    /// has some additional complexity (though less than implementing it
+    /// yourself). You must call `update` on `NamedCallable` when you recieve
+    /// updates from the runtime in order to drive late binding. `update` will
+    /// also return `Some` when one of your function calls returns.
+    pub async fn compile_callable_by_name(
+        &self,
+        env: &Env<GXRt<X>, X::UserEvent>,
+        scope: &Scope,
+        name: &ModPath,
+    ) -> Result<NamedCallable<X>> {
+        let r = self.compile_ref_by_name(env, scope, name).await?;
+        match &r.typ {
+            Type::Fn(_) => (),
+            t => bail!(
+                "{name} in scope {} has type {t}. expected a function",
+                scope.lexical
+            ),
+        }
+        Ok(NamedCallable {
+            fname: r,
+            current: None,
+            ids: FxHashSet::default(),
+            deferred: vec![],
+            h: self.clone(),
+        })
+    }
+
+    /// Compile a ref to a specific bind id
     pub async fn compile_ref(&self, id: impl Into<BindId>) -> Result<Ref<X>> {
         Ok(self
             .exec(|tx| ToGX::CompileRef { id: id.into(), res: tx, rt: self.clone() })
             .await??)
+    }
+
+    /// Compile a ref to a specific name
+    pub async fn compile_ref_by_name(
+        &self,
+        env: &Env<GXRt<X>, X::UserEvent>,
+        scope: &Scope,
+        name: &ModPath,
+    ) -> Result<Ref<X>> {
+        let id = env
+            .lookup_bind(&scope.lexical, name)
+            .ok_or_else(|| anyhow!("no such value {name} in scope {}", scope.lexical))?
+            .1
+            .id;
+        self.compile_ref(id).await
     }
 
     /// Set the variable idenfified by `id` to `v`

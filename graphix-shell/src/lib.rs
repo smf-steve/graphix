@@ -179,7 +179,7 @@ pub struct Shell<X: GXExt> {
     /// function would then return "mod m\n" to force loading the module at
     /// startup. Then your user only needs to `use m`
     #[builder(setter(strip_option), default)]
-    register: Option<Arc<dyn Fn(&mut ExecCtx<GXRt<X>, X::UserEvent>) -> ArcStr>>,
+    register: Option<Arc<dyn Fn(&mut ExecCtx<GXRt<X>, X::UserEvent>) -> Result<ArcStr>>>,
     /// Enable compiler flags, these will be ORed with the default set of flags
     /// for the mode.
     #[builder(default)]
@@ -198,8 +198,14 @@ impl<X: GXExt> Shell<X> {
         let publisher = self.publisher.clone();
         let subscriber = self.subscriber.clone();
         let mut ctx = ExecCtx::new(GXRt::<X>::new(publisher, subscriber));
-        let (root, mods) = graphix_stdlib::register(&mut ctx, self.stdlib_modules)?;
-        let usermods = self.register.as_mut().map(|f| f(&mut ctx));
+        let (root, mods) = graphix_stdlib::register(&mut ctx, self.stdlib_modules)
+            .context("register stdlib modules")?;
+        let usermods = self
+            .register
+            .as_mut()
+            .map(|f| f(&mut ctx))
+            .transpose()
+            .context("register user modules")?;
         let root = match usermods {
             Some(m) => ArcStr::from(format!("{root};\nmod tui;\n{m}")),
             None => ArcStr::from(format!("{root};\nmod tui")),

@@ -326,3 +326,14 @@ be nice if we could do this with `Drop`, but that would require
 holding a reference to the `ExecCtx` we are in at every `Node`. I'd
 really rather not pay to wrap every access to the context in a mutex,
 so we're doing it the hard way (for now).
+
+## Dynamic Linking and Non Rust Builtins
+
+At the moment there is no dynamic linking of rust built-ins, nor is there
+explicit support for writing built-ins in a language other than rust. However
+both of those goals are on the roadmap.
+
+Essentially the plan is to export a minimal C abi interface for adding built-ins
+to Graphix, and then any language that can target that abi can be used directly
+to write Graphix built-ins, and we can dynamically load built-ins from shared
+libraries.

@@ -535,13 +535,20 @@ impl<X: GXExt> GX<X> {
 
     fn compile_ref(&mut self, rt: GXHandle<X>, id: BindId) -> Result<Ref<X>> {
         let eid = ExprId::new();
-        let typ = Type::Any;
-        let n = genn::reference(&mut self.ctx, id, typ, eid);
+        let typ = self
+            .ctx
+            .env
+            .by_id
+            .get(&id)
+            .map(|b| b.typ.clone())
+            .unwrap_or_else(|| Type::Any);
+        let n = genn::reference(&mut self.ctx, id, typ.clone(), eid);
         self.nodes.insert(eid, n);
         let target_bid = self.ctx.env.byref_chain.get(&id).copied();
         Ok(Ref {
             id: eid,
             bid: id,
+            typ,
             target_bid,
             last: self.ctx.cached.get(&id).cloned(),
             rt,

@@ -2,7 +2,7 @@
 
 This document tracks improvements and additions needed for both the Graphix compiler/implementation and the language documentation.
 
-**Last Updated**: 2025-10-23
+**Last Updated**: 2025-10-27
 
 ---
 
@@ -11,7 +11,7 @@ This document tracks improvements and additions needed for both the Graphix comp
 ## High Priority
 
 ### Investigate Legacy Stdlib Arithmetic Functions
-- [ ] Review and test legacy stdlib functions for correct error handling
+- Review and test legacy stdlib functions for correct error handling
 - **Context**: Functions like `divide`, `product`, `sum` were written before the type system existed
 - **Investigation needed**:
   - How do they handle division by zero?
@@ -27,30 +27,52 @@ This document tracks improvements and additions needed for both the Graphix comp
   - Tests to verify correct behavior
   - `book/src/stdlib/core.md` (documentation updates after fixes)
 
-## Standardize Queuing
-- [ ] remove queueing from core::filter
-- [ ] implement a queuing adapter `fn('a, fn('a) -> 'b) -> 'b` that
-      automatically queues input in front of f until f generates an
-      output
+### Standardize Queuing
+- remove queueing from core::filter
+- implement a queuing adapter `fn('a, fn('a) -> 'b) -> 'b` that
+  automatically queues input in front of f until f generates an
+  output
 
-## Eliminate Double Typecheck at call sites
-- [ ] implement Clone for nodes so we can instantiate the node tree of a function and just clone it
+### Eliminate Double Typecheck at call sites
+- implement Clone for nodes so we can instantiate the node tree of a function and just clone it
 
-## Medium Priority
+### Fix Parser Operator Precidence
+- Operator precidence in the parser is broken, all arithmetic and boolean
+  operators have the same prescidence. Fix this so that arith operators have
+  standard infix prescidence rules, and boolean compares are higher than and,
+  or, and not
 
 ### Module System Completeness
-- [ ] Add module renaming on use
-- [ ] Add gxi module signatures
+- Add module renaming on use
+- Add gxi module signatures
 - **Context**: Mentioned as "work in progress" in modules/overview.md
 - **Effort**: Unknown (depends on design decisions)
 
 ### Type System
-- [ ] Once gxi files/module sigs are added add abstract types
+- Once gxi files/module sigs are added add abstract types
+
+### Desktop GUI Target
+- Desktop GUI widget support (mentioned in ui/overview.md)
+
+### Stand Alone Link Mode
+
+Add a compilation mode that automatically builds a rust driver for a stand
+alone graphix application from a specification. Essentially automatically do
+what the book section on embedding says, with automatic dependency discovery.
+
+### Document the Rust Interfaces
+
+### Math Module in Stdlib
+
+sqrt, sin, cos, tan, etc.
+
+## Medium Priority
+
+### Specialize Arithmetic Operators
 
 ## Lower Priority
 
-### Future Features
-- [ ] Desktop GUI widget support (mentioned in ui/overview.md)
+### Other Gui Targets
 - [ ] Web UI target (mentioned in ui/overview.md)
 - [ ] Mobile UI target (mentioned in ui/overview.md)
 
