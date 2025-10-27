@@ -16,7 +16,7 @@ valid Graphix code, just like a file.
 Here is a simple example with file modules,
 
 ```
-eric@katana ~/t/ex> ls
+$ ls
 m.gx  test.gx
 ```
 
@@ -37,7 +37,7 @@ let hello = "hello world"
 running this we get,
 
 ```
-eric@katana ~/p/graphix (main)> target/debug/graphix ~/tmp/ex/test.gx
+$ graphix test.gx
 "hello world"
 ```
 
@@ -50,12 +50,12 @@ otherwise file paths are expected. The comma separator can be escaped with `\`.
 For example,
 
 ```
-GRAPHIX_MODPATH=netidx:/foo,/home/eric/graphix-modules,/very/str\,ange/path
+GRAPHIX_MODPATH=netidx:/foo,/home/user/graphix-modules,/very/str\,ange/path
 ```
 
 would add
 - netidx:/foo
-- /home/eric/graphix-modules
+- /home/user/graphix-modules
 - /very/str,ange/path
 
 to the Graphix module path
@@ -64,8 +64,8 @@ to the Graphix module path
 
 By default the module resolve path has several entries,
 - the parent directory of the program file passed on the command line. e.g. if
-  we are running `/home/eric/test.gx` then Graphix will look for modules in
-  `/home/eric`
+  we are running `/home/user/test.gx` then Graphix will look for modules in
+  `/home/user`
 
 - the Graphix init directory. This is a platform specific directory where you
   can put Graphix modules.
@@ -84,7 +84,7 @@ Graphix directly, but we have to run it in a slightly different way, first lets
 publish it,
 
 ```
-eric@katana ~/t/ex> printf \
+$ printf \
   "/local/graphix/test|string|%s\n/local/graphix/m|string|%s" \
   "$(tr \n ' ' <test.gx)" "$(tr \n ' ' <m.gx)" \
   | netidx publisher
@@ -95,7 +95,7 @@ them to spaces to avoid confusing the command line publisher. Lets see if we
 published successfully.
 
 ```
-eric@katana ~> netidx subscriber /local/graphix/test
+$ netidx subscriber /local/graphix/test
 /local/graphix/test|string|"mod m;  m::hello"
 ```
 
@@ -105,8 +105,7 @@ don't pass a `.gx` extension, so we are telling Graphix to look for a module
 named `test` in it's configured module paths and run that.
 
 ```
-eric@katana ~/p/graphix (main)> GRAPHIX_MODPATH=netidx:/local/graphix \
-  target/debug/graphix test
+$ GRAPHIX_MODPATH=netidx:/local/graphix graphix test
 "hello world"
 ```
 
@@ -117,7 +116,7 @@ Module hierarchies can be created using directories, for example to create
 file called `n.gx`
 
 ```
-eric@katana ~/t/ex1> find .
+$ find .
 .
 ./m
 ./m/mod.gx
@@ -145,7 +144,7 @@ let hello = "hello world"
 if we run the program we get,
 
 ```
-eric@katana ~/p/graphix (main)> target/debug/graphix ~/tmp/ex1/test.gx
+$ graphix test.gx
 "hello world"
 ```
 

@@ -16,6 +16,6 @@ mod m {
 running this we get,
 
 ```
-eric@katana ~/p/graphix (main) [1]> target/debug/graphix ~/test.gx
+$ graphix test.gx
 "we say hello world followed by goodbye world"
 ```

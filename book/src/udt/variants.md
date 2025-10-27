@@ -40,7 +40,7 @@ f(`Other("foo"))
 If we copy the above into a file and run it we will get,
 
 ```
-eric@mazikeen ~/p/graphix (main) [1]> target/debug/graphix ~/test.gx
+$ graphix test.gx
 "it's a foo"
 ```
 

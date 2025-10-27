@@ -480,7 +480,7 @@ that later) and will be printed to stderr by the shell if it is never handled.
 Overflow and underflow are handled by wrapping,</p>
 <pre><code class="language-graphix">〉0 / 0
 
-thread 'tokio-runtime-worker' panicked at /home/eric/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/mod.rs:319:5:
+thread 'tokio-runtime-worker' panicked at &lt;rust runtime&gt;:
 attempt to divide by zero
 -: i64
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
@@ -1076,9 +1076,9 @@ Graphix. A quick example,</p>
 count
 </code></pre>
 <p>This program creates a bind <code>count</code> that will update with the values 0 to 10. If
-you put it in a file <code>test.gx</code> and execute it using <code>graphix ./test.gx</code> it will
+you put it in a file <code>test.gx</code> and execute it using <code>graphix test.gx</code> it will
 print 0 to 10 and then wait.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 0
 1
 2
@@ -1118,11 +1118,10 @@ x; // compile error, x isn't in scope
 y; // compile error, y isn't in scope
 important_thing
 </code></pre>
-<p>This program won't compile because you can't reference y and x from outside the
-block scope, but if you removed those references it would print a very important
-number. Blocks are valid anywhere an expression is valid, and they are just
-expressions. They will become very important when we introduce lambda
-expressions.</p>
+<p>This program won't compile because you can't reference y and x from
+outside the block scope. Blocks are valid anywhere an expression is
+valid, and they are just expressions. They will become very important
+when we introduce lambda expressions.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="use"><a class="header" href="#use">Use</a></h1>
 <p>Use allows you to bring names in modules into your current scope so they can be used without prefixing.</p>
 <pre><code class="language-graphix">net::subscribe(...); // call subscribe in the net module
@@ -1144,8 +1143,8 @@ list
 map(list, |x| x * 2)
 </code></pre>
 <p>will not compile, e.g.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     at line: 5, column: 1 map not defined
@@ -1159,7 +1158,7 @@ let list = {
 (list, map(list, |x| x * 2))
 </code></pre>
 <p>prints</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 ([2, 4, 6, 8, 10], "hello you called map!")
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="select"><a class="header" href="#select">Select</a></h1>
@@ -1204,8 +1203,8 @@ select x {
 <p>This program will print 42, 15, 7 and then wait. The compiler will check that
 you have handled all the possible cases. If we remove the null case from this
 select we will get a compile error.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     missing match cases type mismatch [i64, Array&lt;i64&gt;] does not contain [[i64, null], Array&lt;i64&gt;]
@@ -1225,8 +1224,8 @@ select x {
 </code></pre>
 <p>Here we've added an <code>f64</code> match case, but the argument type can never contain an
 <code>f64</code> so we will get a compile error.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern f64 will never match null, unused match cases
@@ -1251,8 +1250,8 @@ select x {
 </code></pre>
 <p>This will fail with a missing match case because the <code>i64</code> pattern is guarded
 and no unguarded pattern exists that matches <code>i64</code>.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     missing match cases type mismatch [null, Array&lt;i64&gt;] does not contain [[i64, null], Array&lt;i64&gt;]
@@ -1285,7 +1284,7 @@ select a {
 }
 </code></pre>
 <p>This program will print,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 `Ok((1, 2, [3, 4]))
 `Short([1])
 `Ok((5, 6, []))
@@ -1334,7 +1333,7 @@ select a {
 }
 </code></pre>
 <p>does some 2d bounds checking, and will output</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 `VWall
 `HWall
 `VWall
@@ -1345,8 +1344,8 @@ Unfortunately this will confuse the type checker, because the Graphix type syste
 is structural saying <code>{x, ..}</code> without any other information could match ANY
 struct with a field called <code>x</code>. This is currently too much for the type checker
 to handle,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern {x: '_1040} will never match {x: i64, y: i64}, unused match cases
@@ -1371,7 +1370,7 @@ select a {
 </code></pre>
 <p>Here since we've included the type pattern <code>T</code> in our partial patterns the
 program compiles and runs.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 `VWall
 `HWall
 `VWall
@@ -1394,7 +1393,7 @@ select v {
 }
 </code></pre>
 <p>produces</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 "it's bare, no argument"
 "it has an arg 42"
 "it's big `MoreArg(\"hello world\", 42) with args \"hello world\" and 42"
@@ -1411,8 +1410,8 @@ select v {
 }
 </code></pre>
 <p>yields</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern `Wrong will never match [`Arg(i64), `MoreArg(string, i64)], unused match cases
@@ -1436,7 +1435,7 @@ select a {
 }
 </code></pre>
 <p>produces</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 5
 </code></pre>
 <p>This is not normally how we would get the length of an array in Graphix, or even
@@ -1521,7 +1520,7 @@ catch(e) =&gt; select (e.0).error {
 <p>There are two types of errors that can happen in this example, and the compiler
 knows that. If you were to omit one of them, then the example would not compile.
 Suppose we remove the pattern for ArrayIndexError, we would get,</p>
-<pre><code>Error: in file "/home/eric/test.gx"
+<pre><code>Error: in file "test.gx"
 
 Caused by:
     0: at: line: 3, column: 13, in: select (e.0).error {`ArithError(s) =&gt; ..
@@ -1600,7 +1599,7 @@ let g = |#foo:i64, #bar: i64 = 0, x: i64| foo + bar + x;
 f(g, 42) // valid call
 </code></pre>
 <p>outputs</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 84
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="lexical-closures"><a class="header" href="#lexical-closures">Lexical Closures</a></h1>
@@ -1838,7 +1837,7 @@ with any element type and returns it's length. Brilliant, lets call it,</p>
 len(a)
 </code></pre>
 <p>and when we run this we get,</p>
-<pre><code>eric@katana ~ [1]&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 5
 </code></pre>
 <p>That's the right answer. Are we done? Noooooooo. No we are not done. Lets see
@@ -1849,7 +1848,7 @@ a &lt;- [1, 2];
 len(a)
 </code></pre>
 <p>this results in,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 4
 </code></pre>
 <p>What!? That's not even wrong. That's just nonsense, what happened? The key to
@@ -1907,7 +1906,7 @@ in the mean time the existing array will still be empty, meaning the second
 select arm will still be selected, and <code>sum</code> is updating to 0 which we do not
 want to return. If we run this with the same set of examples we will get the
 correct answer,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./cycle_iter.gx
+<pre><code>$ graphix cycle_iter.gx
 5
 3
 2
@@ -2029,7 +2028,7 @@ food consuming function,</p>
 f(`Other("foo"))
 </code></pre>
 <p>If we copy the above into a file and run it we will get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 "it's a foo"
 </code></pre>
 <p>In this example the type checker will ensure that,</p>
@@ -2096,7 +2095,7 @@ let v: FoodKind&lt;`Cookie&gt; = `Other(`Cookie);
 v
 </code></pre>
 <p>if we paste this program into a file and run it we get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 `Other(`Cookie)
 </code></pre>
 <p>We can even place constraints on the type that a type variable can take. For example,</p>
@@ -2105,7 +2104,7 @@ let f = |p: Point3&lt;'a&gt;, x: 'a| {p with x: p.x + x};
 f({x: 0., y: 1., z: 3.14}, 1.)
 </code></pre>
 <p>Running this program we get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 {x: 0, y: 1, z: 3.14}
 </code></pre>
 <p>However, consider,</p>
@@ -2114,8 +2113,8 @@ let v: Point3&lt;'a&gt; = {x: "foo", y: "bar", z: "baz"};
 v
 </code></pre>
 <p>Running this, we can see that <code>'a</code> is indeed constrained, since we get</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     0: at: line: 2, column: 21, in: { x: "foo", y: "bar", z: "baz" }
@@ -2174,21 +2173,21 @@ reputation for being elegant and simple. Lets try them out,</p>
 l
 </code></pre>
 <p>running this we get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 `Cons(4, `Cons(3, `Cons(2, `Cons(1, `Nil))))
 </code></pre>
 <p>Lets try something more complex,</p>
 <pre><code class="language-graphix">map(l, |x| x * x)
 </code></pre>
 <p>results in</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 `Cons(16, `Cons(9, `Cons(4, `Cons(1, `Nil))))
 </code></pre>
 <p>as expected. Finally lets sum the list with fold,</p>
 <pre><code class="language-graphix">fold(l, 0, |acc, v| acc + v)
 </code></pre>
 <p>and as expected we get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 10
 </code></pre>
 <p>So with recursive types and recursive functions you can do some really powerful
@@ -2261,7 +2260,7 @@ f(&amp;v);
 println("[v]")
 </code></pre>
 <p>Running this program will output,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 0
 1
 </code></pre>
@@ -2296,7 +2295,7 @@ e.g. <code>m::name</code> or by bringing the module into scope with <code>use m<
 "we say [m::hello] followed by [m::goodbye]"
 </code></pre>
 <p>running this we get,</p>
-<pre><code>eric@katana ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 "we say hello world followed by goodbye world"
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="external-modules"><a class="header" href="#external-modules">External Modules</a></h1>
@@ -2312,7 +2311,7 @@ modules. For example we might publish <code>/libs/graphix/strops</code>, the nam
 module would be <code>strops</code>, and the resolver expects it to be a string containing
 valid Graphix code, just like a file.</p>
 <p>Here is a simple example with file modules,</p>
-<pre><code>eric@katana ~/t/ex&gt; ls
+<pre><code>$ ls
 m.gx  test.gx
 </code></pre>
 <p><code>test.gx</code> is the program that we will run, <code>m.gx</code> is a module it will load.</p>
@@ -2325,7 +2324,7 @@ m::hello
 <pre><code class="language-graphix">let hello = "hello world"
 </code></pre>
 <p>running this we get,</p>
-<pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/tmp/ex/test.gx
+<pre><code>$ graphix test.gx
 "hello world"
 </code></pre>
 <h2 id="module-load-path"><a class="header" href="#module-load-path">Module Load Path</a></h2>
@@ -2334,12 +2333,12 @@ and appends it's contents to the built in list of module paths. The syntax is a
 comma separated list of paths. Paths that start with <code>netidx:</code> are netidx paths,
 otherwise file paths are expected. The comma separator can be escaped with <code>\</code>.
 For example,</p>
-<pre><code>GRAPHIX_MODPATH=netidx:/foo,/home/eric/graphix-modules,/very/str\,ange/path
+<pre><code>GRAPHIX_MODPATH=netidx:/foo,/home/user/graphix-modules,/very/str\,ange/path
 </code></pre>
 <p>would add</p>
 <ul>
 <li>netidx:/foo</li>
-<li>/home/eric/graphix-modules</li>
+<li>/home/user/graphix-modules</li>
 <li>/very/str,ange/path</li>
 </ul>
 <p>to the Graphix module path</p>
@@ -2348,8 +2347,8 @@ For example,</p>
 <ul>
 <li>
 <p>the parent directory of the program file passed on the command line. e.g. if
-we are running <code>/home/eric/test.gx</code> then Graphix will look for modules in
-<code>/home/eric</code></p>
+we are running <code>/home/user/test.gx</code> then Graphix will look for modules in
+<code>/home/user</code></p>
 </li>
 <li>
 <p>the Graphix init directory. This is a platform specific directory where you
@@ -2368,7 +2367,7 @@ on. You can use this to load commonly used utilities in the repl automatically.<
 <p>We can publish the same code as the files example in netidx and use it in
 Graphix directly, but we have to run it in a slightly different way, first lets
 publish it,</p>
-<pre><code>eric@katana ~/t/ex&gt; printf \
+<pre><code>$ printf \
   "/local/graphix/test|string|%s\n/local/graphix/m|string|%s" \
   "$(tr \n ' ' &lt;test.gx)" "$(tr \n ' ' &lt;m.gx)" \
   | netidx publisher
@@ -2376,22 +2375,21 @@ publish it,</p>
 <p>Graphix doesn't care about whitespaces like newline, so we can just translate
 them to spaces to avoid confusing the command line publisher. Lets see if we
 published successfully.</p>
-<pre><code>eric@katana ~&gt; netidx subscriber /local/graphix/test
+<pre><code>$ netidx subscriber /local/graphix/test
 /local/graphix/test|string|"mod m;  m::hello"
 </code></pre>
 <p>Looks good, now lets run the code. In order to do this we need to add to the
 resolve path to tell the Graphix shell where it should look for modules. We also
 don't pass a <code>.gx</code> extension, so we are telling Graphix to look for a module
 named <code>test</code> in it's configured module paths and run that.</p>
-<pre><code>eric@katana ~/p/graphix (main)&gt; GRAPHIX_MODPATH=netidx:/local/graphix \
-  target/debug/graphix test
+<pre><code>$ GRAPHIX_MODPATH=netidx:/local/graphix graphix test
 "hello world"
 </code></pre>
 <h2 id="module-hierarchies"><a class="header" href="#module-hierarchies">Module Hierarchies</a></h2>
 <p>Module hierarchies can be created using directories, for example to create
 <code>m::n</code> you would create a directory <code>m</code> and in it a file called <code>mod.gx</code> and a
 file called <code>n.gx</code></p>
-<pre><code>eric@katana ~/t/ex1&gt; find .
+<pre><code>$ find .
 .
 ./m
 ./m/mod.gx
@@ -2410,7 +2408,7 @@ m::n::hello
 <pre><code class="language-graphix">let hello = "hello world"
 </code></pre>
 <p>if we run the program we get,</p>
-<pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/tmp/ex1/test.gx
+<pre><code>$ graphix test.gx
 "hello world"
 </code></pre>
 <h2 id="module-hierarchies-in-netidx"><a class="header" href="#module-hierarchies-in-netidx">Module Hierarchies in Netidx</a></h2>
@@ -2455,7 +2453,7 @@ select status {
 }
 </code></pre>
 <p>running this we get,</p>
-<pre><code>eric@katana ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 2
 </code></pre>
 <p>In the first part of this program we just publish a string containing the source

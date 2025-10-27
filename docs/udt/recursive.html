@@ -226,21 +226,21 @@ reputation for being elegant and simple. Lets try them out,</p>
 l
 </code></pre>
 <p>running this we get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main) [1]&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 `Cons(4, `Cons(3, `Cons(2, `Cons(1, `Nil))))
 </code></pre>
 <p>Lets try something more complex,</p>
 <pre><code class="language-graphix">map(l, |x| x * x)
 </code></pre>
 <p>results in</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 `Cons(16, `Cons(9, `Cons(4, `Cons(1, `Nil))))
 </code></pre>
 <p>as expected. Finally lets sum the list with fold,</p>
 <pre><code class="language-graphix">fold(l, 0, |acc, v| acc + v)
 </code></pre>
 <p>and as expected we get,</p>
-<pre><code>eric@mazikeen ~/p/graphix (main)&gt; target/debug/graphix ~/test.gx
+<pre><code>$ graphix test.gx
 10
 </code></pre>
 <p>So with recursive types and recursive functions you can do some really powerful

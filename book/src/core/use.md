@@ -31,8 +31,8 @@ map(list, |x| x * 2)
 will not compile, e.g.
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     at line: 5, column: 1 map not defined
@@ -52,6 +52,6 @@ let list = {
 prints
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 ([2, 4, 6, 8, 10], "hello you called map!")
 ```

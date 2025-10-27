@@ -196,8 +196,8 @@ list
 map(list, |x| x * 2)
 </code></pre>
 <p>will not compile, e.g.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     at line: 5, column: 1 map not defined
@@ -211,7 +211,7 @@ let list = {
 (list, map(list, |x| x * 2))
 </code></pre>
 <p>prints</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 ([2, 4, 6, 8, 10], "hello you called map!")
 </code></pre>
 

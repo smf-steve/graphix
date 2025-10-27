@@ -101,7 +101,7 @@ knows that. If you were to omit one of them, then the example would not compile.
 Suppose we remove the pattern for ArrayIndexError, we would get,
 
 ```
-Error: in file "/home/eric/test.gx"
+Error: in file "test.gx"
 
 Caused by:
     0: at: line: 3, column: 13, in: select (e.0).error {`ArithError(s) => ..

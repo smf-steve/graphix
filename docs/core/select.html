@@ -217,8 +217,8 @@ select x {
 <p>This program will print 42, 15, 7 and then wait. The compiler will check that
 you have handled all the possible cases. If we remove the null case from this
 select we will get a compile error.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     missing match cases type mismatch [i64, Array&lt;i64&gt;] does not contain [[i64, null], Array&lt;i64&gt;]
@@ -238,8 +238,8 @@ select x {
 </code></pre>
 <p>Here we've added an <code>f64</code> match case, but the argument type can never contain an
 <code>f64</code> so we will get a compile error.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern f64 will never match null, unused match cases
@@ -264,8 +264,8 @@ select x {
 </code></pre>
 <p>This will fail with a missing match case because the <code>i64</code> pattern is guarded
 and no unguarded pattern exists that matches <code>i64</code>.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     missing match cases type mismatch [null, Array&lt;i64&gt;] does not contain [[i64, null], Array&lt;i64&gt;]
@@ -298,7 +298,7 @@ select a {
 }
 </code></pre>
 <p>This program will print,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 `Ok((1, 2, [3, 4]))
 `Short([1])
 `Ok((5, 6, []))
@@ -347,7 +347,7 @@ select a {
 }
 </code></pre>
 <p>does some 2d bounds checking, and will output</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 `VWall
 `HWall
 `VWall
@@ -358,8 +358,8 @@ Unfortunately this will confuse the type checker, because the Graphix type syste
 is structural saying <code>{x, ..}</code> without any other information could match ANY
 struct with a field called <code>x</code>. This is currently too much for the type checker
 to handle,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern {x: '_1040} will never match {x: i64, y: i64}, unused match cases
@@ -384,7 +384,7 @@ select a {
 </code></pre>
 <p>Here since we've included the type pattern <code>T</code> in our partial patterns the
 program compiles and runs.</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 `VWall
 `HWall
 `VWall
@@ -407,7 +407,7 @@ select v {
 }
 </code></pre>
 <p>produces</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 "it's bare, no argument"
 "it has an arg 42"
 "it's big `MoreArg(\"hello world\", 42) with args \"hello world\" and 42"
@@ -424,8 +424,8 @@ select v {
 }
 </code></pre>
 <p>yields</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+<pre><code>$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern `Wrong will never match [`Arg(i64), `MoreArg(string, i64)], unused match cases
@@ -449,7 +449,7 @@ select a {
 }
 </code></pre>
 <p>produces</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 5
 </code></pre>
 <p>This is not normally how we would get the length of an array in Graphix, or even

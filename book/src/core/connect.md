@@ -71,11 +71,11 @@ count
 ```
 
 This program creates a bind `count` that will update with the values 0 to 10. If
-you put it in a file `test.gx` and execute it using `graphix ./test.gx` it will
+you put it in a file `test.gx` and execute it using `graphix test.gx` it will
 print 0 to 10 and then wait.
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 0
 1
 2

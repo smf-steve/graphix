@@ -51,7 +51,7 @@ len(a)
 and when we run this we get,
 
 ```
-eric@katana ~ [1]> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 5
 ```
 
@@ -68,7 +68,7 @@ len(a)
 this results in,
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 4
 ```
 
@@ -132,7 +132,7 @@ want to return. If we run this with the same set of examples we will get the
 correct answer,
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./cycle_iter.gx
+$ graphix cycle_iter.gx
 5
 3
 2

@@ -212,7 +212,7 @@ with any element type and returns it's length. Brilliant, lets call it,</p>
 len(a)
 </code></pre>
 <p>and when we run this we get,</p>
-<pre><code>eric@katana ~ [1]&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 5
 </code></pre>
 <p>That's the right answer. Are we done? Noooooooo. No we are not done. Lets see
@@ -223,7 +223,7 @@ a &lt;- [1, 2];
 len(a)
 </code></pre>
 <p>this results in,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./test.gx
+<pre><code>$ graphix test.gx
 4
 </code></pre>
 <p>What!? That's not even wrong. That's just nonsense, what happened? The key to
@@ -281,7 +281,7 @@ in the mean time the existing array will still be empty, meaning the second
 select arm will still be selected, and <code>sum</code> is updating to 0 which we do not
 want to return. If we run this with the same set of examples we will get the
 correct answer,</p>
-<pre><code>eric@katana ~&gt; proj/graphix/target/debug/graphix ./cycle_iter.gx
+<pre><code>$ graphix cycle_iter.gx
 5
 3
 2

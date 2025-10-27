@@ -89,7 +89,7 @@ println("[v]")
 Running this program will output,
 
 ```
-eric@mazikeen ~/p/graphix (main) [1]> target/debug/graphix ~/test.gx
+$ graphix test.gx
 0
 1
 ```

@@ -61,7 +61,7 @@ l
 running this we get,
 
 ```
-eric@mazikeen ~/p/graphix (main) [1]> target/debug/graphix ~/test.gx
+$ graphix test.gx
 `Cons(4, `Cons(3, `Cons(2, `Cons(1, `Nil))))
 ```
 
@@ -74,7 +74,7 @@ map(l, |x| x * x)
 results in
 
 ```
-eric@mazikeen ~/p/graphix (main)> target/debug/graphix ~/test.gx
+$ graphix test.gx
 `Cons(16, `Cons(9, `Cons(4, `Cons(1, `Nil))))
 ```
 
@@ -87,7 +87,7 @@ fold(l, 0, |acc, v| acc + v)
 and as expected we get,
 
 ```
-eric@mazikeen ~/p/graphix (main)> target/debug/graphix ~/test.gx
+$ graphix test.gx
 10
 ```
 

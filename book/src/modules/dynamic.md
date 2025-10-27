@@ -38,7 +38,7 @@ select status {
 running this we get,
 
 ```
-eric@katana ~/p/graphix (main)> target/debug/graphix ~/test.gx
+$ graphix test.gx
 2
 ```
 

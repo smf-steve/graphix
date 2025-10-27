@@ -55,8 +55,8 @@ you have handled all the possible cases. If we remove the null case from this
 select we will get a compile error.
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     missing match cases type mismatch [i64, Array<i64>] does not contain [[i64, null], Array<i64>]
@@ -82,8 +82,8 @@ Here we've added an `f64` match case, but the argument type can never contain an
 `f64` so we will get a compile error.
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern f64 will never match null, unused match cases
@@ -115,8 +115,8 @@ This will fail with a missing match case because the `i64` pattern is guarded
 and no unguarded pattern exists that matches `i64`.
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     missing match cases type mismatch [null, Array<i64>] does not contain [[i64, null], Array<i64>]
@@ -159,7 +159,7 @@ select a {
 This program will print,
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 `Ok((1, 2, [3, 4]))
 `Short([1])
 `Ok((5, 6, []))
@@ -215,7 +215,7 @@ select a {
 does some 2d bounds checking, and will output
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 `VWall
 `HWall
 `VWall
@@ -229,8 +229,8 @@ struct with a field called `x`. This is currently too much for the type checker
 to handle,
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern {x: '_1040} will never match {x: i64, y: i64}, unused match cases
@@ -261,7 +261,7 @@ Here since we've included the type pattern `T` in our partial patterns the
 program compiles and runs.
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 `VWall
 `HWall
 `VWall
@@ -294,7 +294,7 @@ select v {
 produces
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 "it's bare, no argument"
 "it has an arg 42"
 "it's big `MoreArg(\"hello world\", 42) with args \"hello world\" and 42"
@@ -317,8 +317,8 @@ select v {
 yields
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
-Error: in file "/home/eric/test.gx"
+$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     pattern `Wrong will never match [`Arg(i64), `MoreArg(string, i64)], unused match cases
@@ -353,7 +353,7 @@ select a {
 produces
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 5
 ```
 

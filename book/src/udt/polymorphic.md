@@ -20,7 +20,7 @@ v
 if we paste this program into a file and run it we get,
 
 ```
-eric@mazikeen ~/p/graphix (main) [1]> target/debug/graphix ~/test.gx
+$ graphix test.gx
 `Other(`Cookie)
 ```
 
@@ -35,7 +35,7 @@ f({x: 0., y: 1., z: 3.14}, 1.)
 Running this program we get,
 
 ```
-eric@mazikeen ~/p/graphix (main)> target/debug/graphix ~/test.gx
+$ graphix test.gx
 {x: 0, y: 1, z: 3.14}
 ```
 
@@ -50,8 +50,8 @@ v
 Running this, we can see that `'a` is indeed constrained, since we get
 
 ```
-eric@mazikeen ~/p/graphix (main)> target/debug/graphix ~/test.gx
-Error: in file "/home/eric/test.gx"
+$ graphix test.gx
+Error: in file "test.gx"
 
 Caused by:
     0: at: line: 2, column: 21, in: { x: "foo", y: "bar", z: "baz" }

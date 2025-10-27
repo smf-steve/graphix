@@ -40,6 +40,6 @@ f(g, 42) // valid call
 outputs
 
 ```
-eric@katana ~> proj/graphix/target/debug/graphix ./test.gx
+$ graphix test.gx
 84
 ```

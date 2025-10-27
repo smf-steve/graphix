@@ -73,28 +73,12 @@ sqrt, sin, cos, tan, etc.
 ## Lower Priority
 
 ### Other Gui Targets
-- [ ] Web UI target (mentioned in ui/overview.md)
-- [ ] Mobile UI target (mentioned in ui/overview.md)
+- Web UI target (mentioned in ui/overview.md)
+- Mobile UI target (mentioned in ui/overview.md)
 
 ---
 
 # Book/Documentation TODOs
-
-## Phase 1: Critical Fixes (Highest Priority)
-
-These issues block usability or create confusion:
-
-### 1.2 Complete Embedding Overview
-- [ ] Write a proper introduction to the Embedding section
-- **Content needed**:
-  - Why embed Graphix? (scripting, DSL, config languages)
-  - When to embed vs standalone
-  - Brief overview of the three approaches (builtins, shell, rt)
-  - Link to the three subsections
-- **Effort**: 1 hour
-- **File**: `book/src/embedding/overview.md`
-
----
 
 ## Phase 3: Quality Improvements (Medium Priority)
 
@@ -120,12 +104,6 @@ Polish and consistency:
 - **Effort**: 2 hours
 - **Files**: Create `book/src/appendix/syntax_reference.md`
 
-### 3.3 Standardize Code Block Language Tags
-- [ ] Ensure all Graphix code uses ` ```graphix `
-- **Find**: ` ``` ` followed by code that looks like Graphix
-- **Effort**: 1 hour
-- **Files**: All markdown files
-
 ### 3.4 Add Cross-References
 - [ ] Add more internal links between sections
 - **Priority links**:
@@ -135,15 +113,6 @@ Polish and consistency:
   - All core language sections should link to each other where relevant
 - **Effort**: 1-2 hours
 - **Files**: Core language sections primarily
-
-### 3.5 Improve Graph Diagrams
-- [ ] Consider enhancing ASCII diagrams
-- **Options**:
-  - Keep ASCII but ensure consistent formatting
-  - Use Mermaid diagram syntax
-  - Create actual images
-- **Effort**: Variable (2-8 hours depending on approach)
-- **Files**: `intro.md`, `connect.md`, other sections with diagrams
 
 ---
 

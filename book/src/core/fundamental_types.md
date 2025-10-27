@@ -52,7 +52,7 @@ Overflow and underflow are handled by wrapping,
 ```graphix
 〉0 / 0
 
-thread 'tokio-runtime-worker' panicked at /home/eric/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/num/mod.rs:319:5:
+thread 'tokio-runtime-worker' panicked at <rust runtime>:
 attempt to divide by zero
 -: i64
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
