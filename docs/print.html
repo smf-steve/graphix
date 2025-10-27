@@ -5769,7 +5769,9 @@ it's own tokio task. You Interface with this task via a
 As a result, all operations on Graphix objects are async, and the compiler/run
 loop will run in parallel with your application.</p>
 <h2 id="setting-it-up"><a class="header" href="#setting-it-up">Setting it up</a></h2>
-<p>The shell itself is actually the best example of using the <code>graphix-rt</code> crate. As we get further into internals, the details can change more often, but in general getting a Graphix runtime going involves the following,</p>
+<p>The shell itself is actually the best example of using the <code>graphix-rt</code> crate.
+As we get further into internals, the details can change more often, but in
+general getting a Graphix runtime going involves the following,</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>// set up an execution context using the generic runtime with no customization
@@ -5790,10 +5792,12 @@ let handle = GXConfig::builder(ctx, tx)
 can interact with it. You are expected to read the <code>rx</code> portion of the mpsc
 channel. If you do not, the run loop will block waiting for you to read once the
 mpsc channel fills up.</p>
-<h2 id="getting-some-results"><a class="header" href="#getting-some-results">Getting Some Results</a></h2>
+<h2 id="compiling-code-getting-results"><a class="header" href="#compiling-code-getting-results">Compiling Code, Getting Results</a></h2>
 <p>Once setup is complete, lets compile some code and get some results! To compile
-code we call <code>compile</code> on the handle. This results in one or more toplevel
-expressions and a copy of the environment (or a compile error).</p>
+code we call
+<a href="https://docs.rs/graphix-rt/latest/graphix_rt/struct.GXHandle.html#method.compile"><code>compile</code></a>
+on the handle. This results in one or more toplevel expressions and a copy of
+the environment (or a compile error).</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>let cres = handle.compile(literal!("2 + 2")).await?;
@@ -5805,10 +5809,108 @@ let e = cres.exprs[0];
 // producing results, we'd keep seeing updates for it's id on the channel.
 // This is a batch of GXEvents
 let mut batch = rx.recv().await.ok_or_else(|| anyhow!("the runtime is dead"))?;
+let mut env = handle.get_env().await?;
 for ev in batch.drain(..) {
     match ev {
         GXEvent::Updated(id, v) if id == e.id =&gt; println!("2 + 2 = {v}"),
-        GXEvent::Env(_) =&gt; () // new environment, but we don't care
+        GXEvent::Env(e) =&gt; env = e
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="refs-and-trefs-depending-on-graphix-variables"><a class="header" href="#refs-and-trefs-depending-on-graphix-variables">Refs and TRefs, Depending on Graphix Variables</a></h2>
+<p>If you want to be notified when a variable in Graphix updates you can register a
+<a href="https://docs.rs/graphix-rt/latest/graphix_rt/struct.Ref.html"><code>Ref</code></a>, or a
+<a href="https://docs.rs/graphix-rt/latest/graphix_rt/struct.TRef.html"><code>TRef</code></a> if you
+have a corresponding rust type that implements
+<a href="https://docs.rs/netidx-value/latest/netidx_value/trait.FromValue.html"><code>FromValue</code></a>.
+There are two ways to get a ref, by id and by name. By id is probably the most
+common, because
+<a href="https://docs.rs/graphix-compiler/latest/graphix_compiler/struct.BindId.html"><code>BindId</code></a>
+will appear in any data structure that has a value passed by ref (e.g. &amp;v),
+which should be common for large structures that don't change often.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// assume we got id from a data structure and it's type is &amp;i64
+let mut r = handle.compile_ref(id)
+
+// if the variable r is bound to has a value right now it will be in last
+if let Some(v) = &amp;r.last {
+    println!("current value: {v}")
+}
+
+// now we will get an update whenever the variable updates
+let mut batch = rx.recv().await.ok_or_else(|| anyhow!("the runtime is dead"))?;
+for ev in batch.drain(..) {
+    match ev {
+        GXEvent::Updated(id, v) =&gt; {
+            if let Some(v) = r.update(id, &amp;v) {
+                println!("current value {v}")
+            }
+        },
+        GXEvent::Env(_) =&gt; ()
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p>You can also set refs, which is exactly the same thing as the connect operator
+<code>&lt;-</code>, and does what you expect it should do.</p>
+<h3 id="ref-by-name"><a class="header" href="#ref-by-name">Ref By Name</a></h3>
+<p>We can also reference a variable by name,</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut r = handle.compile_ref_by_name(&amp;env, &amp;Scope::root(), &amp;ModPath::from(["foo"])).await?;
+
+// the rest of the code is exactly the same
+<span class="boring">}</span></code></pre></pre>
+<h2 id="calling-graphix-functions"><a class="header" href="#calling-graphix-functions">Calling Graphix Functions</a></h2>
+<p>Now lets register a call site, call a Graphix function, and get it's result. We
+do this by calling
+<a href="https://docs.rs/graphix-rt/latest/graphix_rt/struct.GXHandle.html#method.compile_callable_by_name"><code>compile_callable_by_name</code></a>
+on the handle.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut f = handle.compile_callable_by_name(&amp;env, &amp;Scope::root(), &amp;ModPath::from(["sum"])).await?;
+f.call(ValArray::from_iter_exact([Value::from(1), Value::from(2), Value::from(3)])).await?;
+
+// now we must update f to drive both late binding, and get our return value
+// we need a loop this time because there will be multiple updates
+loop {
+    let mut batch = rx.recv().ok_or_else(|| anyhow!("the runtime is dead"))?;
+    for ev in batch.drain(..) {
+        match ev {
+            GXEvent::Updated(id, v) =&gt; {
+                if let Some(v) = f.update(&amp;v).await {
+                    println!("sum returned {v}")
+                }
+            }
+            GXEvent::Env(e) =&gt; env = e,
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="calling-functions-by-lambdaid"><a class="header" href="#calling-functions-by-lambdaid">Calling Functions by LambdaId</a></h3>
+<p>The above case applies when we only know the name of the function we want to
+call, which is less common than you might imagine. If the function was passed in
+to us, for example we evaluated an expression that returned a function, then
+it's actually easier to deal with because we don't have to handle late binding.
+In this case we can call
+<a href="embedding/%5B%60compile_callable_by_name%60%5D(https://docs.rs/graphix-rt/latest/graphix_rt/struct.GXHandle.html#method.compile_callable)"><code>compile_callable</code></a>
+on the handle.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// id is the LambdaId of the function as a Value. Lets assume it's sum
+let f = handle.compile_callable(id).await?;
+f.call(ValArray::from_iter_exact([Value::from(1), Value::from(41)])).await?;
+
+// now wait for the value
+let mut batch = rx.recv().ok_or_else(|| anyhow!("the runtime is dead"))?;
+for ev in batch.drain(..) {
+    match ev {
+        GXEvent::Updated(id, v) =&gt; {
+            if let Some(v) = f.update(&amp;v) {
+                println!("sum returned {v}")
+            }
+        }
+        GxEvent::Env(e) =&gt; env = e,
     }
 }
 <span class="boring">}</span></code></pre></pre>

@@ -138,6 +138,7 @@ pub struct CompRes<X: GXExt> {
 
 pub struct Ref<X: GXExt> {
     pub id: ExprId,
+    // the most recent value of the variable
     pub last: Option<Value>,
     pub bid: BindId,
     pub target_bid: Option<BindId>,
@@ -152,19 +153,34 @@ impl<X: GXExt> Drop for Ref<X> {
 }
 
 impl<X: GXExt> Ref<X> {
-    pub fn set(&self, v: Value) -> Result<()> {
+    /// set the value of the ref `r <-`
+    ///
+    /// This will cause all nodes dependent on this id to update. This is the
+    /// same thing as the `<-` operator in Graphix. This does the same thing as
+    /// `GXHandle::set`
+    pub fn set<T: Into<Value>>(&mut self, v: T) -> Result<()> {
+        let v = v.into();
+        self.last = Some(v.clone());
         self.rt.set(self.bid, v)
     }
 
-    pub fn set_deref<T: Into<Value>>(&self, v: T) -> Result<()> {
+    /// set the value pointed to by ref `*r <-`
+    ///
+    /// This will cause all nodes dependent on *id to update. This is the same
+    /// as the `*r <-` operator in Graphix. This does the same thing as
+    /// `GXHandle::set` using the target id.
+    pub fn set_deref<T: Into<Value>>(&mut self, v: T) -> Result<()> {
         if let Some(id) = self.target_bid {
             self.rt.set(id, v)?
         }
         Ok(())
     }
 
+    /// Process an update
+    ///
     /// If the expr id refers to this ref, then set `last` to `v` and return a
-    /// mutable reference to `last`, otherwise return None.
+    /// mutable reference to `last`, otherwise return None. This will also
+    /// update `last` if the id matches.
     pub fn update(&mut self, id: ExprId, v: &Value) -> Option<&mut Value> {
         if self.id == id {
             self.last = Some(v.clone());
@@ -181,11 +197,16 @@ pub struct TRef<X: GXExt, T: FromValue> {
 }
 
 impl<X: GXExt, T: FromValue> TRef<X, T> {
+    /// Create a new typed reference from `r`
+    ///
+    /// If conversion of `r` fails, return an error.
     pub fn new(mut r: Ref<X>) -> Result<Self> {
         let t = r.last.take().map(|v| v.cast_to()).transpose()?;
         Ok(TRef { r, t })
     }
 
+    /// Process an update
+    ///
     /// If the expr id refers to this tref, then convert the value into a `T`
     /// update `t` and return a mutable reference to the new `T`, otherwise
     /// return None. Return an Error if the conversion failed.
@@ -201,11 +222,21 @@ impl<X: GXExt, T: FromValue> TRef<X, T> {
 }
 
 impl<X: GXExt, T: Into<Value> + FromValue + Clone> TRef<X, T> {
+    /// set the value of the tref `r <-`
+    ///
+    /// This will cause all nodes dependent on this id to update. This is the
+    /// same thing as the `<-` operator in Graphix. This does the same thing as
+    /// `GXHandle::set`
     pub fn set(&mut self, t: T) -> Result<()> {
         self.t = Some(t.clone());
-        self.r.set(t.into())
+        self.r.set(t)
     }
 
+    /// set the value pointed to by tref `*r <-`
+    ///
+    /// This will cause all nodes dependent on *id to update. This is the same
+    /// as the `*r <-` operator in Graphix. This does the same thing as
+    /// `GXHandle::set` using the target id.
     pub fn set_deref(&mut self, t: T) -> Result<()> {
         self.t = Some(t.clone());
         self.r.set_deref(t.into())
@@ -229,8 +260,12 @@ impl<X: GXExt> Drop for Callable<X> {
 }
 
 impl<X: GXExt> Callable<X> {
-    /// Call the lambda with args. Argument types and arity will be
-    /// checked and an error will be returned if they are wrong.
+    /// Call the lambda with args
+    ///
+    /// Argument types and arity will be checked and an error will be returned
+    /// if they are wrong. If you call the function more than once before it
+    /// returns there is no guarantee that the returns will arrive in the order
+    /// of the calls. There is no guarantee that a function must return.
     pub async fn call(&self, args: ValArray) -> Result<()> {
         if self.typ.args.len() != args.len() {
             bail!("expected {} args", self.typ.args.len())
@@ -251,6 +286,15 @@ impl<X: GXExt> Callable<X> {
             .0
             .send(ToGX::Call { id: self.id, args })
             .map_err(|_| anyhow!("runtime is dead"))
+    }
+
+    /// Return Some(v) if this update is the return value of the callable
+    pub fn update<'a>(&self, id: ExprId, v: &'a Value) -> Option<&'a Value> {
+        if self.expr == id {
+            Some(v)
+        } else {
+            None
+        }
     }
 }
 
@@ -301,12 +345,17 @@ impl<X: GXExt> NamedCallable<X> {
         }
     }
 
-    /// call the function with the specified args
+    /// Call the lambda with args
     ///
-    /// The type and arity will be checked before the call is made. You must
-    /// keep calling `update` while waiting for this method, because if the
-    /// function you are calling is late bound your call will not happen until
-    /// the function is defined.
+    /// Argument types and arity will be checked and an error will be returned
+    /// if they are wrong. If you call the function more than once before it
+    /// returns there is no guarantee that the returns will arrive in the order
+    /// of the calls. There is no guarantee that a function must return. In
+    /// order to handle late binding you must keep calling `update` while
+    /// waiting for this method.
+    ///
+    /// While a late bound function is unresolved calls will queue internally in
+    /// the NamedCallsite and will happen when the function is resolved.
     pub async fn call(&mut self, args: ValArray) -> Result<()> {
         match &self.current {
             Some(c) => c.call(args).await,
@@ -320,10 +369,14 @@ impl<X: GXExt> NamedCallable<X> {
 
     /// call the function with the specified args
     ///
-    /// The type and arity will not be checked before the call is made. You must
-    /// keep calling `update` while waiting for this method, because if the
-    /// function you are calling is late bound your call will not happen until
-    /// the function is defined.
+    /// Argument types and arity will NOT be checked by this method. If you call
+    /// the function more than once before it returns there is no guarantee that
+    /// the returns will arrive in the order of the calls. There is no guarantee
+    /// that a function must return. In order to handle late binding you must
+    /// keep calling `update` while waiting for this method.
+    ///
+    /// While a late bound function is unresolved calls will queue internally in
+    /// the NamedCallsite and will happen when the function is resolved.
     pub async fn call_unchecked(&mut self, args: ValArray) -> Result<()> {
         match &self.current {
             Some(c) => c.call(args).await,
@@ -491,6 +544,8 @@ impl<X: GXExt> GXHandle<X> {
     }
 
     /// Compile a ref to a specific bind id
+    ///
+    /// This will NOT return an error if the specified id isn't in the environment.
     pub async fn compile_ref(&self, id: impl Into<BindId>) -> Result<Ref<X>> {
         Ok(self
             .exec(|tx| ToGX::CompileRef { id: id.into(), res: tx, rt: self.clone() })
@@ -498,6 +553,8 @@ impl<X: GXExt> GXHandle<X> {
     }
 
     /// Compile a ref to a specific name
+    ///
+    /// Return an error if the name does not exist in the specified environment
     pub async fn compile_ref_by_name(
         &self,
         env: &Env<GXRt<X>, X::UserEvent>,
@@ -514,7 +571,8 @@ impl<X: GXExt> GXHandle<X> {
 
     /// Set the variable idenfified by `id` to `v`
     ///
-    /// triggering updates of all dependent node trees.
+    /// triggering updates of all dependent node trees. This does the same thing
+    /// as`Ref::set` and `TRef::set`
     pub fn set<T: Into<Value>>(&self, id: BindId, v: T) -> Result<()> {
         let v = v.into();
         self.0.send(ToGX::Set { id, v }).map_err(|_| anyhow!("runtime is dead"))
