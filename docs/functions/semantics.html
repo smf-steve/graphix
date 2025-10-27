@@ -181,18 +181,26 @@ as "polymorphic graph templates", in that they allow you to specify a part of
 the graph once, and then use it multiple times with different types each time.
 Most of the time this difference in semantics doesn't matter. Most of the time.
 Consider,</p>
-<pre><code class="language-graphix">let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+<pre><code class="language-graphix">let f = |x, y| x + y + y;
+let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 f(n, 1)
 </code></pre>
 <p>What happens here? Does <code>f</code> get "called" every time <code>n</code> updates? Does it only
 work for the first <code>n</code>? Does it explode? Lets transform it like the compiler
 would in order to understand it better,</p>
-<pre><code class="language-graphix">let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+<pre><code class="language-graphix">let f = |x, y| x + y + y;
+let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 </code></pre>
 <p>The "arguments" to the function call were plugged into the holes in the graph
 template and then the whole template is copied to the call site, and from then
 on the graph runs as normal.</p>
+<p>So when <code>n</code> updates, the call site will return <code>n</code> + 2, since <code>1</code>
+never updates we don't have to worry about it, however this same flow
+applies when multiple arguments could update. In this case we're just
+having a philosophical discussion about how call sites are
+implemented, however it DOES actually matter sometimes.</p>
+<h2 id="where-function-semantics-matter"><a class="header" href="#where-function-semantics-matter">Where Function Semantics Matter</a></h2>
 <p>Lets revisit an earlier example where we used select and connect to find the
 length of an array. Suppose we want to generalize that into a function,</p>
 <pre><code class="language-graphix">let len = |a: Array&lt;'a&gt;| {
@@ -206,8 +214,8 @@ length of an array. Suppose we want to generalize that into a function,</p>
   }
 }
 </code></pre>
-<p>Lets just ignore the <code>'a</code> for now. Here we have a function that takes an array
-with any element type and returns it's length. Brilliant, lets call it,</p>
+<p>Here we have a function that takes an array with any element type and
+returns it's length. Brilliant, lets call it,</p>
 <pre><code class="language-graphix">let a = [1, 2, 3, 4, 5];
 len(a)
 </code></pre>
@@ -286,6 +294,9 @@ correct answer,</p>
 3
 2
 </code></pre>
+<p>This comes up other places as well, for example whenever we have to
+deal with something that does IO, like calling an RPC, subscribing to
+values in netidx, etc.</p>
 
                     </main>
 

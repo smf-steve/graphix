@@ -197,8 +197,9 @@ type, e.g. <code>x: 'a</code></li>
 the return type of the function, e.g. <code>-&gt; 'a</code></li>
 <li>After the return type, you can optionally specify a throws type, <code>throws Type</code>, which will set the type that is thrown by the function</li>
 </ul>
-<p>In a fn type, after fn the stuff between the <code>&lt;&gt;</code> are the type
-constraints, the syntax in this readout is a colon separated list of,</p>
+<p>When a function type is printed, the stuff between the <code>fn&lt;&gt;</code> are the
+type constraints, the syntax in this readout is a colon separated list
+of,</p>
 <ul>
 <li>type variable name, for example '_2073</li>
 <li>current value, or unbound if there is no current value</li>
@@ -213,8 +214,9 @@ constraints, the syntax in this readout is a colon separated list of,</p>
    '_2101: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;&gt;
 ('a, 'a) -&gt; 'a throws '_2101
 </code></pre>
-<p>We just have two variables now, <code>'a</code> representing both argument types and the
-return type, and <code>'_2101</code> representing the throws type. We can still call this <code>f</code> with any number type,</p>
+<p>We just have two variables now, <code>'a</code> representing both argument types
+and the return type, and <code>'_2101</code> representing the throws type. We can
+still call this <code>f</code> with any number type,</p>
 <pre><code class="language-graphix">〉f(1.212, 2.0)
 -: f64
 3.2119999999999997
@@ -224,7 +226,8 @@ return type, and <code>'_2101</code> representing the throws type. We can still 
 -: i64
 4
 </code></pre>
-<p>In one case <code>f64</code>, in the other <code>i64</code>. We can't pass numbers of different types,</p>
+<p>In one case <code>f64</code>, in the other <code>i64</code>. We can't pass numbers of
+different types to the same call,</p>
 <pre><code class="language-graphix">〉f(1, 1.2)
 error: in expr
 

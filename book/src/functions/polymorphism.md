@@ -24,8 +24,9 @@ In type annotations of lambda expressions,
 - After the return type, you can optionally specify a throws type, `throws
   Type`, which will set the type that is thrown by the function
 
-In a fn type, after fn the stuff between the `<>` are the type
-constraints, the syntax in this readout is a colon separated list of,
+When a function type is printed, the stuff between the `fn<>` are the
+type constraints, the syntax in this readout is a colon separated list
+of,
 
 - type variable name, for example '_2073
 - current value, or unbound if there is no current value
@@ -45,8 +46,9 @@ fn<'a: Number,
 ('a, 'a) -> 'a throws '_2101
 ```
 
-We just have two variables now, `'a` representing both argument types and the
-return type, and `'_2101` representing the throws type. We can still call this `f` with any number type,
+We just have two variables now, `'a` representing both argument types
+and the return type, and `'_2101` representing the throws type. We can
+still call this `f` with any number type,
 
 ```graphix
 〉f(1.212, 2.0)
@@ -62,7 +64,8 @@ However notice that we get back the explicit type we passed in,
 4
 ```
 
-In one case `f64`, in the other `i64`. We can't pass numbers of different types,
+In one case `f64`, in the other `i64`. We can't pass numbers of
+different types to the same call,
 
 ```graphix
 〉f(1, 1.2)

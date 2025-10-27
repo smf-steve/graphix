@@ -1679,8 +1679,9 @@ type, e.g. <code>x: 'a</code></li>
 the return type of the function, e.g. <code>-&gt; 'a</code></li>
 <li>After the return type, you can optionally specify a throws type, <code>throws Type</code>, which will set the type that is thrown by the function</li>
 </ul>
-<p>In a fn type, after fn the stuff between the <code>&lt;&gt;</code> are the type
-constraints, the syntax in this readout is a colon separated list of,</p>
+<p>When a function type is printed, the stuff between the <code>fn&lt;&gt;</code> are the
+type constraints, the syntax in this readout is a colon separated list
+of,</p>
 <ul>
 <li>type variable name, for example '_2073</li>
 <li>current value, or unbound if there is no current value</li>
@@ -1695,8 +1696,9 @@ constraints, the syntax in this readout is a colon separated list of,</p>
    '_2101: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;&gt;
 ('a, 'a) -&gt; 'a throws '_2101
 </code></pre>
-<p>We just have two variables now, <code>'a</code> representing both argument types and the
-return type, and <code>'_2101</code> representing the throws type. We can still call this <code>f</code> with any number type,</p>
+<p>We just have two variables now, <code>'a</code> representing both argument types
+and the return type, and <code>'_2101</code> representing the throws type. We can
+still call this <code>f</code> with any number type,</p>
 <pre><code class="language-graphix">〉f(1.212, 2.0)
 -: f64
 3.2119999999999997
@@ -1706,7 +1708,8 @@ return type, and <code>'_2101</code> representing the throws type. We can still 
 -: i64
 4
 </code></pre>
-<p>In one case <code>f64</code>, in the other <code>i64</code>. We can't pass numbers of different types,</p>
+<p>In one case <code>f64</code>, in the other <code>i64</code>. We can't pass numbers of
+different types to the same call,</p>
 <pre><code class="language-graphix">〉f(1, 1.2)
 error: in expr
 
@@ -1811,18 +1814,26 @@ as "polymorphic graph templates", in that they allow you to specify a part of
 the graph once, and then use it multiple times with different types each time.
 Most of the time this difference in semantics doesn't matter. Most of the time.
 Consider,</p>
-<pre><code class="language-graphix">let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+<pre><code class="language-graphix">let f = |x, y| x + y + y;
+let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 f(n, 1)
 </code></pre>
 <p>What happens here? Does <code>f</code> get "called" every time <code>n</code> updates? Does it only
 work for the first <code>n</code>? Does it explode? Lets transform it like the compiler
 would in order to understand it better,</p>
-<pre><code class="language-graphix">let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+<pre><code class="language-graphix">let f = |x, y| x + y + y;
+let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 </code></pre>
 <p>The "arguments" to the function call were plugged into the holes in the graph
 template and then the whole template is copied to the call site, and from then
 on the graph runs as normal.</p>
+<p>So when <code>n</code> updates, the call site will return <code>n</code> + 2, since <code>1</code>
+never updates we don't have to worry about it, however this same flow
+applies when multiple arguments could update. In this case we're just
+having a philosophical discussion about how call sites are
+implemented, however it DOES actually matter sometimes.</p>
+<h2 id="where-function-semantics-matter"><a class="header" href="#where-function-semantics-matter">Where Function Semantics Matter</a></h2>
 <p>Lets revisit an earlier example where we used select and connect to find the
 length of an array. Suppose we want to generalize that into a function,</p>
 <pre><code class="language-graphix">let len = |a: Array&lt;'a&gt;| {
@@ -1836,8 +1847,8 @@ length of an array. Suppose we want to generalize that into a function,</p>
   }
 }
 </code></pre>
-<p>Lets just ignore the <code>'a</code> for now. Here we have a function that takes an array
-with any element type and returns it's length. Brilliant, lets call it,</p>
+<p>Here we have a function that takes an array with any element type and
+returns it's length. Brilliant, lets call it,</p>
 <pre><code class="language-graphix">let a = [1, 2, 3, 4, 5];
 len(a)
 </code></pre>
@@ -1916,6 +1927,9 @@ correct answer,</p>
 3
 2
 </code></pre>
+<p>This comes up other places as well, for example whenever we have to
+deal with something that does IO, like calling an RPC, subscribing to
+values in netidx, etc.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="user-defined-types"><a class="header" href="#user-defined-types">User Defined Types</a></h1>
 <p>You can define your own data types in Graphix. This is useful for many tasks,
 such as enforcing interface invariants, and modeling data. As a data modeling

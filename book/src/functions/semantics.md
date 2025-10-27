@@ -7,6 +7,7 @@ Most of the time this difference in semantics doesn't matter. Most of the time.
 Consider,
 
 ```graphix
+let f = |x, y| x + y + y;
 let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
 f(n, 1)
 ```
@@ -16,6 +17,7 @@ work for the first `n`? Does it explode? Lets transform it like the compiler
 would in order to understand it better,
 
 ```graphix
+let f = |x, y| x + y + y;
 let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 ```
@@ -23,6 +25,14 @@ n + 1 + 1
 The "arguments" to the function call were plugged into the holes in the graph
 template and then the whole template is copied to the call site, and from then
 on the graph runs as normal.
+
+So when `n` updates, the call site will return `n` + 2, since `1`
+never updates we don't have to worry about it, however this same flow
+applies when multiple arguments could update. In this case we're just
+having a philosophical discussion about how call sites are
+implemented, however it DOES actually matter sometimes.
+
+## Where Function Semantics Matter
 
 Lets revisit an earlier example where we used select and connect to find the
 length of an array. Suppose we want to generalize that into a function,
@@ -40,8 +50,8 @@ let len = |a: Array<'a>| {
 }
 ```
 
-Lets just ignore the `'a` for now. Here we have a function that takes an array
-with any element type and returns it's length. Brilliant, lets call it,
+Here we have a function that takes an array with any element type and
+returns it's length. Brilliant, lets call it,
 
 ```graphix
 let a = [1, 2, 3, 4, 5];
@@ -137,3 +147,8 @@ $ graphix cycle_iter.gx
 3
 2
 ```
+
+This comes up other places as well, for example whenever we have to
+deal with something that does IO, like calling an RPC, subscribing to
+values in netidx, etc. 
+
