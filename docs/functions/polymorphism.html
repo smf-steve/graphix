@@ -176,74 +176,12 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="polymorphism"><a class="header" href="#polymorphism">Polymorphism</a></h1>
-<p>All functions are polymorphic, even without annotations, argument and return
-types are inferred at each call site, and thus may differ from one site to
-another. Any internal constraints are calculated when the definition is compiled
-and are enforced at each call site. For example consider,</p>
-<pre><code class="language-graphix">〉let f = |x, y| x + y
-〉f
--: fn&lt;'_2073: unbound: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;, '_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number&gt;('_2067: unbound, '_2069: unbound) -&gt; '_2071: unbound throws '_2073: unbound
-159
-</code></pre>
-<p>The type is a bit of a mouthfull, lets format it a bit so it's easier to read.</p>
-<pre><code>fn&lt;'_2073: unbound: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;,
-   '_2069: unbound: Number,
-   '_2067: unbound: Number,
-   '_2071: unbound: Number&gt;
-('_2067: unbound, '_2069: unbound) -&gt; '_2071: unbound throws '_2073: unbound
-</code></pre>
-<p>After fn the stuff between the <code>&lt;&gt;</code> are the type constraints, the syntax in this
-readout is a colon separated list of,</p>
-<ul>
-<li>type variable name, for example '_2073</li>
-<li>current value, or unbound if there is no current value</li>
-<li>constraint type</li>
-</ul>
-<p>We can remove the (unbound) current values and it becomes even easier to read,</p>
-<pre><code>fn&lt;'_2073: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;,
-   '_2069: Number,
-   '_2067: Number,
-   '_2071: Number&gt;
-('_2067, '_2069) -&gt; '_2071 throws '_2073
-</code></pre>
-<p>Here we can see that <code>'_2067</code>, <code>'_2069</code>, and <code>'_2071</code> represent the two
-arguments and the return type of the function. They are all unbound, meaning
-that when the function is used they can have any type. They are also all
-constrained to <code>Number</code>, and this will be enforced when the function is called,
-it's arguments must be numbers and it will return a number. We learned this
-because internally the function uses <code>+</code>, which operates on numbers, this
-constraint was then propagated to the otherwise free variables representing the
-args and the return type.</p>
-<p>So in plain English this says that the arguments to the function can by any type
-as long as it is a number, and the function will return some type which is a
-number. None of the three numbers need to be the same type of number.</p>
-<p>Finally lets address <code>throws '_2073</code>. This states that the function may throw an
-error, and if it does it's type will be <code>'_2073</code>, which in this case is
-constrained to be</p>
-<p><code>Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;</code>.</p>
-<p>This is what happens in the case of overflow, underflow, and other arithmetic
-errors. The <code>throws</code> clause of the type is used by the <code>try catch(e) =&gt; ...</code>
-expression to compute the type of <code>e</code>, which is just the union of all the throws
-types within the <code>try catch</code>.</p>
-<p>We can indeed call <code>f</code> with different number types, and it works just fine,</p>
-<pre><code class="language-graphix">〉f(1.0, 1)
--: Number
-2
-</code></pre>
-<p>The type we get back really depends on the values we pass. For example,</p>
-<pre><code class="language-graphix">〉f(1.1212, 1)
--: Number
-2.1212
-</code></pre>
-<p>Wherever we use <code>f</code> the compiler will force us to handle every possible case in
-the <code>Number</code> type</p>
-<h2 id="explicit-type-specifications"><a class="header" href="#explicit-type-specifications">Explicit Type Specifications</a></h2>
-<p>While the compiler does a pretty good job of inferring the types of functions,
-sometimes you want to express a constraint that can't be inferred. Suppose we
-wanted to modify the example in the last section to say that while you can pass
-any type of number to <code>f</code>, it has to be the same type for both arguments, and
-the return type will be the same as the argument type. We can say that using
-type annotations.</p>
+<p>While the compiler does a pretty good job of inferring the types of
+functions, sometimes you want to express a constraint that can't be
+inferred. Suppose we wanted to write a function that you can pass any
+type of number to, but it has to be the same type for both arguments,
+and the return type will be the same as the argument type. We can say
+that using type variables and constraints in our annotations.</p>
 <pre><code class="language-graphix">〉let f = 'a: Number |x: 'a, y: 'a| -&gt; 'a x + y
 〉f
 -: fn&lt;'a: unbound: Number, '_2101: unbound: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;&gt;('a: unbound, 'a: unbound) -&gt; 'a: unbound throws '_2101: unbound
@@ -259,8 +197,18 @@ type, e.g. <code>x: 'a</code></li>
 the return type of the function, e.g. <code>-&gt; 'a</code></li>
 <li>After the return type, you can optionally specify a throws type, <code>throws Type</code>, which will set the type that is thrown by the function</li>
 </ul>
-<p>The type we ended up with is actually quite a bit simpler, but lets format it
-anyway,</p>
+<p>In a fn type, after fn the stuff between the <code>&lt;&gt;</code> are the type
+constraints, the syntax in this readout is a colon separated list of,</p>
+<ul>
+<li>type variable name, for example '_2073</li>
+<li>current value, or unbound if there is no current value</li>
+<li>constraint type</li>
+</ul>
+<pre><code>fn&lt;'a: unbound: Number, 
+   '_2101: unbound: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;&gt;
+('a: unbound, 'a: unbound) -&gt; 'a: unbound throws '_2101: unbound
+</code></pre>
+<p>We can remove the (unbound) current values and it becomes easier to read,</p>
 <pre><code>fn&lt;'a: Number,
    '_2101: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;&gt;
 ('a, 'a) -&gt; 'a throws '_2101
@@ -306,6 +254,61 @@ implementation of which I will not repeat here), which is,</p>
 </code></pre>
 <p>So map takes an array of <code>'a</code>, and a function mapping <code>'a</code> to <code>'b</code> and possibly
 throwing <code>'e</code> and returns an array of <code>'b</code> possibly throwing <code>'e</code>.</p>
+<h2 id="implicit-polymorphism"><a class="header" href="#implicit-polymorphism">Implicit Polymorphism</a></h2>
+<p>All functions are polymorphic, even without annotations, argument and return
+types are inferred at each call site, and thus may differ from one site to
+another. Any internal constraints are calculated when the definition is compiled
+and are enforced at each call site. For example consider,</p>
+<pre><code class="language-graphix">〉let f = |x, y| x + y
+〉f
+-: fn&lt;'_2073: unbound: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;, '_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number&gt;('_2067: unbound, '_2069: unbound) -&gt; '_2071: unbound throws '_2073: unbound
+159
+</code></pre>
+<p>The type is a bit of a mouthfull, lets format it a bit so it's easier to read.</p>
+<pre><code>fn&lt;'_2073: unbound: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;,
+   '_2069: unbound: Number,
+   '_2067: unbound: Number,
+   '_2071: unbound: Number&gt;
+('_2067: unbound, '_2069: unbound) -&gt; '_2071: unbound throws '_2073: unbound
+</code></pre>
+<p>Removing the unbounds,</p>
+<pre><code>fn&lt;'_2073: Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;,
+   '_2069: Number,
+   '_2067: Number,
+   '_2071: Number&gt;
+('_2067, '_2069) -&gt; '_2071 throws '_2073
+</code></pre>
+<p>Here we can see that <code>'_2067</code>, <code>'_2069</code>, and <code>'_2071</code> represent the two
+arguments and the return type of the function. They are all unbound, meaning
+that when the function is used they can have any type. They are also all
+constrained to <code>Number</code>, and this will be enforced when the function is called,
+it's arguments must be numbers and it will return a number. We learned this
+because internally the function uses <code>+</code>, which operates on numbers, this
+constraint was then propagated to the otherwise free variables representing the
+args and the return type.</p>
+<p>So in plain English this says that the arguments to the function can by any type
+as long as it is a number, and the function will return some type which is a
+number. None of the three numbers need to be the same type of number.</p>
+<p>Finally lets address <code>throws '_2073</code>. This states that the function may throw an
+error, and if it does it's type will be <code>'_2073</code>, which in this case is
+constrained to be</p>
+<p><code>Error&lt;ErrChain&lt;`ArithError(string)&gt;&gt;</code>.</p>
+<p>This is what happens in the case of overflow, underflow, and other arithmetic
+errors. The <code>throws</code> clause of the type is used by the <code>try catch(e) =&gt; ...</code>
+expression to compute the type of <code>e</code>, which is just the union of all the throws
+types within the <code>try catch</code>.</p>
+<p>We can indeed call <code>f</code> with different number types, and it works just fine,</p>
+<pre><code class="language-graphix">〉f(1.0, 1)
+-: Number
+2
+</code></pre>
+<p>The type we get back really depends on the values we pass. For example,</p>
+<pre><code class="language-graphix">〉f(1.1212, 1)
+-: Number
+2.1212
+</code></pre>
+<p>Wherever we use <code>f</code> the compiler will force us to handle every possible case in
+the <code>Number</code> type</p>
 
                     </main>
 
