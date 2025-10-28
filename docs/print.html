@@ -436,7 +436,55 @@ count &lt;- timer ~ (count + 1);
 </ul>
 <p>The best way to learn Graphix is to experiment! Keep the REPL open as you read through the documentation and try out the examples. Every code snippet in this book is designed to be runnable.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="core-language"><a class="header" href="#core-language">Core Language</a></h1>
-<p>This section documents the core language constructs in Graphix.</p>
+<p>This chapter introduces the core constructs that make Graphix work. If you're coming from imperative languages like Python, Java, or C, some of these concepts will feel familiar—but the reactive twist makes them work differently than you might expect.</p>
+<h2 id="types-strong-but-flexible"><a class="header" href="#types-strong-but-flexible">Types: Strong but Flexible</a></h2>
+<p>Graphix has a powerful static type system, but you'll rarely write type annotations. The compiler infers types for you using structural typing—types are compared by their shape, not their name. A struct <code>{x: i64, y: i64}</code> is the same type whether you call it <code>Point</code> or <code>Vector</code> or don't name it at all.</p>
+<p>The <strong><a href="core/./fundamental_types.html">Fundamental Types</a></strong> section covers the built-in numeric types (<code>i64</code>, <code>f64</code>, <code>u32</code>, etc.), booleans, strings, durations, and more. You'll learn how arithmetic works across different numeric types, how string interpolation works with <code>[...]</code> brackets, and why division by zero doesn't crash your program.</p>
+<p><strong><a href="core/./reading_types.html">Reading Type Signatures</a></strong> teaches you how to read the type annotations you'll see throughout the documentation. Function types like <code>fn(Array&lt;'a&gt;, fn('a) -&gt; 'b) -&gt; Array&lt;'b&gt;</code> tell you exactly what a function expects and returns, including what errors it might throw.</p>
+<h2 id="binding-values-and-building-blocks"><a class="header" href="#binding-values-and-building-blocks">Binding Values and Building Blocks</a></h2>
+<p>In Graphix, you create bindings with <code>let</code>. Unlike variables in other languages, these bindings can update over time—they're more like pipes that different values flow through.</p>
+<p><strong><a href="core/./let_binds.html">Let Binds</a></strong> explains how to create bindings, how shadowing works, and why every binding in Graphix is potentially reactive. When you write <code>let x = 42</code>, you're not just storing a value—you're creating a node in the dataflow graph.</p>
+<p><strong><a href="core/./block.html">Blocks</a></strong> shows how to group expressions with <code>{...}</code> to create scopes, hide intermediate bindings, and build up complex expressions. Blocks are expressions too—they evaluate to their last value.</p>
+<p><strong><a href="core/./use.html">Use</a></strong> lets you bring module names into scope so you can write <code>map(arr, f)</code> instead of <code>array::map(arr, f)</code>. Simple, but essential as your programs grow.</p>
+<h2 id="connect-the-heart-of-reactivity"><a class="header" href="#connect-the-heart-of-reactivity">Connect: The Heart of Reactivity</a></h2>
+<p>This is where Graphix becomes special. The <code>&lt;-</code> operator (connect) is the only way to create cycles in your dataflow graph, and it's the key to writing reactive programs and loops.</p>
+<p><strong><a href="core/./connect.html">Connect</a></strong> is the most important section in this chapter. When you write:</p>
+<pre><code class="language-graphix">let count = 0;
+count &lt;- timer ~ (count + 1)
+</code></pre>
+<p>You're telling Graphix: "When <code>timer</code> updates, increment <code>count</code> for the next cycle." Connect schedules updates for the future, which is how you build everything from simple counters to complex state machines. It's also the only looping construct in Graphix—there's no <code>for</code> or <code>while</code>, just connect and select working together.</p>
+<h2 id="select-pattern-matching-with-power"><a class="header" href="#select-pattern-matching-with-power">Select: Pattern Matching with Power</a></h2>
+<p>The <code>select</code> expression is Graphix's answer to <code>switch</code>, <code>match</code>, and <code>if/else</code>—but much more powerful. It lets you match on types, destructure complex data, and ensure at compile time that you've handled every case.</p>
+<p><strong><a href="core/./select.html">Select</a></strong> shows you how to:</p>
+<ul>
+<li>Match on union types and ensure you handle all variants</li>
+<li>Destructure arrays with slice patterns like <code>[head, tail..]</code></li>
+<li>Match structs with patterns like <code>{x, y}</code></li>
+<li>Guard patterns with conditions like <code>n if n &gt; 10</code></li>
+<li>Build loops by combining select with connect</li>
+</ul>
+<p>The compiler checks your select expressions exhaustively—if you forget a case, it won't compile. If you match a case that can never happen, it won't compile. This eliminates entire classes of bugs.</p>
+<h2 id="error-handling-exceptions-done-right"><a class="header" href="#error-handling-exceptions-done-right">Error Handling: Exceptions, Done Right</a></h2>
+<p>Graphix has first-class error handling with try/catch and the <code>?</code> operator. Errors are just values with the special <code>Error&lt;'a&gt;</code> type, and they're tracked through the type system.</p>
+<p><strong><a href="core/./error.html">Error Handling</a></strong> explains:</p>
+<ul>
+<li>How <code>?</code> throws errors to the nearest try/catch in dynamic scope</li>
+<li>How error types are checked at compile time—you can't forget to handle an error type</li>
+<li>How the <code>$</code> operator silently swallows errors (use with caution!)</li>
+<li>How error chains track the full context of where errors originated</li>
+</ul>
+<p>Every error that gets raised with <code>?</code> is wrapped in an <code>ErrChain</code> that captures the file, line, column, and full stack of previous errors. No more mystery exceptions.</p>
+<h2 id="how-it-all-fits-together"><a class="header" href="#how-it-all-fits-together">How It All Fits Together</a></h2>
+<p>These constructs combine to create the Graphix programming model:</p>
+<ol>
+<li>You create <strong>bindings</strong> that hold values</li>
+<li>You build <strong>expressions</strong> that compute new values from old ones</li>
+<li>You use <strong>select</strong> to handle different cases and make decisions</li>
+<li>You use <strong>connect</strong> to update bindings when events occur</li>
+<li>The <strong>type system</strong> ensures everything is safe and correct</li>
+<li><strong>Errors</strong> propagate cleanly through try/catch</li>
+</ol>
+<p>The result is a language where you describe relationships between values, and the runtime automatically maintains those relationships as things change. A temperature value updates, and the Fahrenheit conversion updates automatically. A timer fires, and your counter increments. A network subscription delivers new data, and your UI reflects it instantly.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="fundamental-types"><a class="header" href="#fundamental-types">Fundamental Types</a></h1>
 <p>Graphix has a few fundamental data types, the Graphix shell is a good way to
 explore them by trying out small Graphix expressions. You can run the Graphix
