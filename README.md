@@ -14,7 +14,7 @@ dependencies—when a value updates, all computations that depend on it
 update automatically.
 
 This makes Graphix particularly well-suited for:
-- **Terminal User Interfaces (TUIs)** - Rich, interactive terminal applications
+- **User Interfaces** - Rich, interactive applications
 - **Network Programming** - Reactive data streams with [netidx](https://netidx.github.io/netidx-book)
 - **Real-time Data Processing** - Automatic updates when data changes
 
