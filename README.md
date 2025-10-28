@@ -156,6 +156,7 @@ let status: [i64, string, null] = 42;
 
 select status {
   i64 as n if n > 0 => "positive number: [n]",
+  i64 as n => "non positive number: [n]",
   string as s => "got string: [s]",
   null as _ => "no value"
 }
