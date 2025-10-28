@@ -205,7 +205,7 @@ This is a Rust workspace with four main crates:
 
 ```bash
 # Clone the repository
-git clone https://github.com/estokes/graphix.git
+git clone https://github.com/graphix-lang/graphix.git
 git clone https://github.com/netidx/netidx.git
 cd graphix
 
