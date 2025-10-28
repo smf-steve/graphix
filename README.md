@@ -45,7 +45,7 @@ text(&"Count: [count]")
 
 The `<-` operator (connect) schedules updates for the next cycle. When
 `timer` fires, `count` increments, and the text widget automatically
-displays the new value. The sample operator, `~`, returns the rhs when
+displays the new value. The sample operator `~` returns the rhs when
 the lhs updates.
 
 ## Installation
@@ -66,7 +66,7 @@ cargo install graphix-shell
 
 ### Optional: Netidx
 
-For full networking capabilities, install [netidx](https://netidx.github.io/netidx-book):
+For full networking capabilities, install and set up [netidx](https://netidx.github.io/netidx-book):
 
 ```bash
 cargo install netidx-tools
