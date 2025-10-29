@@ -19,6 +19,7 @@ use anyhow::{bail, Result};
 use arcstr::ArcStr;
 use enumflags2::{bitflags, BitFlags};
 use expr::Expr;
+use futures::channel::mpsc;
 use fxhash::{FxHashMap, FxHashSet};
 use log::info;
 use netidx::{
@@ -29,9 +30,9 @@ use netidx::{
 use netidx_protocols::rpc::server::{ArgSpec, RpcCall};
 use node::compiler;
 use parking_lot::RwLock;
-use poolshark::local::LPooled;
+use poolshark::{global::GPooled, local::LPooled};
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     cell::Cell,
     collections::{hash_map::Entry, HashMap},
     fmt::Debug,
@@ -43,7 +44,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::time::Instant;
+use tokio::{task, time::Instant};
 use triomphe::Arc;
 
 #[derive(Debug, Clone, Copy)]
@@ -388,12 +389,25 @@ pub trait BuiltIn<R: Rt, E: UserEvent> {
     fn init(ctx: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E>;
 }
 
+pub trait Abortable {
+    fn abort(&self);
+}
+
+impl Abortable for task::AbortHandle {
+    fn abort(&self) {
+        task::AbortHandle::abort(self)
+    }
+}
+
 pub trait Rt: Debug + 'static {
+    type AbortHandle: Abortable;
+
     fn clear(&mut self);
 
-    /// Subscribe to the specified netidx path. When the subscription
-    /// updates you are expected to deliver Netidx events to the
-    /// expression specified by ref_by.
+    /// Subscribe to the specified netidx path
+    ///
+    /// When the subscription updates you are expected to deliver
+    /// Netidx events to the expression specified by ref_by.
     fn subscribe(&mut self, flags: UpdatesFlags, path: Path, ref_by: ExprId) -> Dval;
 
     /// Called when a subscription is no longer needed
@@ -486,14 +500,122 @@ pub trait Rt: Debug + 'static {
     /// the timer expires you are expected to deliver a Variable event
     /// for the id, containing the current time.
     fn set_timer(&mut self, id: BindId, timeout: Duration);
+
+    /// Spawn a task
+    ///
+    /// When the task completes it's output must be delivered as a
+    /// variable event using the returned `BindId`
+    ///
+    /// Calling `abort` must guarantee that if it is called before the
+    /// task completes then no update will be delivered.
+    fn spawn<F: Future<Output = (BindId, Value)> + Send + 'static>(
+        &mut self,
+        f: F,
+    ) -> Self::AbortHandle;
+
+    /// Ask the runtime to watch a channel
+    ///
+    /// When event batches arrive via the channel the runtime must
+    /// deliver the events as variable updates.
+    fn watch(&mut self, s: mpsc::Receiver<GPooled<Vec<(BindId, Value)>>>);
+}
+
+#[derive(Default)]
+pub struct LibState(FxHashMap<TypeId, Box<dyn Any + Send + Sync + 'static>>);
+
+impl LibState {
+    /// Look up and return the context global library state of type
+    /// `T`.
+    ///
+    /// If none is registered in this context for `T` then create one
+    /// using `T::default`
+    pub fn get_or_default<T>(&mut self) -> &mut T
+    where
+        T: Default + Any + Send + Sync + 'static,
+    {
+        self.0
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| {
+                Box::new(T::default()) as Box<dyn Any + Send + Sync + 'static>
+            })
+            .downcast_mut::<T>()
+            .unwrap()
+    }
+
+    /// Look up and return the context global library state of type
+    /// `T`.
+    ///
+    /// If none is registered in this context for `T` then create one
+    /// using the provided function.
+    pub fn get_or_else<T, F>(&mut self, f: F) -> &mut T
+    where
+        T: Any + Send + Sync + 'static,
+        F: FnOnce() -> T,
+    {
+        self.0
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| Box::new(f()) as Box<dyn Any + Send + Sync + 'static>)
+            .downcast_mut::<T>()
+            .unwrap()
+    }
+
+    /// Look up and return a reference to the context global library
+    /// state of type `T`.
+    ///
+    /// If none is registered in this context for `T` return `None`
+    pub fn get<T>(&mut self) -> Option<&T>
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.0.get(&TypeId::of::<T>()).map(|t| t.downcast_ref::<T>().unwrap())
+    }
+
+    /// Look up and return a mutable reference to the context global
+    /// library state of type `T`.
+    ///
+    /// If none is registered return `None`
+    pub fn get_mut<T>(&mut self) -> Option<&mut T>
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.0.get_mut(&TypeId::of::<T>()).map(|t| t.downcast_mut::<T>().unwrap())
+    }
+
+    /// Set the context global library state of type `T`
+    ///
+    /// Any existing state will be returned
+    pub fn set<T>(&mut self, t: T) -> Option<Box<T>>
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.0
+            .insert(
+                TypeId::of::<T>(),
+                Box::new(t) as Box<dyn Any + Send + Sync + 'static>,
+            )
+            .map(|t| t.downcast::<T>().unwrap())
+    }
+
+    /// Remove and refurn the context global state library state of type `T`
+    pub fn remove<T>(&mut self) -> Option<Box<T>>
+    where
+        T: Any + Send + Sync + 'static,
+    {
+        self.0.remove(&TypeId::of::<T>()).map(|t| t.downcast::<T>().unwrap())
+    }
 }
 
 pub struct ExecCtx<R: Rt, E: UserEvent> {
     builtins: FxHashMap<&'static str, (FnType, BuiltInInitFn<R, E>)>,
     builtins_allowed: bool,
     tags: FxHashSet<ArcStr>,
+    /// context global library state for built-in functions
+    pub libstate: LibState,
+    /// the language environment, typdefs, binds, lambdas, etc
     pub env: Env<R, E>,
+    /// the last value of every bound variable
     pub cached: FxHashMap<BindId, Value>,
+    /// the runtime
     pub rt: R,
 }
 
@@ -516,6 +638,7 @@ impl<R: Rt, E: UserEvent> ExecCtx<R, E> {
             env: Env::new(),
             builtins: FxHashMap::default(),
             builtins_allowed: true,
+            libstate: LibState::default(),
             tags: FxHashSet::default(),
             cached: HashMap::default(),
             rt: user,

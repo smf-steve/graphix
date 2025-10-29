@@ -42,6 +42,11 @@ This document tracks improvements and additions needed for both the Graphix comp
   standard infix prescidence rules, and boolean compares are higher than and,
   or, and not
 
+### Parser allow trailing ;
+- Allow trailing ; in the shell
+- possibly allow it in modules, do the same thing as rust and OCaml
+  and insert a NOP after it
+
 ### Module System Completeness
 - Add module renaming on use
 - Add gxi module signatures

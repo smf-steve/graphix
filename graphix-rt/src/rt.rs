@@ -3,7 +3,7 @@ use anyhow::{bail, Result};
 use arcstr::{literal, ArcStr};
 use chrono::prelude::*;
 use compact_str::format_compact;
-use futures::{channel::mpsc, FutureExt};
+use futures::{channel::mpsc, stream::SelectAll, FutureExt};
 use fxhash::FxHashMap;
 use graphix_compiler::{expr::ExprId, BindId, Rt};
 use netidx::{
@@ -17,14 +17,16 @@ use netidx_protocols::rpc::{
     self,
     server::{ArgSpec, RpcCall},
 };
+use poolshark::global::GPooled;
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
+    fmt::Debug,
     future,
     time::Duration,
 };
 use tokio::{
     sync::Mutex,
-    task::JoinSet,
+    task::{self, JoinSet},
     time::{self, Instant},
 };
 use triomphe::Arc;
@@ -49,6 +51,9 @@ pub struct GXRt<X: GXExt> {
     pub(super) pending_unsubscribe: VecDeque<(Instant, Dval)>,
     pub(super) change_trackers: FxHashMap<BindId, Arc<Mutex<ChangeTracker>>>,
     pub(super) tasks: JoinSet<(BindId, Value)>,
+    pub(super) watches: SelectAll<mpsc::Receiver<GPooled<Vec<(BindId, Value)>>>>,
+    // so the selectall will never return None
+    dummy_watch_tx: mpsc::Sender<GPooled<Vec<(BindId, Value)>>>,
     pub(super) batch: publisher::UpdateBatch,
     pub(super) publisher: Publisher,
     pub(super) subscriber: Subscriber,
@@ -70,6 +75,9 @@ impl<X: GXExt> GXRt<X> {
         let batch = publisher.start_batch();
         let mut tasks = JoinSet::new();
         tasks.spawn(async { future::pending().await });
+        let (dummy_watch_tx, dummy_rx) = mpsc::channel(1);
+        let mut watches = SelectAll::new();
+        watches.push(dummy_rx);
         Self {
             by_ref: HashMap::default(),
             var_updates: VecDeque::new(),
@@ -85,6 +93,8 @@ impl<X: GXExt> GXRt<X> {
             updated: HashMap::default(),
             ext: X::default(),
             tasks,
+            watches,
+            dummy_watch_tx,
             batch,
             publisher,
             subscriber,
@@ -124,6 +134,8 @@ macro_rules! check_changed {
 }
 
 impl<X: GXExt> Rt for GXRt<X> {
+    type AbortHandle = task::AbortHandle;
+
     fn clear(&mut self) {
         let Self {
             by_ref,
@@ -138,6 +150,8 @@ impl<X: GXExt> Rt for GXRt<X> {
             pending_unsubscribe,
             change_trackers,
             tasks,
+            watches,
+            dummy_watch_tx,
             batch,
             publisher,
             subscriber: _,
@@ -165,6 +179,10 @@ impl<X: GXExt> Rt for GXRt<X> {
         change_trackers.clear();
         *tasks = JoinSet::new();
         tasks.spawn(async { future::pending().await });
+        *watches = SelectAll::new();
+        let (tx, rx) = mpsc::channel(1);
+        *dummy_watch_tx = tx;
+        watches.push(rx);
         *batch = publisher.start_batch();
         let (tx, rx) = mpsc::channel(3);
         *updates_tx = tx;
@@ -374,5 +392,16 @@ impl<X: GXExt> Rt for GXRt<X> {
                 self.updated.entry(*eid).or_default();
             }
         }
+    }
+
+    fn spawn<F: Future<Output = (BindId, Value)> + Send + 'static>(
+        &mut self,
+        f: F,
+    ) -> Self::AbortHandle {
+        self.tasks.spawn(f)
+    }
+
+    fn watch(&mut self, s: mpsc::Receiver<GPooled<Vec<(BindId, Value)>>>) {
+        self.watches.push(s)
     }
 }
