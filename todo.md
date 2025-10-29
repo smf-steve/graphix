@@ -66,6 +66,11 @@ what the book section on embedding says, with automatic dependency discovery.
 
 sqrt, sin, cos, tan, etc.
 
+### Flushing behavior
+- add an optional #flush argument to print and printf
+- add a flush function to core
+- investigate difference in flush behavior on mac os vs linux
+
 ## Medium Priority
 
 ### Specialize Arithmetic Operators
