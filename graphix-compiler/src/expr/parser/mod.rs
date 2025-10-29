@@ -1730,13 +1730,16 @@ parser! {
 pub fn parse(ori: Origin) -> anyhow::Result<Arc<[Expr]>> {
     let ori = Arc::new(ori);
     set_origin(ori.clone());
-    let r: Vec<Expr> = sep_by1(expr(), attempt(sptoken(';')))
-        .skip(spaces())
-        .skip(eof())
-        .easy_parse(position::Stream::new(&*ori.text))
-        .map(|(r, _)| r)
-        .map_err(|e| anyhow::anyhow!(format!("{}", e)))?;
-    Ok(Arc::from(r))
+    let mut r: LPooled<Vec<Option<Expr>>> = sep_by1(
+        choice((expr().map(Some), look_ahead(spaces().with(eof())).map(|_| None))),
+        attempt(sptoken(';')),
+    )
+    .skip(spaces())
+    .skip(eof())
+    .easy_parse(position::Stream::new(&*ori.text))
+    .map(|(r, _)| r)
+    .map_err(|e| anyhow::anyhow!(format!("{}", e)))?;
+    Ok(Arc::from_iter(r.drain(..).filter_map(|e| e)))
 }
 
 /// Parse one and only one expression.

@@ -1360,6 +1360,6 @@ fn tupleref() {
 
 #[test]
 fn prop0() {
-    let s = "m{\"key\"}";
-    dbg!(test_parse_mapref(s).unwrap());
+    let s = "{ (u32:0) with a: (bytes: == u32:0) }\n";
+    dbg!(parse_one(s).unwrap());
 }
