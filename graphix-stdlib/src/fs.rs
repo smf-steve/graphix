@@ -4,30 +4,208 @@ use futures::{channel::mpsc, SinkExt, StreamExt};
 use fxhash::{FxHashMap, FxHashSet};
 use graphix_compiler::{err, BindId, CBATCH_POOL};
 use netidx_value::Value;
-use notify::RecommendedWatcher;
+use notify::{
+    event::{
+        AccessKind, CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind,
+        RenameMode,
+    },
+    EventKind, RecommendedWatcher,
+};
 use poolshark::global::GPooled;
 use std::{
     collections::hash_set,
     path::{Path, PathBuf},
+    pin::Pin,
 };
-use tokio::{select, sync::mpsc as tmpsc};
+use tokio::{fs, select, sync::mpsc as tmpsc};
 
 #[derive(Debug, Clone, Copy)]
 #[bitflags]
-#[repr(u8)]
+#[repr(u64)]
 enum Interest {
+    Access,
+    AccessOpen,
+    AccessClose,
+    AccessRead,
+    AccessOther,
     Create,
+    CreateFile,
+    CreateFolder,
+    CreateOther,
     Modify,
+    ModifyData,
+    ModifyDataSize,
+    ModifyDataContent,
+    ModifyDataOther,
+    ModifyMetadata,
+    ModifyMetadataAccessTime,
+    ModifyMetadataWriteTime,
+    ModifyMetadataPermissions,
+    ModifyMetadataOwnership,
+    ModifyMetadataExtended,
+    ModifyMetadataOther,
+    ModifyRename,
+    ModifyRenameTo,
+    ModifyRenameFrom,
+    ModifyRenameBoth,
+    ModifyRenameOther,
+    ModifyOther,
     Delete,
-    Rename,
+    DeleteFile,
+    DeleteFolder,
+    DeleteOther,
+    Other,
 }
 
 #[derive(Debug, Clone)]
 struct Watch {
     path: ArcStr,
+    canonical_path: PathBuf,
     id: BindId,
     interest: BitFlags<Interest>,
     recursive: bool,
+}
+
+impl Watch {
+    fn interested(&self, kind: &EventKind) -> bool {
+        use Interest::*;
+        match kind {
+            EventKind::Any => true,
+            EventKind::Access(AccessKind::Any) => self
+                .interest
+                .intersects(Access | AccessClose | AccessOpen | AccessRead | AccessOther),
+            EventKind::Access(AccessKind::Close(_)) => {
+                self.interest.intersects(Access | AccessClose)
+            }
+            EventKind::Access(AccessKind::Open(_)) => {
+                self.interest.intersects(Access | AccessOpen)
+            }
+            EventKind::Access(AccessKind::Read) => {
+                self.interest.intersects(Access | AccessRead)
+            }
+            EventKind::Access(AccessKind::Other) => {
+                self.interest.intersects(Access | AccessOther)
+            }
+            EventKind::Create(CreateKind::Any) => {
+                self.interest.intersects(Create | CreateFile | CreateFolder | CreateOther)
+            }
+            EventKind::Create(CreateKind::File) => {
+                self.interest.intersects(Create | CreateFile)
+            }
+            EventKind::Create(CreateKind::Folder) => {
+                self.interest.intersects(Create | CreateFolder)
+            }
+            EventKind::Create(CreateKind::Other) => {
+                self.interest.intersects(Create | CreateOther)
+            }
+            EventKind::Modify(ModifyKind::Any) => self.interest.intersects(
+                Modify
+                    | ModifyData
+                    | ModifyDataSize
+                    | ModifyDataContent
+                    | ModifyDataOther
+                    | ModifyMetadata
+                    | ModifyMetadataAccessTime
+                    | ModifyMetadataWriteTime
+                    | ModifyMetadataPermissions
+                    | ModifyMetadataOwnership
+                    | ModifyMetadataExtended
+                    | ModifyMetadataOther
+                    | ModifyRename
+                    | ModifyRenameTo
+                    | ModifyRenameFrom
+                    | ModifyRenameBoth
+                    | ModifyRenameOther
+                    | ModifyOther,
+            ),
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)) => {
+                self.interest.intersects(
+                    Modify
+                        | ModifyData
+                        | ModifyDataSize
+                        | ModifyDataContent
+                        | ModifyDataOther,
+                )
+            }
+            EventKind::Modify(ModifyKind::Data(DataChange::Content)) => {
+                self.interest.intersects(Modify | ModifyData | ModifyDataContent)
+            }
+            EventKind::Modify(ModifyKind::Data(DataChange::Size)) => {
+                self.interest.intersects(Modify | ModifyData | ModifyDataSize)
+            }
+            EventKind::Modify(ModifyKind::Data(DataChange::Other)) => {
+                self.interest.intersects(Modify | ModifyData | ModifyDataOther)
+            }
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)) => {
+                self.interest.intersects(
+                    Modify
+                        | ModifyMetadata
+                        | ModifyMetadataAccessTime
+                        | ModifyMetadataWriteTime
+                        | ModifyMetadataPermissions
+                        | ModifyMetadataOwnership
+                        | ModifyMetadataExtended
+                        | ModifyMetadataOther,
+                )
+            }
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::AccessTime)) => self
+                .interest
+                .intersects(Modify | ModifyMetadata | ModifyMetadataAccessTime),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Extended)) => {
+                self.interest.intersects(Modify | ModifyMetadata | ModifyMetadataExtended)
+            }
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Other)) => {
+                self.interest.intersects(Modify | ModifyMetadata | ModifyMetadataOther)
+            }
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Ownership)) => self
+                .interest
+                .intersects(Modify | ModifyMetadata | ModifyMetadataOwnership),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Permissions)) => self
+                .interest
+                .intersects(Modify | ModifyMetadata | ModifyMetadataPermissions),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)) => self
+                .interest
+                .intersects(Modify | ModifyMetadata | ModifyMetadataWriteTime),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any)) => {
+                self.interest.intersects(
+                    Modify
+                        | ModifyRename
+                        | ModifyRenameTo
+                        | ModifyRenameFrom
+                        | ModifyRenameBoth
+                        | ModifyRenameOther,
+                )
+            }
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
+                self.interest.intersects(Modify | ModifyRename | ModifyRenameBoth)
+            }
+            EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
+                self.interest.intersects(Modify | ModifyRename | ModifyRenameFrom)
+            }
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
+                self.interest.intersects(Modify | ModifyRename | ModifyRenameTo)
+            }
+            EventKind::Modify(ModifyKind::Name(RenameMode::Other)) => {
+                self.interest.intersects(Modify | ModifyRename | ModifyRenameOther)
+            }
+            EventKind::Modify(ModifyKind::Other) => {
+                self.interest.intersects(Modify | ModifyOther)
+            }
+            EventKind::Remove(RemoveKind::Any) => {
+                self.interest.intersects(Delete | DeleteFile | DeleteFolder | DeleteOther)
+            }
+            EventKind::Remove(RemoveKind::File) => {
+                self.interest.intersects(Delete | DeleteFile)
+            }
+            EventKind::Remove(RemoveKind::Folder) => {
+                self.interest.intersects(Delete | DeleteFolder)
+            }
+            EventKind::Remove(RemoveKind::Other) => {
+                self.interest.intersects(Delete | DeleteOther)
+            }
+            EventKind::Other => self.interest.contains(Other),
+        }
+    }
 }
 
 enum WatchCmd {
@@ -41,6 +219,25 @@ impl notify::EventHandler for NotifyChan {
     }
 }
 
+/// like fs::cananocialize, but will never fail. It will canonicalize
+/// as much of the path as it's possible to canonicalize and leave the
+/// rest untouched.
+fn best_effort_canonicalize(path: PathBuf) -> Pin<Box<dyn Future<Output = PathBuf>>> {
+    Box::pin(async move {
+        match fs::canonicalize(&path).await {
+            Ok(p) => p,
+            Err(_) => match (path.parent(), path.file_name()) {
+                (None, None) => PathBuf::new(),
+                (None, Some(_)) => PathBuf::from(path),
+                (Some(parent), None) => best_effort_canonicalize(parent.into()).await,
+                (Some(parent), Some(file)) => {
+                    best_effort_canonicalize(parent.into()).await.join(file)
+                }
+            },
+        }
+    })
+}
+
 #[derive(Default)]
 struct Watched {
     by_id: FxHashMap<BindId, Watch>,
@@ -48,7 +245,8 @@ struct Watched {
 }
 
 impl Watched {
-    fn relevant_watches<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a Watch> {
+    /// return an iterator over all the watches that are relevant to a particular path
+    fn relevant_to<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a Watch> {
         struct I<'a> {
             t: &'a Watched,
             path: Option<&'a Path>,
@@ -83,8 +281,45 @@ impl Watched {
         I { t: self, path: Some(path), curr: None }
     }
 
-    fn add_watch(&mut self, w: Watch) {
-        todo!()
+    /// return an iterator over all watches triggered by a particular event
+    fn triggered_by<'a>(
+        &'a self,
+        event: &'a notify::Event,
+    ) -> impl Iterator<Item = &'a Watch> {
+        event
+            .paths
+            .iter()
+            .flat_map(|p| self.relevant_to(p))
+            .filter(|w| w.interested(&event.kind))
+    }
+
+    /// add a watch and return the canonicalized path
+    async fn add_watch(&mut self, mut w: Watch) -> PathBuf {
+        let id = w.id;
+        let path = best_effort_canonicalize(PathBuf::from(&*w.path)).await;
+        w.canonical_path = path.clone();
+        self.by_id.insert(id, w);
+        self.by_root.entry(path.clone()).or_default().insert(id);
+        path
+    }
+
+    /// remove a watch, and return it's root path if it is the last
+    /// watch with that root
+    async fn remove_watch(&mut self, id: &BindId) -> Option<PathBuf> {
+        self.by_id.remove(id).and_then(|w| {
+            match self.by_root.get_mut(&w.canonical_path) {
+                None => Some(w.canonical_path),
+                Some(ids) => {
+                    ids.remove(id);
+                    if ids.is_empty() {
+                        self.by_root.remove(&w.canonical_path);
+                        Some(w.canonical_path)
+                    } else {
+                        None
+                    }
+                }
+            }
+        })
     }
 }
 
@@ -94,6 +329,7 @@ async fn file_watcher_loop(
     mut rx: mpsc::UnboundedReceiver<WatchCmd>,
     mut tx: mpsc::Sender<GPooled<Vec<(BindId, Value)>>>,
 ) {
+    let mut watched = Watched::default();
     let mut recv_buf = vec![];
     loop {
         select! {
