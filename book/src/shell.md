@@ -158,6 +158,10 @@ won't print the expression returned by `tui::text::text(&"count is [count]")` to
 
 ![TUI Output](ui/tui/media/tui_output_example.gif)
 
+When you type `Ctrl+C` the shell will exit TUI mode and return to the
+normal shell mode. You can use this behavior to experiment with TUI
+widgets interactively.
+
 ## Module Resolution
 
 A crucial feature of the shell is its automatic module path configuration. Understanding how this works is essential for organizing larger projects.

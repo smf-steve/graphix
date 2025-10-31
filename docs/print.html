@@ -2693,6 +2693,9 @@ mode and will render the output expression as a tui. For example,</p>
 </code></pre>
 <p>won't print the expression returned by <code>tui::text::text(&amp;"count is [count]")</code> to stdout, it will build a tui,</p>
 <p><img src="ui/tui/media/tui_output_example.gif" alt="TUI Output" /></p>
+<p>When you type <code>Ctrl+C</code> the shell will exit TUI mode and return to the
+normal shell mode. You can use this behavior to experiment with TUI
+widgets interactively.</p>
 <h2 id="module-resolution"><a class="header" href="#module-resolution">Module Resolution</a></h2>
 <p>A crucial feature of the shell is its automatic module path configuration. Understanding how this works is essential for organizing larger projects.</p>
 <h3 id="running-a-local-file"><a class="header" href="#running-a-local-file">Running a Local File</a></h3>
