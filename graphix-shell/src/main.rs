@@ -181,7 +181,7 @@ async fn main() -> Result<()> {
             .log_to_file(
                 FileSpec::default()
                     .directory(dir)
-                    .basename("netidx-shell")
+                    .basename("graphix")
                     .use_timestamp(false),
             )
             .start()

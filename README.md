@@ -3,7 +3,7 @@
 A reactive dataflow programming language for building user interfaces
 and network applications.
 
-![Graphix TUI Example](book/src/ui/tui/media/overview_first.gif)
+![Graphix TUI Example](../book/src/ui/tui/media/overview_first.gif)
 
 [Join us on Discord](https://discord.gg/bQv4gNR8WK)
 
@@ -126,16 +126,16 @@ Press `Ctrl+C` to exit.
 Graphix includes a comprehensive terminal UI library with support for:
 
 ### Interactive Tables
-![Table Example](book/src/ui/tui/media/table_interactive.gif)
+![Table Example](../book/src/ui/tui/media/table_interactive.gif)
 
 ### Dynamic Charts
-![Canvas Animation](book/src/ui/tui/media/canvas_animated.gif)
+![Canvas Animation](../book/src/ui/tui/media/canvas_animated.gif)
 
 ### Scrollable Content
-![Paragraph Scrolling](book/src/ui/tui/media/scroll_paragraph.gif)
+![Paragraph Scrolling](../book/src/ui/tui/media/scroll_paragraph.gif)
 
 ### Focus Management
-![Layout Focus](book/src/ui/tui/media/layout_focus.gif)
+![Layout Focus](../book/src/ui/tui/media/layout_focus.gif)
 
 ## Documentation
 
