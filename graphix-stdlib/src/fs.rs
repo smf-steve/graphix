@@ -9,6 +9,7 @@ use poolshark::global::GPooled;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    slice,
 };
 use tokio::{select, sync::mpsc as tmpsc};
 
@@ -44,7 +45,7 @@ impl notify::EventHandler for NotifyChan {
 #[derive(Default)]
 struct Watched {
     by_id: FxHashMap<BindId, Watch>,
-    by_root: FxHashMap<PathBuf, BindId>,
+    by_root: FxHashMap<PathBuf, Vec<BindId>>,
 }
 
 impl Watched {
@@ -52,6 +53,7 @@ impl Watched {
         struct I<'a> {
             t: &'a Watched,
             path: Option<&'a Path>,
+            curr: slice::Iter<'a, BindId>,
         }
         impl<'a> Iterator for I<'a> {
             type Item = &'a Watch;

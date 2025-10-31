@@ -25,9 +25,7 @@ use poolshark::{
 use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
-    future, mem,
-    path::PathBuf,
-    result,
+    future, mem, result,
     sync::Weak,
     time::Duration,
 };
@@ -372,11 +370,10 @@ impl<X: GXExt> GX<X> {
         Ok(CompRes { exprs, env: self.ctx.env.clone() })
     }
 
-    async fn load_exprs(&self, file: &ArcStr) -> Result<(Origin, Arc<[Expr]>)> {
-        let (ori, exprs) = match file.strip_prefix("netidx:") {
-            None => {
-                let file = PathBuf::from(&**file);
-                let file = file.canonicalize()?;
+    async fn load_exprs(&self, source: &Source) -> Result<(Origin, Arc<[Expr]>)> {
+        let (ori, exprs) = match source {
+            Source::File(file) => {
+                let file = fs::canonicalize(file).await?;
                 let s = fs::read_to_string(&file).await?;
                 let s = if s.starts_with("#!") {
                     if let Some(i) = s.find('\n') {
@@ -394,8 +391,7 @@ impl<X: GXExt> GX<X> {
                 };
                 (ori.clone(), expr::parser::parse(ori)?)
             }
-            Some(path) => {
-                let path = netidx::path::Path::from(ArcStr::from(path));
+            Source::Netidx(path) => {
                 let val = self
                     .ctx
                     .rt
@@ -411,24 +407,27 @@ impl<X: GXExt> GX<X> {
                         bail!("can't load {v} expected a string")
                     }
                 };
-                let ori = Origin {
-                    parent: None,
-                    source: Source::Netidx(path),
-                    text: src.clone(),
-                };
+                let ori =
+                    Origin { parent: None, source: source.clone(), text: src.clone() };
                 (ori.clone(), expr::parser::parse(ori)?)
             }
+            Source::Internal(src) => {
+                let ori =
+                    Origin { parent: None, source: source.clone(), text: src.clone() };
+                (ori.clone(), expr::parser::parse(ori)?)
+            }
+            Source::Unspecified => bail!("can't load from an unspecified source"),
         };
         Ok((ori, exprs))
     }
 
-    async fn check(&mut self, file: &ArcStr) -> Result<()> {
+    async fn check(&mut self, source: &Source) -> Result<()> {
         let env = self.ctx.env.clone();
         let go = async {
             let st = Instant::now();
             info!("parse time: {:?}", st.elapsed());
             let scope = Scope::root();
-            let (ori, exprs) = self.load_exprs(file).await?;
+            let (ori, exprs) = self.load_exprs(source).await?;
             let exprs =
                 try_join_all(exprs.iter().map(|e| e.resolve_modules(&self.resolvers)))
                     .await?;
@@ -457,10 +456,10 @@ impl<X: GXExt> GX<X> {
         res
     }
 
-    async fn load(&mut self, rt: GXHandle<X>, file: &ArcStr) -> Result<CompRes<X>> {
+    async fn load(&mut self, rt: GXHandle<X>, source: &Source) -> Result<CompRes<X>> {
         let scope = Scope::root();
         let st = Instant::now();
-        let (ori, exprs) = self.load_exprs(file).await?;
+        let (ori, exprs) = self.load_exprs(source).await?;
         info!("parse time: {:?}", st.elapsed());
         let st = Instant::now();
         let exprs =

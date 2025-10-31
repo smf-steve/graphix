@@ -12,7 +12,7 @@ use enumflags2::BitFlags;
 use fxhash::FxHashSet;
 use graphix_compiler::{
     env::Env,
-    expr::{ExprId, ModPath, ModuleResolver},
+    expr::{ExprId, ModPath, ModuleResolver, Source},
     typ::{FnType, Type},
     BindId, CFlag, Event, ExecCtx, NoUserEvent, Scope, UserEvent,
 };
@@ -397,12 +397,12 @@ enum ToGX<X: GXExt> {
         id: ExprId,
     },
     Load {
-        path: ArcStr,
+        path: Source,
         rt: GXHandle<X>,
         res: oneshot::Sender<Result<CompRes<X>>>,
     },
     Check {
-        path: ArcStr,
+        path: Source,
         res: oneshot::Sender<Result<()>>,
     },
     Compile {
@@ -477,7 +477,7 @@ impl<X: GXExt> GXHandle<X> {
     /// will not be altered by checking an expression, so you will not
     /// be able to use any defined names later in the program. If you
     /// want to do that see `compile`.
-    pub async fn check(&self, path: ArcStr) -> Result<()> {
+    pub async fn check(&self, path: Source) -> Result<()> {
         Ok(self.exec(|tx| ToGX::Check { path, res: tx }).await??)
     }
 
@@ -492,15 +492,13 @@ impl<X: GXExt> GXHandle<X> {
         Ok(self.exec(|tx| ToGX::Compile { text, res: tx, rt: self.clone() }).await??)
     }
 
-    /// Load and execute a graphix module
+    /// Load and execute a file or netidx value
     ///
-    /// If path startes with `netidx:` then the module will be loaded
-    /// from netidx, otherwise it will be loaded from the
-    /// filesystem. When the `CompExp` objects contained in the
-    /// `CompRes` are dropped their corresponding expressions will be
+    /// When the `CompExp` objects contained in the `CompRes` are
+    /// dropped their corresponding expressions will be
     /// deleted. Therefore, you can stop execution of the whole file
     /// by dropping the returned `CompRes`.
-    pub async fn load(&self, path: ArcStr) -> Result<CompRes<X>> {
+    pub async fn load(&self, path: Source) -> Result<CompRes<X>> {
         Ok(self.exec(|tx| ToGX::Load { path, res: tx, rt: self.clone() }).await??)
     }
 

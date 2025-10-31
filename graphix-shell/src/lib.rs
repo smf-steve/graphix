@@ -3,7 +3,7 @@ use arcstr::{literal, ArcStr};
 use derive_builder::Builder;
 use enumflags2::BitFlags;
 use graphix_compiler::{
-    expr::{CouldNotResolve, ExprId, ModPath, ModuleResolver},
+    expr::{CouldNotResolve, ExprId, ModPath, ModuleResolver, Source},
     format_with_flags,
     typ::{TVal, Type},
     CFlag, ExecCtx, PrintFlag,
@@ -109,22 +109,19 @@ pub enum Mode {
     /// as it executes. Ctrl-C cancel's execution of the last
     /// expression and Ctrl-D exits the shell.
     Repl,
-    /// Load compile and execute the specified file. Print the value
+    /// Load compile and execute a file. Print the value
     /// of the last expression in the file to stdout. Ctrl-C exits the
     /// shell.
-    File(ArcStr),
-    /// Compile and execute the code in the specified string. Besides
-    /// not loading from a file this mode behaves exactly like File.
-    Static(ArcStr),
+    Script(Source),
     /// Check that the specified file compiles but do not run it
-    Check(ArcStr),
+    Check(Source),
 }
 
 impl Mode {
     fn file_mode(&self) -> bool {
         match self {
             Self::Repl => false,
-            Self::File(_) | Self::Check(_) | Self::Static(_) => true,
+            Self::Script(_) | Self::Check(_) => true,
         }
     }
 }
@@ -210,9 +207,7 @@ impl<X: GXExt> Shell<X> {
             None => ArcStr::from(format!("{root};\nmod tui")),
         };
         let mut flags = match self.mode {
-            Mode::File(_) | Mode::Check(_) | Mode::Static(_) => {
-                CFlag::WarnUnhandled | CFlag::WarnUnused
-            }
+            Mode::Script(_) | Mode::Check(_) => CFlag::WarnUnhandled | CFlag::WarnUnused,
             Mode::Repl => BitFlags::empty(),
         };
         flags.insert(self.enable_flags);
@@ -247,28 +242,19 @@ impl<X: GXExt> Shell<X> {
         exprs: &mut Vec<CompExp<X>>,
     ) -> Result<Env<X>> {
         let env;
-        macro_rules! file_mode {
-            ($r:expr) => {{
-                exprs.extend($r.exprs);
+        match &self.mode {
+            Mode::Check(source) => {
+                gx.check(source.clone()).await?;
+                exit(0)
+            }
+            Mode::Script(source) => {
+                let r = gx.load(source.clone()).await?;
+                exprs.extend(r.exprs);
                 env = gx.get_env().await?;
                 if let Some(e) = exprs.pop() {
                     *output = Output::from_expr(&gx, &env, e);
                 }
                 *newenv = None
-            }};
-        }
-        match &self.mode {
-            Mode::File(file) => {
-                let r = gx.load(file.clone()).await?;
-                file_mode!(r)
-            }
-            Mode::Check(file) => {
-                gx.check(file.clone()).await?;
-                exit(0)
-            }
-            Mode::Static(s) => {
-                let r = gx.compile(s.clone()).await?;
-                file_mode!(r)
             }
             Mode::Repl if !self.no_init => match gx.compile("mod init".into()).await {
                 Ok(res) => {

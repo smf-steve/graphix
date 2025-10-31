@@ -32,6 +32,7 @@
   - [Inline Modules](./modules/inline.md)
   - [External Modules](./modules/external.md)
   - [Dynamic Modules](./modules/dynamic.md)
+- [The Graphix Shell](./shell.md)
 - [The Standard Library](./stdlib/overview.md)
   - [core](./stdlib/core.md)
   - [net](./stdlib/net.md)

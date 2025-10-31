@@ -3,12 +3,16 @@ use arcstr::ArcStr;
 use clap::Parser;
 use enumflags2::BitFlags;
 use flexi_logger::{FileSpec, Logger};
-use graphix_compiler::{expr::ModuleResolver, CFlag};
+use graphix_compiler::{
+    expr::{ModuleResolver, Source},
+    CFlag,
+};
 use graphix_rt::NoExt;
 use graphix_shell::{Mode, ShellBuilder};
 use log::info;
 use netidx::{
     config::Config,
+    path::Path,
     publisher::{BindCfg, DesiredAuth, Publisher, PublisherBuilder},
     subscriber::{Subscriber, SubscriberBuilder},
     InternalOnly,
@@ -205,30 +209,31 @@ async fn main() -> Result<()> {
         bail!("check mode requires a file to check")
     }
     if let Some(f) = &p.file {
-        let mode = if p.check { Mode::Check(f.clone()) } else { Mode::File(f.clone()) };
-        shell = shell.mode(mode);
-        match f.strip_prefix("netidx:") {
+        let source = match f.strip_prefix("netidx:") {
             Some(path) => {
-                let path = netidx::path::Path::from(ArcStr::from(path));
                 shell = shell.module_resolvers(vec![ModuleResolver::Netidx {
                     subscriber: subscriber.clone(),
-                    base: path,
+                    base: netidx::path::Path::from(ArcStr::from(path)),
                     timeout: None,
                 }]);
+                Source::Netidx(Path::from(ArcStr::from(path)))
             }
             None => {
-                let path = PathBuf::from(&**f);
+                let path = PathBuf::from(&**f).canonicalize()?;
+                let path = if path.is_dir() { path.join("main.gx") } else { path };
                 match path.parent() {
                     Some(p) if p.as_os_str().is_empty() => (),
                     None => (),
                     Some(p) => {
-                        shell = shell.module_resolvers(vec![ModuleResolver::Files(
-                            p.canonicalize()?,
-                        )]);
+                        let p = PathBuf::from(p);
+                        shell = shell.module_resolvers(vec![ModuleResolver::Files(p)]);
                     }
-                }
+                };
+                Source::File(path)
             }
-        }
+        };
+        let mode = if p.check { Mode::Check(source) } else { Mode::Script(source) };
+        shell = shell.mode(mode);
     }
     let (enable, disable) = RawFlag::as_flags(&p.warn);
     shell
