@@ -208,7 +208,7 @@ Run it with `graphix counter.gx` and you'll see the count printed to the console
 In Graphix programs:
 
 - **The last value** is what determines what the shell displays
-  - If it's a `Widget` type (like our text example), then it is rendered as a TUI
+  - If it's a `Tui` type (like our text example), then it is rendered as a TUI
   - Otherwise, the value is printed to the console every time it updates
 - **Use `print` or `println`** for explicit output during execution
 - **Programs run forever** unless they explicitly exit - they're reactive graphs that respond to events

@@ -24,7 +24,7 @@ use triomphe::Arc as TArc;
 
 mod array;
 mod core;
-//mod fs;
+mod fs;
 mod map;
 mod net;
 mod rand;

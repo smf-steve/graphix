@@ -1,15 +1,14 @@
 use arcstr::ArcStr;
 use enumflags2::{bitflags, BitFlags};
 use futures::{channel::mpsc, SinkExt, StreamExt};
-use fxhash::FxHashMap;
+use fxhash::{FxHashMap, FxHashSet};
 use graphix_compiler::{err, BindId, CBATCH_POOL};
 use netidx_value::Value;
 use notify::RecommendedWatcher;
 use poolshark::global::GPooled;
 use std::{
-    collections::BTreeMap,
+    collections::hash_set,
     path::{Path, PathBuf},
-    slice,
 };
 use tokio::{select, sync::mpsc as tmpsc};
 
@@ -45,7 +44,7 @@ impl notify::EventHandler for NotifyChan {
 #[derive(Default)]
 struct Watched {
     by_id: FxHashMap<BindId, Watch>,
-    by_root: FxHashMap<PathBuf, Vec<BindId>>,
+    by_root: FxHashMap<PathBuf, FxHashSet<BindId>>,
 }
 
 impl Watched {
@@ -53,29 +52,39 @@ impl Watched {
         struct I<'a> {
             t: &'a Watched,
             path: Option<&'a Path>,
-            curr: slice::Iter<'a, BindId>,
+            curr: Option<hash_set::Iter<'a, BindId>>,
         }
         impl<'a> Iterator for I<'a> {
             type Item = &'a Watch;
 
             fn next(&mut self) -> Option<Self::Item> {
                 loop {
+                    if let Some(sl) = self.curr.as_mut()
+                        && let Some(id) = sl.next()
+                    {
+                        match self.t.by_id.get(id) {
+                            Some(w) => break Some(w),
+                            None => continue,
+                        }
+                    }
                     match self.path {
                         None => break None,
                         Some(path) => match self.t.by_root.get(path) {
                             None => self.path = path.parent(),
-                            Some(id) => {
+                            Some(ids) => {
                                 self.path = path.parent();
-                                if let Some(w) = self.t.by_id.get(id) {
-                                    break Some(w);
-                                }
+                                self.curr = Some(ids.iter())
                             }
                         },
                     }
                 }
             }
         }
-        I { t: self, path: Some(path) }
+        I { t: self, path: Some(path), curr: None }
+    }
+
+    fn add_watch(&mut self, w: Watch) {
+        todo!()
     }
 }
 
