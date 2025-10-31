@@ -31,7 +31,7 @@ When you pass a file path, directory path or netidx url to `graphix`, it runs in
 ```bash
 graphix ./myprogram.gx
 graphix ./myapp # my app is a directory containing a main.gx
-graphix netidx:/path/to/my/program # program is a netidx value containing graphix source
+graphix netidx:/path/to/my/program
 ```
 
 In script mode:
