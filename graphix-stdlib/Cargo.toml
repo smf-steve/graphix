@@ -1,6 +1,6 @@
 [package]
 name = "graphix-stdlib"
-version = "0.1.17"
+version = "0.1.18"
 authors = ["Eric Stokes <letaris@gmail.com>"]
 edition = "2024"
 homepage = "https://graphix-lang.github.io/graphix"
