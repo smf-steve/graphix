@@ -26,7 +26,7 @@ REPL mode is designed for interactive exploration. It doesn't enable warnings by
 
 ### Script Mode
 
-When you pass a file path, directory path or netidx url to `graphix`, it runs in script mode:
+When you pass a file path, directory path, or netidx url to `graphix`, it runs in script mode:
 
 ```bash
 graphix ./myprogram.gx
