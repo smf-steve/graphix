@@ -36,7 +36,9 @@ graphix netidx:/path/to/my/program
 
 In script mode:
 - The entire program source is loaded, compiled, and executed
-- The value of the last expression is printed to stdout as it updates
+- The value of the last expression is
+    - is built into a TUI if it is of type Tui
+    - is printed to stdout as it updates
 - `Ctrl+C` exits the program
 - Warnings are enabled by default (unused variables, unhandled errors)
 

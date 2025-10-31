@@ -202,7 +202,12 @@ graphix netidx:/path/to/my/program
 <p>In script mode:</p>
 <ul>
 <li>The entire program source is loaded, compiled, and executed</li>
-<li>The value of the last expression is printed to stdout as it updates</li>
+<li>The value of the last expression is
+<ul>
+<li>is built into a TUI if it is of type Tui</li>
+<li>is printed to stdout as it updates</li>
+</ul>
+</li>
 <li><code>Ctrl+C</code> exits the program</li>
 <li>Warnings are enabled by default (unused variables, unhandled errors)</li>
 </ul>
