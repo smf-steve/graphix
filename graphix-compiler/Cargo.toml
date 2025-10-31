@@ -1,6 +1,6 @@
 [package]
 name = "graphix-compiler"
-version = "0.1.16"
+version = "0.1.17"
 authors = ["Eric Stokes <eestokes@pm.me>"]
 edition = "2024"
 homepage = "https://graphix-lang.github.io/graphix"
