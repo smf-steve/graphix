@@ -188,8 +188,13 @@
 <li>Input is read line by line from the user</li>
 <li>Each line is compiled and executed immediately</li>
 <li>Completion is available via the Tab key</li>
-<li>The value and type of output expressions are printed as they update</li>
-<li><code>Ctrl+C</code> cancels the currently running expression</li>
+<li>The value and type of output expressions are
+<ul>
+<li>built into TUIs if they are of type Tui</li>
+<li>printed to stdout if they are not</li>
+</ul>
+</li>
+<li><code>Ctrl+C</code> cancels the currently running expression/tui</li>
 <li><code>Ctrl+D</code> exits the shell</li>
 </ul>
 <p>REPL mode is designed for interactive exploration. It doesn't enable warnings by default to keep the experience lightweight.</p>
@@ -205,7 +210,7 @@ graphix netidx:/path/to/my/program
 <li>The value of the last expression is
 <ul>
 <li>built into a TUI if it is of type Tui</li>
-<li>printed to stdout as it updates</li>
+<li>printed to stdout as it updates if it is not</li>
 </ul>
 </li>
 <li><code>Ctrl+C</code> exits the program</li>

@@ -18,8 +18,10 @@ In REPL mode:
 - Input is read line by line from the user
 - Each line is compiled and executed immediately
 - Completion is available via the Tab key
-- The value and type of output expressions are printed as they update
-- `Ctrl+C` cancels the currently running expression
+- The value and type of output expressions are
+    - built into TUIs if they are of type Tui
+    - printed to stdout if they are not
+- `Ctrl+C` cancels the currently running expression/tui
 - `Ctrl+D` exits the shell
 
 REPL mode is designed for interactive exploration. It doesn't enable warnings by default to keep the experience lightweight.
@@ -38,7 +40,7 @@ In script mode:
 - The entire program source is loaded, compiled, and executed
 - The value of the last expression is
     - built into a TUI if it is of type Tui
-    - printed to stdout as it updates
+    - printed to stdout as it updates if it is not
 - `Ctrl+C` exits the program
 - Warnings are enabled by default (unused variables, unhandled errors)
 
