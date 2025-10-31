@@ -24,52 +24,41 @@ In REPL mode:
 
 REPL mode is designed for interactive exploration. It doesn't enable warnings by default to keep the experience lightweight.
 
-### File Mode
+### Script Mode
 
-When you pass a file path to `graphix`, it loads and executes that file:
+When you pass a file path, directory path or netidx url to `graphix`, it runs in script mode:
 
 ```bash
-graphix ./myprogram
+graphix ./myprogram.gx
+graphix ./myapp # my app is a directory containing a main.gx
+graphix netidx:/path/to/my/program # program is a netidx value containing graphix source
 ```
 
-In file mode:
-- The entire file is loaded, compiled, and executed
+In script mode:
+- The entire program source is loaded, compiled, and executed
 - The value of the last expression is printed to stdout as it updates
 - `Ctrl+C` exits the program
 - Warnings are enabled by default (unused variables, unhandled errors)
 
-File mode is for running complete programs. The shell stays running to
+Script mode is for running complete programs. The shell stays running to
 handle the reactive graph's ongoing updates.
-
-### Directory Mode
-
-When you pass a directory to `graphix`, it will load and execute
-`directory/main.gx`. In other respects it's the same as file mode, but
-makes it easy to structure multiple modules as an "app bundle" in a
-directory.
 
 ### Check Mode
 
-Check mode compiles a file but doesn't execute it:
+Check mode compiles a program but doesn't execute it:
 
 ```bash
 graphix --check ./myprogram
 ```
+
+You can pass the same program sources to check mode as you can to file
+mode.
 
 This is useful for:
 - Verifying syntax and types without running side effects
 - Integrating with editors and build tools
 - Quick validation during development
 
-### Running From Netidx
-
-You can also run programs stored in netidx by specifying the netidx path to a program:
-
-```bash
-graphix netidx:/path/to/myprogram
-```
-
-This loads and executes `myprogram` from netidx.
 
 ## Understanding Output
 

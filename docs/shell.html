@@ -193,39 +193,33 @@
 <li><code>Ctrl+D</code> exits the shell</li>
 </ul>
 <p>REPL mode is designed for interactive exploration. It doesn't enable warnings by default to keep the experience lightweight.</p>
-<h3 id="file-mode"><a class="header" href="#file-mode">File Mode</a></h3>
-<p>When you pass a file path to <code>graphix</code>, it loads and executes that file:</p>
-<pre><code class="language-bash">graphix ./myprogram
+<h3 id="script-mode"><a class="header" href="#script-mode">Script Mode</a></h3>
+<p>When you pass a file path, directory path or netidx url to <code>graphix</code>, it runs in script mode:</p>
+<pre><code class="language-bash">graphix ./myprogram.gx
+graphix ./myapp # my app is a directory containing a main.gx
+graphix netidx:/path/to/my/program # program is a netidx value containing graphix source
 </code></pre>
-<p>In file mode:</p>
+<p>In script mode:</p>
 <ul>
-<li>The entire file is loaded, compiled, and executed</li>
+<li>The entire program source is loaded, compiled, and executed</li>
 <li>The value of the last expression is printed to stdout as it updates</li>
 <li><code>Ctrl+C</code> exits the program</li>
 <li>Warnings are enabled by default (unused variables, unhandled errors)</li>
 </ul>
-<p>File mode is for running complete programs. The shell stays running to
+<p>Script mode is for running complete programs. The shell stays running to
 handle the reactive graph's ongoing updates.</p>
-<h3 id="directory-mode"><a class="header" href="#directory-mode">Directory Mode</a></h3>
-<p>When you pass a directory to <code>graphix</code>, it will load and execute
-<code>directory/main.gx</code>. In other respects it's the same as file mode, but
-makes it easy to structure multiple modules as an "app bundle" in a
-directory.</p>
 <h3 id="check-mode"><a class="header" href="#check-mode">Check Mode</a></h3>
-<p>Check mode compiles a file but doesn't execute it:</p>
+<p>Check mode compiles a program but doesn't execute it:</p>
 <pre><code class="language-bash">graphix --check ./myprogram
 </code></pre>
+<p>You can pass the same program sources to check mode as you can to file
+mode.</p>
 <p>This is useful for:</p>
 <ul>
 <li>Verifying syntax and types without running side effects</li>
 <li>Integrating with editors and build tools</li>
 <li>Quick validation during development</li>
 </ul>
-<h3 id="running-from-netidx"><a class="header" href="#running-from-netidx">Running From Netidx</a></h3>
-<p>You can also run programs stored in netidx by specifying the netidx path to a program:</p>
-<pre><code class="language-bash">graphix netidx:/path/to/myprogram
-</code></pre>
-<p>This loads and executes <code>myprogram</code> from netidx.</p>
 <h2 id="understanding-output"><a class="header" href="#understanding-output">Understanding Output</a></h2>
 <p>One of the most important concepts to understand about the shell is its output behavior. Not all expressions produce output, and expressions that do produce output can update multiple times.</p>
 <h3 id="output-vs-non-output-expressions"><a class="header" href="#output-vs-non-output-expressions">Output vs Non-Output Expressions</a></h3>
@@ -311,7 +305,7 @@ example you could have executed:</p>
 <pre><code class="language-bash">graphix /home/user/myproject/src
 </code></pre>
 <p>and the result would have been the same.</p>
-<h3 id="running-from-netidx-1"><a class="header" href="#running-from-netidx-1">Running from Netidx</a></h3>
+<h3 id="running-from-netidx"><a class="header" href="#running-from-netidx">Running from Netidx</a></h3>
 <p>When you run a program from netidx, the <strong>netidx path</strong> is added to the module search path.</p>
 <p>If you run:</p>
 <pre><code class="language-bash">graphix netidx:/my/graphix/modules/myprogram
