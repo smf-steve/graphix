@@ -2601,6 +2601,11 @@ ignored, and will be inaccessible to the loading program.</p>
 </ul>
 <p>File mode is for running complete programs. The shell stays running to
 handle the reactive graph's ongoing updates.</p>
+<h3 id="directory-mode"><a class="header" href="#directory-mode">Directory Mode</a></h3>
+<p>When you pass a directory to <code>graphix</code>, it will load and execute
+<code>directory/main.gx</code>. In other respects it's the same as file mode, but
+makes it easy to structure multiple modules as an "app bundle" in a
+directory.</p>
 <h3 id="check-mode"><a class="header" href="#check-mode">Check Mode</a></h3>
 <p>Check mode compiles a file but doesn't execute it:</p>
 <pre><code class="language-bash">graphix --check ./myprogram
@@ -2648,7 +2653,7 @@ count
 </code></pre>
 <p>The last line <code>count</code> is an output expression. Its value changes every second as the timer fires. The shell stays running, printing each new value.</p>
 <p>To stop watching the output and return to the REPL prompt, press <code>Ctrl+C</code>. In file mode, <code>Ctrl+C</code> exits the entire program.</p>
-<h3 id="non-terminating-programs"><a class="header" href="#non-terminating-programs">Non-Terminating Programs</a></h3>
+<h3 id="non-terminating-expressions"><a class="header" href="#non-terminating-expressions">Non-Terminating Expressions</a></h3>
 <p>Most useful Graphix programs don't terminate naturally because they're reactive systems responding to events. The program runs until you explicitly stop it with <code>Ctrl+C</code>.</p>
 <p>However, some expressions produce a single value and effectively "complete":</p>
 <pre><code class="language-graphix">〉2 + 2
@@ -2694,23 +2699,31 @@ mod math;
 utils::helper()
 </code></pre>
 <p>The shell will find <code>utils.gx</code> and <code>math.gx</code> because they're in the same directory.</p>
+<h3 id="running-a-local-directory"><a class="header" href="#running-a-local-directory">Running a Local Directory</a></h3>
+<p>When you run a local directory, the directory is added to the module
+search path. So for example with the same structure as the above files
+example you could have executed:</p>
+<pre><code class="language-bash">graphix /home/user/myproject/src
+</code></pre>
+<p>and the result would have been the same.</p>
 <h3 id="running-from-netidx-1"><a class="header" href="#running-from-netidx-1">Running from Netidx</a></h3>
-<p>When you run a program from netidx, the <strong>base netidx path</strong> is added to the module search path.</p>
+<p>When you run a program from netidx, the <strong>netidx path</strong> is added to the module search path.</p>
 <p>If you run:</p>
-<pre><code class="language-bash">GRAPHIX_MODPATH=netidx:/my/graphix/modules graphix myprogram
+<pre><code class="language-bash">graphix netidx:/my/graphix/modules/myprogram
 </code></pre>
 <p>The shell:</p>
 <ol>
-<li>Looks for a module named <code>myprogram</code> in <code>netidx:/my/graphix/modules</code></li>
+<li>subscribes to <code>/my/graphix/modules/myprogram</code></li>
 <li>Loads and executes it</li>
-<li>Adds <code>netidx:/my/graphix/modules</code> to the module search path</li>
+<li>Adds <code>netidx:/my/graphix/modules/myprogram</code> to the module search path</li>
 </ol>
-<p>So if <code>myprogram</code> contains <code>mod utils</code>, the shell will look for <code>netidx:/my/graphix/modules/utils</code>.</p>
+<p>So if <code>myprogram</code> contains <code>mod utils</code>, the shell will look for
+<code>netidx:/my/graphix/modules/myprogram/utils</code>.</p>
 <h3 id="module-search-path-priority"><a class="header" href="#module-search-path-priority">Module Search Path Priority</a></h3>
 <p>The complete module search path, in order of priority:</p>
 <ol>
 <li><strong>File parent directory</strong> (if running a local file)</li>
-<li><strong>Netidx base path</strong> (if running from netidx)</li>
+<li><strong>Netidx path</strong> (if running from netidx)</li>
 <li><strong>GRAPHIX_MODPATH</strong> entries (from the environment variable)</li>
 <li><strong>Platform-specific init directory</strong>:
 <ul>
@@ -2818,7 +2831,6 @@ GRAPHIX_MODPATH=netidx:/shared/graphix graphix myprogram.gx
 <ul>
 <li>Define commonly used utilities</li>
 <li>Set up default imports</li>
-<li>Configure REPL preferences</li>
 </ul>
 <p>Example <code>~/.local/share/graphix/init.gx</code>:</p>
 <pre><code class="language-graphix">// Commonly used stdlib modules
@@ -2837,7 +2849,7 @@ let clear = || print("\x1b[2J\x1b[H");
 <pre><code class="language-bash"># Use a specific netidx config file
 graphix --config /path/to/netidx.toml myprogram.gx
 
-# Specify the authentication mechanism
+# Specify the netidx authentication mechanism
 graphix --auth krb5 myprogram.gx
 
 # Disable netidx entirely (internal-only mode)

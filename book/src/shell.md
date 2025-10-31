@@ -41,6 +41,13 @@ In file mode:
 File mode is for running complete programs. The shell stays running to
 handle the reactive graph's ongoing updates.
 
+### Directory Mode
+
+When you pass a directory to `graphix`, it will load and execute
+`directory/main.gx`. In other respects it's the same as file mode, but
+makes it easy to structure multiple modules as an "app bundle" in a
+directory.
+
 ### Check Mode
 
 Check mode compiles a file but doesn't execute it:
@@ -106,7 +113,7 @@ The last line `count` is an output expression. Its value changes every second as
 
 To stop watching the output and return to the REPL prompt, press `Ctrl+C`. In file mode, `Ctrl+C` exits the entire program.
 
-### Non-Terminating Programs
+### Non-Terminating Expressions
 
 Most useful Graphix programs don't terminate naturally because they're reactive systems responding to events. The program runs until you explicitly stop it with `Ctrl+C`.
 
@@ -174,28 +181,41 @@ utils::helper()
 
 The shell will find `utils.gx` and `math.gx` because they're in the same directory.
 
+### Running a Local Directory
+
+When you run a local directory, the directory is added to the module
+search path. So for example with the same structure as the above files
+example you could have executed:
+
+```bash
+graphix /home/user/myproject/src
+```
+
+and the result would have been the same.
+
 ### Running from Netidx
 
-When you run a program from netidx, the **base netidx path** is added to the module search path.
+When you run a program from netidx, the **netidx path** is added to the module search path.
 
 If you run:
 ```bash
-GRAPHIX_MODPATH=netidx:/my/graphix/modules graphix myprogram
+graphix netidx:/my/graphix/modules/myprogram
 ```
 
 The shell:
-1. Looks for a module named `myprogram` in `netidx:/my/graphix/modules`
+1. subscribes to `/my/graphix/modules/myprogram`
 2. Loads and executes it
-3. Adds `netidx:/my/graphix/modules` to the module search path
+3. Adds `netidx:/my/graphix/modules/myprogram` to the module search path
 
-So if `myprogram` contains `mod utils`, the shell will look for `netidx:/my/graphix/modules/utils`.
+So if `myprogram` contains `mod utils`, the shell will look for
+`netidx:/my/graphix/modules/myprogram/utils`.
 
 ### Module Search Path Priority
 
 The complete module search path, in order of priority:
 
 1. **File parent directory** (if running a local file)
-2. **Netidx base path** (if running from netidx)
+2. **Netidx path** (if running from netidx)
 3. **GRAPHIX_MODPATH** entries (from the environment variable)
 4. **Platform-specific init directory**:
    - Linux: `~/.local/share/graphix`
@@ -335,7 +355,6 @@ In REPL mode only, the shell automatically tries to load a module named `init`. 
 Create an `init.gx` file in your init directory to:
 - Define commonly used utilities
 - Set up default imports
-- Configure REPL preferences
 
 Example `~/.local/share/graphix/init.gx`:
 ```graphix
@@ -361,7 +380,7 @@ The `graphix` command supports several options for controlling its behavior.
 # Use a specific netidx config file
 graphix --config /path/to/netidx.toml myprogram.gx
 
-# Specify the authentication mechanism
+# Specify the netidx authentication mechanism
 graphix --auth krb5 myprogram.gx
 
 # Disable netidx entirely (internal-only mode)
