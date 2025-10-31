@@ -2617,7 +2617,7 @@ handle the reactive graph's ongoing updates.</p>
 <p>Check mode compiles a program but doesn't execute it:</p>
 <pre><code class="language-bash">graphix --check ./myprogram
 </code></pre>
-<p>You can pass the same program sources to check mode as you can to file
+<p>You can pass the same program sources to check mode as you can to script
 mode.</p>
 <p>This is useful for:</p>
 <ul>
@@ -2656,7 +2656,7 @@ count &lt;- timer ~ (count + 1);
 count
 </code></pre>
 <p>The last line <code>count</code> is an output expression. Its value changes every second as the timer fires. The shell stays running, printing each new value.</p>
-<p>To stop watching the output and return to the REPL prompt, press <code>Ctrl+C</code>. In file mode, <code>Ctrl+C</code> exits the entire program.</p>
+<p>To stop watching the output and return to the REPL prompt, press <code>Ctrl+C</code>. In script mode, <code>Ctrl+C</code> exits the entire program.</p>
 <h3 id="non-terminating-expressions"><a class="header" href="#non-terminating-expressions">Non-Terminating Expressions</a></h3>
 <p>Most useful Graphix programs don't terminate naturally because they're reactive systems responding to events. The program runs until you explicitly stop it with <code>Ctrl+C</code>.</p>
 <p>However, some expressions produce a single value and effectively "complete":</p>
@@ -2717,12 +2717,18 @@ utils::helper()
 </code></pre>
 <p>The shell will find <code>utils.gx</code> and <code>math.gx</code> because they're in the same directory.</p>
 <h3 id="running-a-local-directory"><a class="header" href="#running-a-local-directory">Running a Local Directory</a></h3>
-<p>When you run a local directory, the directory is added to the module
-search path. So for example with the same structure as the above files
-example you could have executed:</p>
+<p>When you run a local directory, the shell looks for <code>main.gx</code> in that directory and executes it. The directory is also added to the module search path.</p>
+<p>For example, with this structure:</p>
+<pre><code>/home/user/myproject/src/
+  main.gx
+  utils.gx
+  math.gx
+</code></pre>
+<p>You can run:</p>
 <pre><code class="language-bash">graphix /home/user/myproject/src
 </code></pre>
-<p>and the result would have been the same.</p>
+<p>This executes <code>main.gx</code> and adds <code>/home/user/myproject/src</code> to the module search path, so <code>main.gx</code> can load <code>utils</code> and <code>math</code> modules.</p>
+<p>This is useful for organizing projects where you want both a runnable program (<code>main.gx</code>) and a library interface (<code>mod.gx</code>) for the same set of modules.</p>
 <h3 id="running-from-netidx"><a class="header" href="#running-from-netidx">Running from Netidx</a></h3>
 <p>When you run a program from netidx, the <strong>netidx path</strong> is added to the module search path.</p>
 <p>If you run:</p>
@@ -2864,56 +2870,56 @@ let clear = || print("\x1b[2J\x1b[H");
 <p>The <code>graphix</code> command supports several options for controlling its behavior.</p>
 <h3 id="netidx-configuration"><a class="header" href="#netidx-configuration">Netidx Configuration</a></h3>
 <pre><code class="language-bash"># Use a specific netidx config file
-graphix --config /path/to/netidx.toml myprogram.gx
+graphix --config /path/to/netidx.toml myprogram
 
 # Specify the netidx authentication mechanism
-graphix --auth krb5 myprogram.gx
+graphix --auth krb5 netidx:/apps/myprogram
 
 # Disable netidx entirely (internal-only mode)
-graphix --no-netidx myprogram.gx
+graphix --no-netidx ./myapp
 </code></pre>
 <p>When netidx is disabled, networking functions work only within the same process.</p>
 <h3 id="publisher-configuration"><a class="header" href="#publisher-configuration">Publisher Configuration</a></h3>
 <pre><code class="language-bash"># Set the publisher bind address
-graphix --bind 127.0.0.1:5000 myprogram.gx
+graphix --bind 127.0.0.1:5000 ./myprogram.gx
 
 # Set a timeout for slow subscribers
-graphix --publish-timeout 30 myprogram.gx
+graphix --publish-timeout 30 myprogram
 </code></pre>
 <h3 id="module-resolution-1"><a class="header" href="#module-resolution-1">Module Resolution</a></h3>
 <pre><code class="language-bash"># Set timeout for resolving netidx modules (seconds)
-graphix --resolve-timeout 10 myprogram.gx
+graphix --resolve-timeout 10 netidx:/apps/myprogram
 
 # Skip loading the init module in REPL mode
 graphix --no-init
 </code></pre>
 <h3 id="compiler-warnings"><a class="header" href="#compiler-warnings">Compiler Warnings</a></h3>
 <p>Control which warnings are enabled with the <code>-W</code> flag:</p>
-<pre><code class="language-bash"># Warn about unhandled error operators (?) - default in file mode
-graphix -W unhandled myprogram.gx
+<pre><code class="language-bash"># Warn about unhandled error operators (?) - default in script mode
+graphix -W unhandled ./myprogram
 
 # Disable warning about unhandled errors
-graphix -W no-unhandled myprogram.gx
+graphix -W no-unhandled myapp.gx
 
 # Warn about unhandled arithmetic overflow
-graphix -W unhandled-arith myprogram.gx
+graphix -W unhandled-arith netidx:/apps/calculator
 
-# Warn about unused variables - default in file mode
-graphix -W unused myprogram.gx
+# Warn about unused variables - default in script mode
+graphix -W unused ./myproject
 
 # Disable unused variable warnings
 graphix -W no-unused myprogram.gx
 
 # Make all warnings into errors
-graphix -W error myprogram.gx
+graphix -W error ./myapp
 </code></pre>
 <p>Multiple warning flags can be combined:</p>
-<pre><code class="language-bash">graphix -W unused -W unhandled -W error myprogram.gx
+<pre><code class="language-bash">graphix -W unused -W unhandled -W error myprogram
 </code></pre>
 <p>If you specify both a flag and its negation (e.g., <code>unhandled</code> and <code>no-unhandled</code>), the <code>no-</code> variant always wins.</p>
 <h3 id="logging"><a class="header" href="#logging">Logging</a></h3>
 <p>Enable debug logging for troubleshooting:</p>
-<pre><code class="language-bash">RUST_LOG=debug graphix --log-dir /tmp/graphix-logs myprogram.gx
+<pre><code class="language-bash">RUST_LOG=debug graphix --log-dir /tmp/graphix-logs ./myprogram
 </code></pre>
 <p>Logs will be written to files in the specified directory.</p>
 <h2 id="summary"><a class="header" href="#summary">Summary</a></h2>

@@ -55,7 +55,7 @@ Check mode compiles a program but doesn't execute it:
 graphix --check ./myprogram
 ```
 
-You can pass the same program sources to check mode as you can to file
+You can pass the same program sources to check mode as you can to script
 mode.
 
 This is useful for:
@@ -104,7 +104,7 @@ count
 
 The last line `count` is an output expression. Its value changes every second as the timer fires. The shell stays running, printing each new value.
 
-To stop watching the output and return to the REPL prompt, press `Ctrl+C`. In file mode, `Ctrl+C` exits the entire program.
+To stop watching the output and return to the REPL prompt, press `Ctrl+C`. In script mode, `Ctrl+C` exits the entire program.
 
 ### Non-Terminating Expressions
 
@@ -196,15 +196,24 @@ The shell will find `utils.gx` and `math.gx` because they're in the same directo
 
 ### Running a Local Directory
 
-When you run a local directory, the directory is added to the module
-search path. So for example with the same structure as the above files
-example you could have executed:
+When you run a local directory, the shell looks for `main.gx` in that directory and executes it. The directory is also added to the module search path.
 
+For example, with this structure:
+```
+/home/user/myproject/src/
+  main.gx
+  utils.gx
+  math.gx
+```
+
+You can run:
 ```bash
 graphix /home/user/myproject/src
 ```
 
-and the result would have been the same.
+This executes `main.gx` and adds `/home/user/myproject/src` to the module search path, so `main.gx` can load `utils` and `math` modules.
+
+This is useful for organizing projects where you want both a runnable program (`main.gx`) and a library interface (`mod.gx`) for the same set of modules.
 
 ### Running from Netidx
 
@@ -391,13 +400,13 @@ The `graphix` command supports several options for controlling its behavior.
 
 ```bash
 # Use a specific netidx config file
-graphix --config /path/to/netidx.toml myprogram.gx
+graphix --config /path/to/netidx.toml myprogram
 
 # Specify the netidx authentication mechanism
-graphix --auth krb5 myprogram.gx
+graphix --auth krb5 netidx:/apps/myprogram
 
 # Disable netidx entirely (internal-only mode)
-graphix --no-netidx myprogram.gx
+graphix --no-netidx ./myapp
 ```
 
 When netidx is disabled, networking functions work only within the same process.
@@ -406,17 +415,17 @@ When netidx is disabled, networking functions work only within the same process.
 
 ```bash
 # Set the publisher bind address
-graphix --bind 127.0.0.1:5000 myprogram.gx
+graphix --bind 127.0.0.1:5000 ./myprogram.gx
 
 # Set a timeout for slow subscribers
-graphix --publish-timeout 30 myprogram.gx
+graphix --publish-timeout 30 myprogram
 ```
 
 ### Module Resolution
 
 ```bash
 # Set timeout for resolving netidx modules (seconds)
-graphix --resolve-timeout 10 myprogram.gx
+graphix --resolve-timeout 10 netidx:/apps/myprogram
 
 # Skip loading the init module in REPL mode
 graphix --no-init
@@ -427,28 +436,28 @@ graphix --no-init
 Control which warnings are enabled with the `-W` flag:
 
 ```bash
-# Warn about unhandled error operators (?) - default in file mode
-graphix -W unhandled myprogram.gx
+# Warn about unhandled error operators (?) - default in script mode
+graphix -W unhandled ./myprogram
 
 # Disable warning about unhandled errors
-graphix -W no-unhandled myprogram.gx
+graphix -W no-unhandled myapp.gx
 
 # Warn about unhandled arithmetic overflow
-graphix -W unhandled-arith myprogram.gx
+graphix -W unhandled-arith netidx:/apps/calculator
 
-# Warn about unused variables - default in file mode
-graphix -W unused myprogram.gx
+# Warn about unused variables - default in script mode
+graphix -W unused ./myproject
 
 # Disable unused variable warnings
 graphix -W no-unused myprogram.gx
 
 # Make all warnings into errors
-graphix -W error myprogram.gx
+graphix -W error ./myapp
 ```
 
 Multiple warning flags can be combined:
 ```bash
-graphix -W unused -W unhandled -W error myprogram.gx
+graphix -W unused -W unhandled -W error myprogram
 ```
 
 If you specify both a flag and its negation (e.g., `unhandled` and `no-unhandled`), the `no-` variant always wins.
@@ -458,7 +467,7 @@ If you specify both a flag and its negation (e.g., `unhandled` and `no-unhandled
 Enable debug logging for troubleshooting:
 
 ```bash
-RUST_LOG=debug graphix --log-dir /tmp/graphix-logs myprogram.gx
+RUST_LOG=debug graphix --log-dir /tmp/graphix-logs ./myprogram
 ```
 
 Logs will be written to files in the specified directory.
