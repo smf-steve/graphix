@@ -120,9 +120,9 @@ However, some expressions produce a single value and effectively "complete":
 
 Even though this printed its value immediately, the shell is still waiting for potential updates. Since `2 + 2` can never update, nothing more will happen, but you still need `Ctrl+C` to return to the prompt.
 
-### File Output Behavior
+### Script Output Behavior
 
-When you run a file, only the **last top-level expression** produces output. Consider this file:
+When you run in script mode only the **last top-level expression** produces output. Consider this file:
 
 ```graphix
 let x = 10
@@ -141,6 +141,22 @@ output expression that the shell will print.
 When you run this file:
 - `print("Hello")` will print "Hello" as a side effect
 - The shell will print the value of `x * y` (200) as the program output
+
+### Special Output TUIs
+
+When the type of the output expression is a Tui then instead of
+printing the expression to stdout the Graphix shell will switch to TUI
+mode and will render the output expression as a tui. For example,
+
+```graphix
+〉let count = 0
+〉count <- time::timer(1, true) ~ count + 1
+〉tui::text::text(&"count is [count]")
+```
+
+won't print the expression returned by `tui::text::text(&"count is [count]")` to stdout, it will build a tui,
+
+![TUI Output](ui/tui/media/tui_output_example.gif)
 
 ## Module Resolution
 

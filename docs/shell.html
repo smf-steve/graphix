@@ -270,8 +270,8 @@ count
 4
 </code></pre>
 <p>Even though this printed its value immediately, the shell is still waiting for potential updates. Since <code>2 + 2</code> can never update, nothing more will happen, but you still need <code>Ctrl+C</code> to return to the prompt.</p>
-<h3 id="file-output-behavior"><a class="header" href="#file-output-behavior">File Output Behavior</a></h3>
-<p>When you run a file, only the <strong>last top-level expression</strong> produces output. Consider this file:</p>
+<h3 id="script-output-behavior"><a class="header" href="#script-output-behavior">Script Output Behavior</a></h3>
+<p>When you run in script mode only the <strong>last top-level expression</strong> produces output. Consider this file:</p>
 <pre><code class="language-graphix">let x = 10
 let y = 20
 x + y
@@ -288,6 +288,16 @@ output expression that the shell will print.</p>
 <li><code>print("Hello")</code> will print "Hello" as a side effect</li>
 <li>The shell will print the value of <code>x * y</code> (200) as the program output</li>
 </ul>
+<h3 id="special-output-tuis"><a class="header" href="#special-output-tuis">Special Output TUIs</a></h3>
+<p>When the type of the output expression is a Tui then instead of
+printing the expression to stdout the Graphix shell will switch to TUI
+mode and will render the output expression as a tui. For example,</p>
+<pre><code class="language-graphix">〉let count = 0
+〉count &lt;- time::timer(1, true) ~ count + 1
+〉tui::text::text(&amp;"count is [count]")
+</code></pre>
+<p>won't print the expression returned by <code>tui::text::text(&amp;"count is [count]")</code> to stdout, it will build a tui,</p>
+<p><img src="ui/tui/media/tui_output_example.gif" alt="TUI Output" /></p>
 <h2 id="module-resolution"><a class="header" href="#module-resolution">Module Resolution</a></h2>
 <p>A crucial feature of the shell is its automatic module path configuration. Understanding how this works is essential for organizing larger projects.</p>
 <h3 id="running-a-local-file"><a class="header" href="#running-a-local-file">Running a Local File</a></h3>
