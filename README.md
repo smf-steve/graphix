@@ -3,8 +3,6 @@
 A reactive dataflow programming language for building user interfaces
 and network applications.
 
-![Graphix TUI Example](../book/src/ui/tui/media/overview_first.gif)
-
 [Join us on Discord](https://discord.gg/bQv4gNR8WK)
 
 ## What is Graphix?
@@ -49,6 +47,8 @@ The `<-` operator (connect) schedules updates for the next cycle. When
 `timer` fires, `count` increments, and the text widget automatically
 displays the new value. The sample operator `~` returns the rhs when
 the lhs updates.
+
+![Graphix TUI Example](../book/src/ui/tui/media/overview_first.gif)
 
 ## Installation
 
