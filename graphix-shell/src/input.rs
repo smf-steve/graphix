@@ -71,7 +71,7 @@ impl<X: GXExt> InputReader<X> {
     ) -> Result<Signal> {
         match output {
             Output::Tui(tui) => Ok(tui.wait_signal().await),
-            Output::Text(_) => {
+            Output::EmptyScript | Output::Text(_) => {
                 tokio::signal::ctrl_c().await?;
                 Ok(Signal::CtrlC)
             }

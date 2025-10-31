@@ -37,6 +37,7 @@ const TUITYP: LazyLock<Type> = LazyLock::new(|| Type::Ref {
 
 enum Output<X: GXExt> {
     None,
+    EmptyScript,
     Tui(Tui<X>),
     Text(CompExp<X>),
 }
@@ -56,7 +57,7 @@ impl<X: GXExt> Output<X> {
 
     async fn clear(&mut self) {
         match self {
-            Self::None | Self::Text(_) => (),
+            Self::None | Self::Text(_) | Self::EmptyScript => (),
             Self::Tui(tui) => tui.stop().await,
         }
         *self = Self::None
@@ -64,7 +65,7 @@ impl<X: GXExt> Output<X> {
 
     async fn process_update(&mut self, env: &Env<X>, id: ExprId, v: Value) {
         match self {
-            Self::None => (),
+            Self::None | Output::EmptyScript => (),
             Self::Tui(tui) => tui.update(id, v).await,
             Self::Text(e) => {
                 if e.id == id {
@@ -298,7 +299,7 @@ impl<X: GXExt> Shell<X> {
         let gx = self.init(tx).await?;
         let script = self.mode.file_mode();
         let mut input = InputReader::new();
-        let mut output = Output::None;
+        let mut output = if script { Output::EmptyScript } else { Output::None };
         let mut newenv = None;
         let mut exprs = vec![];
         let mut env = self.load_env(&gx, &mut newenv, &mut output, &mut exprs).await?;
