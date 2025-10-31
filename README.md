@@ -5,6 +5,8 @@ and network applications.
 
 ![Graphix TUI Example](book/src/ui/tui/media/overview_first.gif)
 
+[Join us on Discord](https://discord.gg/bQv4gNR8WK)
+
 ## What is Graphix?
 
 Graphix is a statically-typed functional programming language that
