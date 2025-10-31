@@ -30,7 +30,10 @@ use netidx::{
 use netidx_protocols::rpc::server::{ArgSpec, RpcCall};
 use node::compiler;
 use parking_lot::RwLock;
-use poolshark::{global::GPooled, local::LPooled};
+use poolshark::{
+    global::{GPooled, Pool},
+    local::LPooled,
+};
 use std::{
     any::{Any, TypeId},
     cell::Cell,
@@ -108,7 +111,7 @@ macro_rules! tdbg {
 #[macro_export]
 macro_rules! err {
     ($tag:expr, $err:literal) => {{
-        let e: Value = ($tag.clone(), literal!($err)).into();
+        let e: Value = ($tag.clone(), arcstr::literal!($err)).into();
         Value::Error(triomphe::Arc::new(e))
     }};
 }
@@ -200,6 +203,10 @@ pub enum PrintFlag {
 thread_local! {
     static PRINT_FLAGS: Cell<BitFlags<PrintFlag>> = Cell::new(PrintFlag::ReplacePrims | PrintFlag::NoSource);
 }
+
+/// global pool of channel watch batches
+pub static CBATCH_POOL: LazyLock<Pool<Vec<(BindId, Value)>>> =
+    LazyLock::new(|| Pool::new(10000, 1000));
 
 /// For the duration of the closure F change the way type variables
 /// are formatted (on this thread only) according to the specified

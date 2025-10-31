@@ -18,9 +18,7 @@ use netidx::{
 };
 use poolshark::global::GPooled;
 use reedline::Signal;
-use std::{
-    collections::HashMap, path::PathBuf, process::exit, sync::LazyLock, time::Duration,
-};
+use std::{collections::HashMap, process::exit, sync::LazyLock, time::Duration};
 use tokio::{select, sync::mpsc};
 use triomphe::Arc;
 use tui::Tui;
@@ -113,12 +111,12 @@ pub enum Mode {
     /// Load compile and execute the specified file. Print the value
     /// of the last expression in the file to stdout. Ctrl-C exits the
     /// shell.
-    File(PathBuf),
+    File(ArcStr),
     /// Compile and execute the code in the specified string. Besides
     /// not loading from a file this mode behaves exactly like File.
     Static(ArcStr),
     /// Check that the specified file compiles but do not run it
-    Check(PathBuf),
+    Check(ArcStr),
 }
 
 impl Mode {

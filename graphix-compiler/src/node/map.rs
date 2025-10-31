@@ -6,7 +6,7 @@ use crate::{
     update_args, wrap, CFlag, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
 use anyhow::Result;
-use arcstr::{literal, ArcStr};
+use arcstr::ArcStr;
 use enumflags2::BitFlags;
 use immutable_chunkmap::map::Map as CMap;
 use netidx_value::Value;

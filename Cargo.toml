@@ -35,6 +35,7 @@ netidx-core = { path = "../netidx/netidx-core", version = "0.30.0" }
 netidx-protocols = { path = "../netidx/netidx-protocols", version = "0.30.0" }
 netidx-value = { path = "../netidx/netidx-value", version = "0.30.0" }
 netidx = { path = "../netidx/netidx", version = "0.30.0", default-features = false }
+notify = "8.2.0"
 parking_lot = "0.12.1"
 poolshark = { version = "0.2.5" }
 rand = "0.9"

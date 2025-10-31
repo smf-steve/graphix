@@ -1,14 +1,11 @@
 use anyhow::{anyhow, bail, Context, Result};
-use arcstr::{literal, ArcStr};
-use combine::stream::position::SourcePosition;
+use arcstr::ArcStr;
 use enumflags2::BitFlags;
 use futures::{channel::mpsc, future::try_join_all, StreamExt};
 use fxhash::{FxBuildHasher, FxHashMap};
 use graphix_compiler::{
     compile,
-    expr::{
-        self, Expr, ExprId, ExprKind, ModPath, ModuleKind, ModuleResolver, Origin, Source,
-    },
+    expr::{self, Expr, ExprId, ExprKind, ModuleResolver, Origin, Source},
     node::genn,
     typ::Type,
     BindId, CFlag, Event, ExecCtx, LambdaId, Node, Refs, Scope,
@@ -16,7 +13,9 @@ use graphix_compiler::{
 use indexmap::IndexMap;
 use log::{debug, error, info};
 use netidx::{
-    path::Path, protocol::valarray::ValArray, publisher::Value, subscriber::Dval,
+    protocol::valarray::ValArray,
+    publisher::Value,
+    subscriber::{self, Dval},
 };
 use netidx_protocols::rpc::server::RpcCall;
 use poolshark::{
@@ -27,7 +26,7 @@ use smallvec::{smallvec, SmallVec};
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
     future, mem,
-    path::{Component, PathBuf},
+    path::PathBuf,
     result,
     sync::Weak,
     time::Duration,
@@ -373,9 +372,10 @@ impl<X: GXExt> GX<X> {
         Ok(CompRes { exprs, env: self.ctx.env.clone() })
     }
 
-    async fn load_exprs(&self, file: &PathBuf) -> Result<(Origin, Arc<[Expr]>)> {
-        let (ori, exprs) = match file.extension() {
-            Some(e) if e.as_encoded_bytes() == b"gx" => {
+    async fn load_exprs(&self, file: &ArcStr) -> Result<(Origin, Arc<[Expr]>)> {
+        let (ori, exprs) = match file.strip_prefix("netidx:") {
+            None => {
+                let file = PathBuf::from(&**file);
                 let file = file.canonicalize()?;
                 let s = fs::read_to_string(&file).await?;
                 let s = if s.starts_with("#!") {
@@ -394,53 +394,35 @@ impl<X: GXExt> GX<X> {
                 };
                 (ori.clone(), expr::parser::parse(ori)?)
             }
-            Some(e) => bail!("invalid file extension {e:?}"),
-            None => {
-                let name = file
-                    .components()
-                    .map(|c| match c {
-                        Component::RootDir
-                        | Component::CurDir
-                        | Component::ParentDir
-                        | Component::Prefix(_) => {
-                            bail!("invalid module name {file:?}")
-                        }
-                        Component::Normal(s) => Ok(s),
-                    })
-                    .collect::<Result<Box<[_]>>>()?;
-                if name.len() != 1 {
-                    bail!("invalid module name {file:?}")
-                }
-                let name = name[0].to_string_lossy();
-                let name = name
-                    .parse::<ModPath>()
-                    .with_context(|| "parsing module name {file:?}")?;
-                let name = Path::basename(&*name)
-                    .ok_or_else(|| anyhow!("invalid module name {file:?}"))?;
-                let name = ArcStr::from(name);
+            Some(path) => {
+                let path = netidx::path::Path::from(ArcStr::from(path));
+                let val = self
+                    .ctx
+                    .rt
+                    .subscriber
+                    .subscribe_nondurable_one(path.clone(), None)
+                    .await?;
+                let src = match val.last() {
+                    subscriber::Event::Unsubscribed => {
+                        bail!("could not subscribe to {path}")
+                    }
+                    subscriber::Event::Update(Value::String(s)) => s,
+                    subscriber::Event::Update(v) => {
+                        bail!("can't load {v} expected a string")
+                    }
+                };
                 let ori = Origin {
                     parent: None,
-                    source: Source::Internal(name.clone()),
-                    text: literal!(""),
+                    source: Source::Netidx(path),
+                    text: src.clone(),
                 };
-                let kind = ExprKind::Module {
-                    export: true,
-                    name,
-                    value: ModuleKind::Unresolved,
-                };
-                let exprs = Arc::from(vec![Expr {
-                    id: ExprId::new(),
-                    ori: Arc::new(ori.clone()),
-                    pos: SourcePosition::default(),
-                    kind,
-                }]);
-                (ori, exprs)
+                (ori.clone(), expr::parser::parse(ori)?)
             }
         };
         Ok((ori, exprs))
     }
 
-    async fn check(&mut self, file: &PathBuf) -> Result<()> {
+    async fn check(&mut self, file: &ArcStr) -> Result<()> {
         let env = self.ctx.env.clone();
         let go = async {
             let st = Instant::now();
@@ -475,7 +457,7 @@ impl<X: GXExt> GX<X> {
         res
     }
 
-    async fn load(&mut self, rt: GXHandle<X>, file: &PathBuf) -> Result<CompRes<X>> {
+    async fn load(&mut self, rt: GXHandle<X>, file: &ArcStr) -> Result<CompRes<X>> {
         let scope = Scope::root();
         let st = Instant::now();
         let (ori, exprs) = self.load_exprs(file).await?;

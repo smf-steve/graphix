@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use arcstr::ArcStr;
 use clap::Parser;
 use enumflags2::BitFlags;
 use flexi_logger::{FileSpec, Logger};
@@ -115,7 +116,7 @@ struct Params {
     #[arg(long = "check")]
     check: bool,
     /// run the program in the specified file instead of starting the REPL
-    file: Option<PathBuf>,
+    file: Option<ArcStr>,
     /// enable or disable compiler flags. Currently supported flags are,
     /// - unhandled, no-unhandled: warn about unhandled ? operators (default)
     /// - unhandled-arith, no-unhandled-arith: warn about unhandled arith exceptions
@@ -206,12 +207,26 @@ async fn main() -> Result<()> {
     if let Some(f) = &p.file {
         let mode = if p.check { Mode::Check(f.clone()) } else { Mode::File(f.clone()) };
         shell = shell.mode(mode);
-        match f.parent() {
-            Some(p) if p.as_os_str().is_empty() => (),
-            None => (),
-            Some(p) => {
-                shell = shell
-                    .module_resolvers(vec![ModuleResolver::Files(p.canonicalize()?)]);
+        match f.strip_prefix("netidx:") {
+            Some(path) => {
+                let path = netidx::path::Path::from(ArcStr::from(path));
+                shell = shell.module_resolvers(vec![ModuleResolver::Netidx {
+                    subscriber: subscriber.clone(),
+                    base: path,
+                    timeout: None,
+                }]);
+            }
+            None => {
+                let path = PathBuf::from(&**f);
+                match path.parent() {
+                    Some(p) if p.as_os_str().is_empty() => (),
+                    None => (),
+                    Some(p) => {
+                        shell = shell.module_resolvers(vec![ModuleResolver::Files(
+                            p.canonicalize()?,
+                        )]);
+                    }
+                }
             }
         }
     }

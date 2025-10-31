@@ -27,7 +27,7 @@ use netidx_value::FromValue;
 use poolshark::global::GPooled;
 use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
-use std::{fmt, future, path::PathBuf, time::Duration};
+use std::{fmt, future, time::Duration};
 use tokio::{
     sync::{
         mpsc::{self as tmpsc},
@@ -397,12 +397,12 @@ enum ToGX<X: GXExt> {
         id: ExprId,
     },
     Load {
-        path: PathBuf,
+        path: ArcStr,
         rt: GXHandle<X>,
         res: oneshot::Sender<Result<CompRes<X>>>,
     },
     Check {
-        path: PathBuf,
+        path: ArcStr,
         res: oneshot::Sender<Result<()>>,
     },
     Compile {
@@ -468,18 +468,20 @@ impl<X: GXExt> GXHandle<X> {
         self.exec(|res| ToGX::GetEnv { res }).await
     }
 
-    /// Check that the specified file compiles and typechecks.
+    /// Check that a graphix module compiles
     ///
-    /// If the file will compile and type check successfully
-    /// return Ok(()) otherwise an error describing the problem. The
-    /// environment will not be altered by checking an expression, so
-    /// you will not be able to use any defined names later in the
-    /// program. If you want to do that see `compile`
-    pub async fn check(&self, path: PathBuf) -> Result<()> {
+    /// If path startes with `netidx:` then the module will be loaded
+    /// from netidx, otherwise it will be loaded from the
+    /// filesystem. If the file compiles successfully return Ok(())
+    /// otherwise an error describing the problem. The environment
+    /// will not be altered by checking an expression, so you will not
+    /// be able to use any defined names later in the program. If you
+    /// want to do that see `compile`.
+    pub async fn check(&self, path: ArcStr) -> Result<()> {
         Ok(self.exec(|tx| ToGX::Check { path, res: tx }).await??)
     }
 
-    /// Compile and execute the specified graphix expression.
+    /// Compile and execute a graphix expression
     ///
     /// If it generates results, they will be sent to all the channels that are
     /// subscribed. When the `CompExp` objects contained in the `CompRes` are
@@ -490,20 +492,19 @@ impl<X: GXExt> GXHandle<X> {
         Ok(self.exec(|tx| ToGX::Compile { text, res: tx, rt: self.clone() }).await??)
     }
 
-    /// Load and execute the specified graphix module.
+    /// Load and execute a graphix module
     ///
-    /// The path may have one of two forms. If it is the path to a file with
-    /// extension .bs then the rt will load the file directly. If it is a
-    /// modpath (e.g. foo::bar::baz) then the module resolver will look for a
-    /// matching module in the modpath. When the `CompExp` objects contained in
-    /// the `CompRes` are dropped their corresponding expressions will be
-    /// deleted. Therefore, you can stop execution of the whole file by dropping
-    /// the returned `CompRes`.
-    pub async fn load(&self, path: PathBuf) -> Result<CompRes<X>> {
+    /// If path startes with `netidx:` then the module will be loaded
+    /// from netidx, otherwise it will be loaded from the
+    /// filesystem. When the `CompExp` objects contained in the
+    /// `CompRes` are dropped their corresponding expressions will be
+    /// deleted. Therefore, you can stop execution of the whole file
+    /// by dropping the returned `CompRes`.
+    pub async fn load(&self, path: ArcStr) -> Result<CompRes<X>> {
         Ok(self.exec(|tx| ToGX::Load { path, res: tx, rt: self.clone() }).await??)
     }
 
-    /// Compile a callable interface to the specified lambda id.
+    /// Compile a callable interface to a lambda id
     ///
     /// This is how you call a lambda directly from rust. When the returned
     /// `Callable` is dropped the associated callsite will be delete.
@@ -513,7 +514,7 @@ impl<X: GXExt> GXHandle<X> {
             .await??)
     }
 
-    /// Compile a callable interface to a late bound function by name.
+    /// Compile a callable interface to a late bound function by name
     ///
     /// This allows you to call a function by name. Because of late binding it
     /// has some additional complexity (though less than implementing it
@@ -543,18 +544,18 @@ impl<X: GXExt> GXHandle<X> {
         })
     }
 
-    /// Compile a ref to a specific bind id
+    /// Compile a ref to a bind id
     ///
-    /// This will NOT return an error if the specified id isn't in the environment.
+    /// This will NOT return an error if the id isn't in the environment.
     pub async fn compile_ref(&self, id: impl Into<BindId>) -> Result<Ref<X>> {
         Ok(self
             .exec(|tx| ToGX::CompileRef { id: id.into(), res: tx, rt: self.clone() })
             .await??)
     }
 
-    /// Compile a ref to a specific name
+    /// Compile a ref to a name
     ///
-    /// Return an error if the name does not exist in the specified environment
+    /// Return an error if the name does not exist in the environment
     pub async fn compile_ref_by_name(
         &self,
         env: &Env<GXRt<X>, X::UserEvent>,
