@@ -37,7 +37,10 @@ use poolshark::{
 use std::{
     any::{Any, TypeId},
     cell::Cell,
-    collections::{hash_map::Entry, HashMap},
+    collections::{
+        hash_map::{self, Entry},
+        HashMap,
+    },
     fmt::Debug,
     mem,
     sync::{
@@ -118,8 +121,8 @@ macro_rules! err {
 
 #[macro_export]
 macro_rules! errf {
-    ($tag:expr, $fmt:expr, $args:tt) => {{
-        let msg: ArcStr = compact_str::format_compact!($fmt, $args).as_str().into();
+    ($tag:expr, $fmt:expr, $($args:expr),*) => {{
+        let msg: ArcStr = compact_str::format_compact!($fmt, $($args),*).as_str().into();
         let e: Value = ($tag.clone(), msg).into();
         Value::Error(triomphe::Arc::new(e))
     }};
@@ -177,6 +180,8 @@ pub trait UserEvent: Clone + Debug + Any {
     fn clear(&mut self);
 }
 
+pub trait CustomBuiltinType: Debug + Any + Send + Sync {}
+
 #[derive(Debug, Clone)]
 pub struct NoUserEvent;
 
@@ -205,7 +210,7 @@ thread_local! {
 }
 
 /// global pool of channel watch batches
-pub static CBATCH_POOL: LazyLock<Pool<Vec<(BindId, Value)>>> =
+pub static CBATCH_POOL: LazyLock<Pool<Vec<(BindId, Box<dyn CustomBuiltinType>)>>> =
     LazyLock::new(|| Pool::new(10000, 1000));
 
 /// For the duration of the closure F change the way type variables
@@ -233,6 +238,7 @@ pub struct Event<E: UserEvent> {
     pub netidx: FxHashMap<SubId, subscriber::Event>,
     pub writes: FxHashMap<Id, WriteRequest>,
     pub rpc_calls: FxHashMap<BindId, RpcCall>,
+    pub custom: FxHashMap<BindId, Box<dyn CustomBuiltinType>>,
     pub user: E,
 }
 
@@ -244,16 +250,18 @@ impl<E: UserEvent> Event<E> {
             netidx: HashMap::default(),
             writes: HashMap::default(),
             rpc_calls: HashMap::default(),
+            custom: HashMap::default(),
             user,
         }
     }
 
     pub fn clear(&mut self) {
-        let Self { init, variables, netidx, rpc_calls, writes, user } = self;
+        let Self { init, variables, netidx, rpc_calls, writes, custom, user } = self;
         *init = false;
         variables.clear();
         netidx.clear();
         rpc_calls.clear();
+        custom.clear();
         writes.clear();
         user.clear();
     }
@@ -511,11 +519,11 @@ pub trait Rt: Debug + 'static {
     /// Spawn a task
     ///
     /// When the task completes it's output must be delivered as a
-    /// variable event using the returned `BindId`
+    /// custom event using the returned `BindId`
     ///
     /// Calling `abort` must guarantee that if it is called before the
     /// task completes then no update will be delivered.
-    fn spawn<F: Future<Output = (BindId, Value)> + Send + 'static>(
+    fn spawn<F: Future<Output = (BindId, Box<dyn CustomBuiltinType>)> + Send + 'static>(
         &mut self,
         f: F,
     ) -> Self::AbortHandle;
@@ -523,12 +531,15 @@ pub trait Rt: Debug + 'static {
     /// Ask the runtime to watch a channel
     ///
     /// When event batches arrive via the channel the runtime must
-    /// deliver the events as variable updates.
-    fn watch(&mut self, s: mpsc::Receiver<GPooled<Vec<(BindId, Value)>>>);
+    /// deliver the events as custom updates.
+    fn watch(
+        &mut self,
+        s: mpsc::Receiver<GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>>,
+    );
 }
 
 #[derive(Default)]
-pub struct LibState(FxHashMap<TypeId, Box<dyn Any + Send + Sync + 'static>>);
+pub struct LibState(FxHashMap<TypeId, Box<dyn Any + Send + Sync>>);
 
 impl LibState {
     /// Look up and return the context global library state of type
@@ -538,13 +549,11 @@ impl LibState {
     /// using `T::default`
     pub fn get_or_default<T>(&mut self) -> &mut T
     where
-        T: Default + Any + Send + Sync + 'static,
+        T: Default + Any + Send + Sync,
     {
         self.0
             .entry(TypeId::of::<T>())
-            .or_insert_with(|| {
-                Box::new(T::default()) as Box<dyn Any + Send + Sync + 'static>
-            })
+            .or_insert_with(|| Box::new(T::default()) as Box<dyn Any + Send + Sync>)
             .downcast_mut::<T>()
             .unwrap()
     }
@@ -556,14 +565,31 @@ impl LibState {
     /// using the provided function.
     pub fn get_or_else<T, F>(&mut self, f: F) -> &mut T
     where
-        T: Any + Send + Sync + 'static,
+        T: Any + Send + Sync,
         F: FnOnce() -> T,
     {
         self.0
             .entry(TypeId::of::<T>())
-            .or_insert_with(|| Box::new(f()) as Box<dyn Any + Send + Sync + 'static>)
+            .or_insert_with(|| Box::new(f()) as Box<dyn Any + Send + Sync>)
             .downcast_mut::<T>()
             .unwrap()
+    }
+
+    pub fn entry<'a, T>(
+        &'a mut self,
+    ) -> hash_map::Entry<'a, TypeId, Box<dyn Any + Send + Sync>>
+    where
+        T: Any + Send + Sync,
+    {
+        self.0.entry(TypeId::of::<T>())
+    }
+
+    /// return true if `T` is present
+    pub fn contains<T>(&self) -> bool
+    where
+        T: Any + Send + Sync,
+    {
+        self.0.contains_key(&TypeId::of::<T>())
     }
 
     /// Look up and return a reference to the context global library
@@ -572,7 +598,7 @@ impl LibState {
     /// If none is registered in this context for `T` return `None`
     pub fn get<T>(&mut self) -> Option<&T>
     where
-        T: Any + Send + Sync + 'static,
+        T: Any + Send + Sync,
     {
         self.0.get(&TypeId::of::<T>()).map(|t| t.downcast_ref::<T>().unwrap())
     }
@@ -583,7 +609,7 @@ impl LibState {
     /// If none is registered return `None`
     pub fn get_mut<T>(&mut self) -> Option<&mut T>
     where
-        T: Any + Send + Sync + 'static,
+        T: Any + Send + Sync,
     {
         self.0.get_mut(&TypeId::of::<T>()).map(|t| t.downcast_mut::<T>().unwrap())
     }
@@ -593,20 +619,17 @@ impl LibState {
     /// Any existing state will be returned
     pub fn set<T>(&mut self, t: T) -> Option<Box<T>>
     where
-        T: Any + Send + Sync + 'static,
+        T: Any + Send + Sync,
     {
         self.0
-            .insert(
-                TypeId::of::<T>(),
-                Box::new(t) as Box<dyn Any + Send + Sync + 'static>,
-            )
+            .insert(TypeId::of::<T>(), Box::new(t) as Box<dyn Any + Send + Sync>)
             .map(|t| t.downcast::<T>().unwrap())
     }
 
     /// Remove and refurn the context global state library state of type `T`
     pub fn remove<T>(&mut self) -> Option<Box<T>>
     where
-        T: Any + Send + Sync + 'static,
+        T: Any + Send + Sync,
     {
         self.0.remove(&TypeId::of::<T>()).map(|t| t.downcast::<T>().unwrap())
     }

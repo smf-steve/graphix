@@ -5,7 +5,7 @@ use chrono::prelude::*;
 use compact_str::format_compact;
 use futures::{channel::mpsc, stream::SelectAll, FutureExt};
 use fxhash::FxHashMap;
-use graphix_compiler::{expr::ExprId, BindId, Rt};
+use graphix_compiler::{expr::ExprId, BindId, CustomBuiltinType, Rt};
 use netidx::{
     path::Path,
     protocol::valarray::ValArray,
@@ -43,6 +43,7 @@ pub struct GXRt<X: GXExt> {
     pub(super) subscribed: FxHashMap<SubId, FxHashMap<ExprId, usize>>,
     pub(super) published: FxHashMap<Id, FxHashMap<ExprId, usize>>,
     pub(super) var_updates: VecDeque<(BindId, Value)>,
+    pub(super) custom_updates: VecDeque<(BindId, Box<dyn CustomBuiltinType>)>,
     pub(super) net_updates: VecDeque<(SubId, subscriber::Event)>,
     pub(super) net_writes: VecDeque<(Id, WriteRequest)>,
     pub(super) rpc_overflow: VecDeque<(BindId, RpcCall)>,
@@ -51,9 +52,11 @@ pub struct GXRt<X: GXExt> {
     pub(super) pending_unsubscribe: VecDeque<(Instant, Dval)>,
     pub(super) change_trackers: FxHashMap<BindId, Arc<Mutex<ChangeTracker>>>,
     pub(super) tasks: JoinSet<(BindId, Value)>,
-    pub(super) watches: SelectAll<mpsc::Receiver<GPooled<Vec<(BindId, Value)>>>>,
+    pub(super) custom_tasks: JoinSet<(BindId, Box<dyn CustomBuiltinType>)>,
+    pub(super) watches:
+        SelectAll<mpsc::Receiver<GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>>>,
     // so the selectall will never return None
-    dummy_watch_tx: mpsc::Sender<GPooled<Vec<(BindId, Value)>>>,
+    dummy_watch_tx: mpsc::Sender<GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>>,
     pub(super) batch: publisher::UpdateBatch,
     pub(super) publisher: Publisher,
     pub(super) subscriber: Subscriber,
@@ -75,12 +78,15 @@ impl<X: GXExt> GXRt<X> {
         let batch = publisher.start_batch();
         let mut tasks = JoinSet::new();
         tasks.spawn(async { future::pending().await });
+        let mut custom_tasks = JoinSet::new();
+        custom_tasks.spawn(async { future::pending().await });
         let (dummy_watch_tx, dummy_rx) = mpsc::channel(1);
         let mut watches = SelectAll::new();
         watches.push(dummy_rx);
         Self {
             by_ref: HashMap::default(),
             var_updates: VecDeque::new(),
+            custom_updates: VecDeque::new(),
             net_updates: VecDeque::new(),
             net_writes: VecDeque::new(),
             rpc_overflow: VecDeque::new(),
@@ -93,6 +99,7 @@ impl<X: GXExt> GXRt<X> {
             updated: HashMap::default(),
             ext: X::default(),
             tasks,
+            custom_tasks,
             watches,
             dummy_watch_tx,
             batch,
@@ -140,6 +147,7 @@ impl<X: GXExt> Rt for GXRt<X> {
         let Self {
             by_ref,
             var_updates,
+            custom_updates,
             net_updates,
             net_writes,
             rpc_clients,
@@ -150,6 +158,7 @@ impl<X: GXExt> Rt for GXRt<X> {
             pending_unsubscribe,
             change_trackers,
             tasks,
+            custom_tasks,
             watches,
             dummy_watch_tx,
             batch,
@@ -168,6 +177,7 @@ impl<X: GXExt> Rt for GXRt<X> {
         updated.clear();
         by_ref.clear();
         var_updates.clear();
+        custom_updates.clear();
         net_updates.clear();
         net_writes.clear();
         rpc_overflow.clear();
@@ -179,6 +189,8 @@ impl<X: GXExt> Rt for GXRt<X> {
         change_trackers.clear();
         *tasks = JoinSet::new();
         tasks.spawn(async { future::pending().await });
+        *custom_tasks = JoinSet::new();
+        custom_tasks.spawn(async { future::pending().await });
         *watches = SelectAll::new();
         let (tx, rx) = mpsc::channel(1);
         *dummy_watch_tx = tx;
@@ -394,14 +406,19 @@ impl<X: GXExt> Rt for GXRt<X> {
         }
     }
 
-    fn spawn<F: Future<Output = (BindId, Value)> + Send + 'static>(
+    fn spawn<
+        F: Future<Output = (BindId, Box<dyn CustomBuiltinType>)> + Send + 'static,
+    >(
         &mut self,
         f: F,
     ) -> Self::AbortHandle {
-        self.tasks.spawn(f)
+        self.custom_tasks.spawn(f)
     }
 
-    fn watch(&mut self, s: mpsc::Receiver<GPooled<Vec<(BindId, Value)>>>) {
+    fn watch(
+        &mut self,
+        s: mpsc::Receiver<GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>>,
+    ) {
         self.watches.push(s)
     }
 }
