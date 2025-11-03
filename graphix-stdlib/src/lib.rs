@@ -604,6 +604,7 @@ pub enum Module {
     Rand,
     Re,
     Str,
+    Fs,
 }
 
 /// Register selected modules of the standard graphix library
@@ -677,6 +678,10 @@ pub fn register<R: Rt, E: UserEvent>(
             Module::Str => {
                 root.push_str("pub mod str;\n");
                 tbl.insert(Path::from("/str"), str::register(ctx)?);
+            }
+            Module::Fs => {
+                root.push_str("pub mod fs;\n");
+                tbl.insert(Path::from("/fs"), fs::register(ctx)?);
             }
         }
     }

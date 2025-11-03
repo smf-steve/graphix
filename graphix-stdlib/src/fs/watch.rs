@@ -1,12 +1,15 @@
+use anyhow::{anyhow, bail};
 use arcstr::{literal, ArcStr};
-use compact_str::format_compact;
+use compact_str::{format_compact, CompactString};
 use enumflags2::{bitflags, BitFlags};
 use futures::{channel::mpsc, SinkExt, StreamExt};
 use fxhash::{FxHashMap, FxHashSet};
 use graphix_compiler::{
-    err, errf, BindId, CustomBuiltinType, LibState, Rt, UserEvent, CBATCH_POOL,
+    errf, expr::ExprId, Apply, BindId, BuiltIn, BuiltInInitFn, CustomBuiltinType, Event,
+    ExecCtx, LibState, Node, Rt, UserEvent, CBATCH_POOL,
 };
-use netidx_value::Value;
+use netidx::utils::Either;
+use netidx_value::{FromValue, Value};
 use notify::{
     event::{
         AccessKind, CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind,
@@ -14,14 +17,24 @@ use notify::{
     },
     EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
-use poolshark::global::GPooled;
+use poolshark::{
+    global::{GPooled, Pool},
+    local::LPooled,
+};
 use std::{
-    collections::hash_set,
+    any::Any,
+    collections::{hash_set, HashSet},
+    os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     pin::Pin,
-    result::Result,
+    result::{self, Result},
+    sync::{Arc, LazyLock},
 };
 use tokio::{fs, select, sync::mpsc as tmpsc, task};
+
+use crate::deftype;
+
+static PATHS: LazyLock<Pool<FxHashSet<ArcStr>>> = LazyLock::new(|| Pool::new(1000, 1000));
 
 #[derive(Debug, Clone, Copy)]
 #[bitflags]
@@ -60,6 +73,50 @@ enum Interest {
     DeleteFolder,
     DeleteOther,
     Other,
+}
+
+impl FromValue for Interest {
+    fn from_value(v: Value) -> anyhow::Result<Self> {
+        match v {
+            Value::String(s) => match &*s {
+                "Any" => Ok(Self::Any),
+                "Access" => Ok(Self::Access),
+                "AccessOpen" => Ok(Self::AccessOpen),
+                "AccessClose" => Ok(Self::AccessClose),
+                "AccessRead" => Ok(Self::AccessRead),
+                "AccessOther" => Ok(Self::AccessOther),
+                "Create" => Ok(Self::Create),
+                "CreateFile" => Ok(Self::CreateFile),
+                "CreateFolder" => Ok(Self::CreateFolder),
+                "CreateOther" => Ok(Self::CreateOther),
+                "Modify" => Ok(Self::Modify),
+                "ModifyData" => Ok(Self::ModifyData),
+                "ModifyDataSize" => Ok(Self::ModifyDataSize),
+                "ModifyDataContent" => Ok(Self::ModifyDataContent),
+                "ModifyDataOther" => Ok(Self::ModifyDataOther),
+                "ModifyMetadata" => Ok(Self::ModifyMetadata),
+                "ModifyMetadataAccessTime" => Ok(Self::ModifyMetadataAccessTime),
+                "ModifyMetadataWriteTime" => Ok(Self::ModifyMetadataWriteTime),
+                "ModifyMetadataPermissions" => Ok(Self::ModifyMetadataPermissions),
+                "ModifyMetadataOwnership" => Ok(Self::ModifyMetadataOwnership),
+                "ModifyMetadataExtended" => Ok(Self::ModifyMetadataExtended),
+                "ModifyMetadataOther" => Ok(Self::ModifyMetadataOther),
+                "ModifyRename" => Ok(Self::ModifyRename),
+                "ModifyRenameTo" => Ok(Self::ModifyRenameTo),
+                "ModifyRenameFrom" => Ok(Self::ModifyRenameFrom),
+                "ModifyRenameBoth" => Ok(Self::ModifyRenameBoth),
+                "ModifyRenameOther" => Ok(Self::ModifyRenameOther),
+                "ModifyOther" => Ok(Self::ModifyOther),
+                "Delete" => Ok(Self::Delete),
+                "DeleteFile" => Ok(Self::DeleteFile),
+                "DeleteFolder" => Ok(Self::DeleteFolder),
+                "DeleteOther" => Ok(Self::DeleteOther),
+                "Other" => Ok(Self::Other),
+                _ => Err(anyhow::anyhow!("Invalid Interest variant: {}", s)),
+            },
+            _ => Err(anyhow::anyhow!("Expected string value for Interest, got: {:?}", v)),
+        }
+    }
 }
 
 impl Into<Value> for Interest {
@@ -328,12 +385,18 @@ enum WatchCmd {
 }
 
 #[derive(Debug)]
-enum WatchEvent {
-    Update { path: PathBuf, event: Interest },
-    Error { path: Option<PathBuf>, error: ArcStr },
+struct WatchEvent {
+    paths: GPooled<FxHashSet<ArcStr>>,
+    event: result::Result<Interest, ArcStr>,
 }
 
 impl CustomBuiltinType for WatchEvent {}
+
+impl WatchEvent {
+    fn downcast_mut(t: &mut Box<dyn CustomBuiltinType>) -> Option<&mut Self> {
+        (t as &mut dyn Any).downcast_mut()
+    }
+}
 
 /// like fs::cananocialize, but will never fail. It will canonicalize
 /// as much of the path as it's possible to canonicalize and leave the
@@ -356,10 +419,18 @@ fn best_effort_canonicalize(
     })
 }
 
+fn utf8_path(path: &PathBuf) -> ArcStr {
+    let path = path.as_os_str().as_bytes();
+    match str::from_utf8(path) {
+        Ok(s) => ArcStr::from(s),
+        Err(_) => ArcStr::from(CompactString::from_utf8_lossy(path).as_str()),
+    }
+}
+
 #[derive(Default)]
 struct Watched {
     by_id: FxHashMap<BindId, Watch>,
-    by_root: FxHashMap<PathBuf, FxHashSet<BindId>>,
+    by_root: FxHashMap<PathBuf, (RecursiveMode, FxHashSet<BindId>)>,
 }
 
 impl Watched {
@@ -387,7 +458,7 @@ impl Watched {
                         None => break None,
                         Some(path) => match self.t.by_root.get(path) {
                             None => self.path = path.parent(),
-                            Some(ids) => {
+                            Some((_, ids)) => {
                                 self.path = path.parent();
                                 self.curr = Some(ids.iter())
                             }
@@ -400,15 +471,22 @@ impl Watched {
     }
 
     /// add a watch and return the canonicalized path if adding a watch is necessary
-    async fn add_watch(&mut self, mut w: Watch) -> Option<PathBuf> {
+    async fn add_watch(&mut self, mut w: Watch) -> Option<(PathBuf, RecursiveMode)> {
         let id = w.id;
         let path = best_effort_canonicalize(PathBuf::from(&*w.path)).await;
         w.canonical_path = path.clone();
+        let rec = if w.recursive {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
         self.by_id.insert(id, w);
-        let s = self.by_root.entry(path.clone()).or_default();
-        let add = s.is_empty();
+        let (is_rec, s) =
+            self.by_root.entry(path.clone()).or_insert_with(|| (rec, HashSet::default()));
+        let add = s.is_empty() || &rec != is_rec;
+        *is_rec = rec;
         s.insert(id);
-        add.then(|| path)
+        add.then(|| (path, rec))
     }
 
     /// remove a watch, and return it's root path if it is the last
@@ -417,7 +495,7 @@ impl Watched {
         self.by_id.remove(id).and_then(|w| {
             match self.by_root.get_mut(&w.canonical_path) {
                 None => Some(w.canonical_path),
-                Some(ids) => {
+                Some((_, ids)) => {
                     ids.remove(id);
                     if ids.is_empty() {
                         self.by_root.remove(&w.canonical_path);
@@ -435,16 +513,19 @@ impl Watched {
         batch: &mut GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>,
         ev: Result<notify::Event, notify::Error>,
     ) {
+        let mut by_id: LPooled<FxHashMap<BindId, WatchEvent>> = LPooled::take();
         match ev {
             Ok(ev) => {
+                let event = Ok((&ev.kind).into());
                 for path in ev.paths.iter() {
+                    let utf8_path = utf8_path(path);
                     for w in self.relevant_to(&path) {
                         if w.interested(&ev.kind) {
-                            let wev = WatchEvent::Update {
-                                path: path.clone(),
-                                event: (&ev.kind).into(),
-                            };
-                            batch.push((w.id, Box::new(wev)))
+                            let wev = by_id.entry(w.id).or_insert_with(|| WatchEvent {
+                                event: event.clone(),
+                                paths: PATHS.take(),
+                            });
+                            wev.paths.insert(utf8_path.clone());
                         }
                     }
                 }
@@ -452,29 +533,40 @@ impl Watched {
             Err(e) => {
                 let err = ArcStr::from(format_compact!("{:?}", e.kind).as_str());
                 for path in e.paths.iter() {
+                    let utf8_path = utf8_path(path);
                     for w in self.relevant_to(&path) {
-                        let wev = WatchEvent::Error {
-                            path: Some(path.clone()),
-                            error: err.clone(),
-                        };
-                        batch.push((w.id, Box::new(wev)))
+                        let wev = by_id.entry(w.id).or_insert_with(|| WatchEvent {
+                            paths: PATHS.take(),
+                            event: Err(err.clone()),
+                        });
+                        wev.paths.insert(utf8_path.clone());
                     }
                 }
             }
         }
+        let evs = by_id
+            .drain()
+            .map(|(id, wev)| (id, Box::new(wev) as Box<dyn CustomBuiltinType>));
+        batch.extend(evs)
     }
 }
 
 fn push_error(
     batch: &mut GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>,
     id: BindId,
-    path: Option<PathBuf>,
-    e: notify::Error,
+    path: Option<ArcStr>,
+    e: Either<notify::Error, ArcStr>,
 ) {
-    let wev = WatchEvent::Error {
-        path: path,
-        error: ArcStr::from(format_compact!("{e:?}").as_str()),
+    let mut wev = WatchEvent {
+        paths: PATHS.take(),
+        event: Err(match e {
+            Either::Left(e) => ArcStr::from(format_compact!("{e:?}").as_str()),
+            Either::Right(e) => e,
+        }),
     };
+    if let Some(path) = path {
+        wev.paths.insert(path);
+    }
     batch.push((id, Box::new(wev)))
 }
 
@@ -499,22 +591,19 @@ async fn file_watcher_loop(
             },
             cmd = rx.select_next_some() => match cmd {
                 WatchCmd::Watch(w) => {
-                    let recursive = if w.recursive {
-                        RecursiveMode::Recursive
-                    } else {
-                        RecursiveMode::NonRecursive
-                    };
                     let id = w.id;
-                    if let Some(path) = watched.add_watch(w).await {
+                    if let Some((path, recursive)) = watched.add_watch(w).await {
                         if let Err(e) = watcher.watch(&path, recursive) {
-                            push_error(&mut batch, id, Some(path), e)
+                            let path = utf8_path(&path);
+                            push_error(&mut batch, id, Some(path), Either::Left(e))
                         }
                     }
                 },
                 WatchCmd::Stop(id) => {
                     if let Some(path) = watched.remove_watch(&id) {
                         if let Err(e) = watcher.unwatch(&path) {
-                            push_error(&mut batch, id, Some(path), e)
+                            let path = utf8_path(&path);
+                            push_error(&mut batch, id, Some(path), Either::Left(e))
                         }
                     }
                 }
@@ -532,11 +621,8 @@ async fn file_watcher_loop(
         match cmd {
             WatchCmd::Stop(_) => (),
             WatchCmd::Watch(w) => {
-                let wev = WatchEvent::Error {
-                    path: None,
-                    error: literal!("the watcher thread has stopped"),
-                };
-                batch.push((w.id, Box::new(wev)));
+                let e = literal!("the watcher thread has stopped");
+                push_error(&mut batch, w.id, None, Either::Right(e));
             }
         }
     }
@@ -545,7 +631,16 @@ async fn file_watcher_loop(
     }
 }
 
-struct WatchCtx(mpsc::UnboundedSender<WatchCmd>);
+struct WatchCtx(anyhow::Result<mpsc::UnboundedSender<WatchCmd>>);
+
+impl WatchCtx {
+    fn send(&self, cmd: WatchCmd) -> anyhow::Result<()> {
+        match &self.0 {
+            Ok(tx) => tx.unbounded_send(cmd).map_err(|_| anyhow!("watcher died")),
+            Err(e) => bail!("could not start watcher {e:?}"),
+        }
+    }
+}
 
 struct NotifyChan(tmpsc::Sender<notify::Result<notify::Event>>);
 
@@ -555,23 +650,121 @@ impl notify::EventHandler for NotifyChan {
     }
 }
 
-fn get_watcher<'a, R: Rt, E: UserEvent>(
-    rt: &mut R,
-    st: &'a mut LibState,
-) -> anyhow::Result<&'a mut WatchCtx> {
-    if st.contains::<WatchCtx>() {
-        Ok(st.get_mut::<WatchCtx>().unwrap())
-    } else {
+fn get_watcher<'a, R: Rt>(rt: &mut R, st: &'a mut LibState) -> &'a mut WatchCtx {
+    st.get_or_else::<WatchCtx, _>(|| {
         let (notify_tx, notify_rx) = tmpsc::channel(10);
         let notify_tx = NotifyChan(notify_tx);
-        let watcher = notify::recommended_watcher(notify_tx)?;
-        let (cmd_tx, cmd_rx) = mpsc::unbounded();
-        let (ev_tx, ev_rx) = mpsc::channel(1000);
-        task::spawn(
-            async move { file_watcher_loop(watcher, notify_rx, cmd_rx, ev_tx).await },
-        );
-        rt.watch(ev_rx);
-        st.set::<WatchCtx>(WatchCtx(cmd_tx));
-        Ok(st.get_mut::<WatchCtx>().unwrap())
+        match notify::recommended_watcher(notify_tx) {
+            Err(e) => WatchCtx(Err(e.into())),
+            Ok(watcher) => {
+                let (cmd_tx, cmd_rx) = mpsc::unbounded();
+                let (ev_tx, ev_rx) = mpsc::channel(1000);
+                task::spawn(async move {
+                    file_watcher_loop(watcher, notify_rx, cmd_rx, ev_tx).await
+                });
+                rt.watch(ev_rx);
+                WatchCtx(Ok(cmd_tx))
+            }
+        }
+    })
+}
+
+#[derive(Debug)]
+pub(super) struct WatchBuiltIn {
+    id: BindId,
+    top_id: ExprId,
+    interest: BitFlags<Interest>,
+    rec: bool,
+    path: Option<ArcStr>,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for WatchBuiltIn {
+    const NAME: &str = "is_err";
+    deftype!(
+        "core",
+        "fn(?#interest:Array<Interest>, ?#recursive:bool, string) -> Result<string, `WatchError(string)>"
+    );
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|ctx, _, _, _, top_id| {
+            let id = BindId::new();
+            ctx.rt.ref_var(id, top_id);
+            Ok(Box::new(WatchBuiltIn {
+                id,
+                top_id,
+                interest: BitFlags::empty(),
+                rec: false,
+                path: None,
+            }))
+        })
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for WatchBuiltIn {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        let mut up = false;
+        if let Some(Ok(int)) =
+            from[0].update(ctx, event).map(|v| v.cast_to::<BitFlags<Interest>>())
+        {
+            up |= self.interest != int;
+            self.interest = int;
+        }
+        if let Some(Ok(rec)) = from[1].update(ctx, event).map(|v| v.cast_to::<bool>()) {
+            up |= self.rec != rec;
+            self.rec = rec;
+        }
+        let mut path_up = false;
+        if let Some(Ok(path)) = from[2].update(ctx, event).map(|v| v.cast_to::<ArcStr>())
+        {
+            let path = Some(path);
+            path_up = path != self.path;
+            self.path = path;
+        }
+        if path_up && let Some(path) = &self.path {
+            ctx.rt.set_var(self.id, path.clone().into());
+        }
+        if (up || path_up)
+            && let Some(path) = &self.path
+        {
+            let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+            if let Err(e) = wctx.send(WatchCmd::Watch(Watch {
+                path: path.clone(),
+                canonical_path: PathBuf::new(),
+                id: self.id,
+                interest: self.interest,
+                recursive: self.rec,
+            })) {
+                ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}"));
+            }
+        }
+        if let Some(mut w) = event.custom.remove(&self.id)
+            && let Some(w) = WatchEvent::downcast_mut(&mut w)
+            && let Some(path) = &self.path
+        {
+            match &w.event {
+                Ok(_) => ctx.rt.set_var(self.id, path.clone().into()),
+                Err(e) => ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}")),
+            }
+        }
+        event.variables.get(&self.id).cloned()
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+        let _ = wctx.send(WatchCmd::Stop(self.id));
+        ctx.rt.unref_var(self.id, self.top_id);
+        self.id = BindId::new();
+        ctx.rt.ref_var(self.id, self.top_id);
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+        let _ = wctx.send(WatchCmd::Stop(self.id));
+        ctx.rt.unref_var(self.id, self.top_id);
     }
 }
