@@ -850,7 +850,7 @@ parser! {
             ),
             attempt(
                 (
-                    sptoken('`').with(typname()),
+                    sptoken('`').with(ident(true)),
                     optional(attempt(between(
                         token('('),
                         sptoken(')'),
@@ -1572,7 +1572,7 @@ parser! {
     {
         (
             position(),
-            token('`').with(typname()),
+            token('`').with(ident(true)),
             optional(attempt(between(token('('), sptoken(')'), sep_by1(expr(), csep())))),
         )
             .map(|(pos, tag, args): (_, ArcStr, Option<LPooled<Vec<Expr>>>)| {

@@ -5,8 +5,8 @@ use graphix_rt::{GXConfig, GXEvent, GXHandle, GXRt, NoExt};
 use poolshark::global::GPooled;
 use tokio::sync::mpsc;
 
-mod langtest;
-mod libtest;
+mod lang;
+mod lib;
 
 pub struct TestCtx {
     pub _internal_only: netidx::InternalOnly,

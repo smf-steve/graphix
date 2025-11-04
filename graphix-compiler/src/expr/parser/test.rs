@@ -1360,6 +1360,53 @@ fn tupleref() {
 
 #[test]
 fn prop0() {
-    let s = "{ (u32:0) with a: (bytes: == u32:0) }\n";
+    /*
+
+    */
+    let s = r#"
+// The type of file system events you are interested in.
+// The short names, e.g. `Access mean ANY kind of access event.
+// The longer names e.g. `AccessOpen mean a more specific subset
+// of the short named class event. There are sometimes multiple
+// levels of this. For example `Modify expresses interest in
+// any modification, `ModifyRename expresses interest in any
+// kind of rename operation, and `ModifyRenameTo expresses interest
+// only on rename to.
+type Interest = [
+    `Any,
+    `Access,
+    `AccessOpen,
+    `AccessClose,
+    `AccessRead,
+    `AccessOther,
+    `Create,
+    `CreateFile,
+    `CreateFolder,
+    `CreateOther,
+    `Modify,
+    `ModifyData,
+    `ModifyDataSize,
+    `ModifyDataContent,
+    `ModifyDataOther,
+    `ModifyMetadata,
+    `ModifyMetadataAccessTime,
+    `ModifyMetadataWriteTime,
+    `ModifyMetadataPermissions,
+    `ModifyMetadataOwnership,
+    `ModifyMetadataExtended,
+    `ModifyMetadataOther,
+    `ModifyRename,
+    `ModifyRenameTo,
+    `ModifyRenameFrom,
+    `ModifyRenameBoth,
+    `ModifyRenameOther,
+    `ModifyOther,
+    `Delete,
+    `DeleteFile,
+    `DeleteFolder,
+    `DeleteOther,
+    `Other
+]
+"#;
     dbg!(parse_one(s).unwrap());
 }

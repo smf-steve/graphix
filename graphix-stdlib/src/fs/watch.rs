@@ -24,11 +24,11 @@ use poolshark::{
 };
 use std::{
     any::Any,
-    collections::{hash_set, HashSet},
+    collections::hash_set,
     ffi::OsStr,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
-    result::{self, Result},
+    result::Result,
     sync::{Arc, LazyLock},
 };
 use tokio::{fs, select, sync::mpsc as tmpsc, task};
@@ -204,7 +204,6 @@ struct Watch {
     canonical_path: PathBuf,
     id: BindId,
     interest: BitFlags<Interest>,
-    recursive: bool,
 }
 
 impl Watch {
@@ -349,24 +348,26 @@ impl Watch {
     }
 }
 
+#[derive(Debug)]
 enum WatchCmd {
     Watch(Watch),
     Stop(BindId),
 }
 
+#[derive(Debug, Clone)]
+enum WatchEventKind {
+    Established,
+    Error(ArcStr),
+    Event(Interest),
+}
+
 #[derive(Debug)]
 struct WatchEvent {
     paths: GPooled<FxHashSet<ArcStr>>,
-    event: result::Result<Interest, ArcStr>,
+    event: WatchEventKind,
 }
 
 impl CustomBuiltinType for WatchEvent {}
-
-impl WatchEvent {
-    fn downcast_mut(t: &mut Box<dyn CustomBuiltinType>) -> Option<&mut Self> {
-        (t as &mut dyn Any).downcast_mut()
-    }
-}
 
 /// like fs::cananocialize, but will never fail. It will canonicalize
 /// as much of the path as it's possible to canonicalize and leave the
@@ -409,117 +410,87 @@ fn utf8_path(path: &PathBuf) -> ArcStr {
     }
 }
 
-enum RemoveAction {
-    Remove(PathBuf),
-    ChangeRecursion(RecursiveMode, PathBuf),
+enum AddAction {
+    AddWatch(PathBuf),
+    JustNotify(PathBuf),
 }
 
 #[derive(Default)]
 struct Watched {
     by_id: FxHashMap<BindId, Watch>,
-    by_root: FxHashMap<PathBuf, (RecursiveMode, FxHashSet<BindId>)>,
+    by_root: FxHashMap<PathBuf, FxHashSet<BindId>>,
 }
 
 impl Watched {
-    /// return an iterator over all the watches that are relevant to a particular path
-    fn relevant_to<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a Watch> {
+    /// add a watch and return the canonicalized path if adding a watch is necessary
+    async fn add_watch(&mut self, mut w: Watch) -> AddAction {
+        let id = w.id;
+        let path = match self.by_id.get_mut(&id) {
+            Some(ow) if ow.path == w.path => {
+                let Watch { path: _, canonical_path, id: _, interest } = ow;
+                let canonical_path = canonical_path.clone();
+                *interest = w.interest;
+                return AddAction::JustNotify(canonical_path);
+            }
+            Some(_) | None => best_effort_canonicalize(&Path::new(&*w.path)).await,
+        };
+        w.canonical_path = path.clone();
+        self.by_id.insert(id, w);
+        self.by_root.entry(path.clone()).or_default().insert(id);
+        AddAction::AddWatch(path)
+    }
+
+    /// remove a watch, and return an optional action to be performed on the
+    /// watcher
+    fn remove_watch(&mut self, id: &BindId) -> Option<PathBuf> {
+        self.by_id.remove(id).and_then(|w| {
+            match self.by_root.get_mut(&w.canonical_path) {
+                None => Some(w.canonical_path),
+                Some(ids) => {
+                    ids.remove(id);
+                    ids.is_empty().then(|| {
+                        self.by_root.remove(&w.canonical_path);
+                        w.canonical_path
+                    })
+                }
+            }
+        })
+    }
+
+    fn relevant_to<'a>(&'a self, path: &'a PathBuf) -> impl Iterator<Item = &'a Watch> {
         struct I<'a> {
+            root_ids: Option<hash_set::Iter<'a, BindId>>,
+            path_ids: Option<hash_set::Iter<'a, BindId>>,
             t: &'a Watched,
-            root: &'a Path,
-            path: Option<&'a Path>,
-            curr: Option<hash_set::Iter<'a, BindId>>,
         }
         impl<'a> Iterator for I<'a> {
             type Item = &'a Watch;
 
             fn next(&mut self) -> Option<Self::Item> {
-                loop {
-                    if let Some(sl) = self.curr.as_mut()
-                        && let Some(id) = sl.next()
-                    {
-                        match self.t.by_id.get(id) {
-                            Some(w) => {
-                                if w.recursive || &w.canonical_path == self.root {
-                                    break Some(w);
-                                } else {
-                                    continue;
-                                }
+                macro_rules! next {
+                    ($set:expr) => {
+                        if let Some(set) = $set
+                            && let Some(id) = set.next()
+                        {
+                            match self.t.by_id.get(id) {
+                                Some(w) => return Some(w),
+                                None => continue,
                             }
-                            None => continue,
                         }
-                    }
-                    match self.path {
-                        None => break None,
-                        Some(path) => match self.t.by_root.get(path) {
-                            None => self.path = path.parent(),
-                            Some((_, ids)) => {
-                                self.path = path.parent();
-                                self.curr = Some(ids.iter())
-                            }
-                        },
-                    }
+                    };
+                }
+                loop {
+                    next!(&mut self.path_ids);
+                    next!(&mut self.root_ids);
+                    return None;
                 }
             }
         }
-        I { t: self, path: Some(path), root: path, curr: None }
-    }
-
-    /// add a watch and return the canonicalized path if adding a watch is necessary
-    async fn add_watch(&mut self, mut w: Watch) -> Option<(PathBuf, RecursiveMode)> {
-        let id = w.id;
-        let path = match self.by_id.get(&id) {
-            Some(ow) if ow.path == w.path => ow.canonical_path.clone(),
-            Some(_) | None => best_effort_canonicalize(&Path::new(&*w.path)).await,
-        };
-        w.canonical_path = path.clone();
-        let rec = if w.recursive {
-            RecursiveMode::Recursive
-        } else {
-            RecursiveMode::NonRecursive
-        };
-        self.by_id.insert(id, w);
-        let (is_rec, s) =
-            self.by_root.entry(path.clone()).or_insert_with(|| (rec, HashSet::default()));
-        let add = s.is_empty() || &rec != is_rec;
-        *is_rec = rec;
-        s.insert(id);
-        add.then(|| (path, rec))
-    }
-
-    /// remove a watch, and return an optional action to be performed on the
-    /// watcher
-    fn remove_watch(&mut self, id: &BindId) -> Option<RemoveAction> {
-        self.by_id.remove(id).and_then(|w| {
-            match self.by_root.get_mut(&w.canonical_path) {
-                None => Some(RemoveAction::Remove(w.canonical_path)),
-                Some((rec, ids)) => {
-                    ids.remove(id);
-                    if ids.is_empty() {
-                        self.by_root.remove(&w.canonical_path);
-                        Some(RemoveAction::Remove(w.canonical_path))
-                    } else {
-                        let rec_needed = ids
-                            .iter()
-                            .filter_map(|id| self.by_id.get(id))
-                            .fold(false, |acc, w| acc | w.recursive);
-                        let rec_needed = if rec_needed {
-                            RecursiveMode::Recursive
-                        } else {
-                            RecursiveMode::NonRecursive
-                        };
-                        if *rec != rec_needed {
-                            *rec = rec_needed;
-                            Some(RemoveAction::ChangeRecursion(
-                                rec_needed,
-                                w.canonical_path,
-                            ))
-                        } else {
-                            None
-                        }
-                    }
-                }
-            }
-        })
+        I {
+            path_ids: self.by_root.get(path).map(|h| h.iter()),
+            root_ids: path.parent().and_then(|p| self.by_root.get(p).map(|h| h.iter())),
+            t: self,
+        }
     }
 
     fn process_event(
@@ -530,10 +501,10 @@ impl Watched {
         let mut by_id: LPooled<FxHashMap<BindId, WatchEvent>> = LPooled::take();
         match ev {
             Ok(ev) => {
-                let event = Ok((&ev.kind).into());
+                let event = WatchEventKind::Event((&ev.kind).into());
                 for path in ev.paths.iter() {
                     let utf8_path = utf8_path(path);
-                    for w in self.relevant_to(&path) {
+                    for w in self.relevant_to(path) {
                         if w.interested(&ev.kind) {
                             let wev = by_id.entry(w.id).or_insert_with(|| WatchEvent {
                                 event: event.clone(),
@@ -551,7 +522,7 @@ impl Watched {
                     for w in self.relevant_to(&path) {
                         let wev = by_id.entry(w.id).or_insert_with(|| WatchEvent {
                             paths: PATHS.take(),
-                            event: Err(err.clone()),
+                            event: WatchEventKind::Error(err.clone()),
                         });
                         wev.paths.insert(utf8_path.clone());
                     }
@@ -573,7 +544,7 @@ fn push_error(
 ) {
     let mut wev = WatchEvent {
         paths: PATHS.take(),
-        event: Err(match e {
+        event: WatchEventKind::Error(match e {
             Either::Left(e) => ArcStr::from(format_compact!("{e:?}").as_str()),
             Either::Right(e) => e,
         }),
@@ -584,12 +555,24 @@ fn push_error(
     batch.push((id, Box::new(wev)))
 }
 
+fn push_established(
+    batch: &mut GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>,
+    id: BindId,
+    path: &PathBuf,
+) {
+    let path = utf8_path(path);
+    let mut wev = WatchEvent { paths: PATHS.take(), event: WatchEventKind::Established };
+    wev.paths.insert(path);
+    batch.push((id, Box::new(wev)))
+}
+
 async fn file_watcher_loop(
     mut watcher: RecommendedWatcher,
     mut rx_notify: tmpsc::Receiver<notify::Result<notify::Event>>,
     mut rx: mpsc::UnboundedReceiver<WatchCmd>,
     mut tx: mpsc::Sender<GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>>,
 ) {
+    eprintln!("starting file watcher loop");
     let mut watched = Watched::default();
     let mut recv_buf = vec![];
     let mut batch = CBATCH_POOL.take();
@@ -614,18 +597,25 @@ async fn file_watcher_loop(
             cmd = rx.select_next_some() => match cmd {
                 WatchCmd::Watch(w) => {
                     let id = w.id;
-                    if let Some((path, recursive)) = watched.add_watch(w).await {
-                        or_push!(path, id, watcher.watch(&path, recursive))
+                    match watched.add_watch(w).await {
+                        AddAction::JustNotify(path) => push_established(&mut batch, id, &path),
+                        AddAction::AddWatch(path) => {
+                            match watcher.watch(&path, RecursiveMode::NonRecursive) {
+                                Ok(()) => push_established(&mut batch, id, &path),
+                                Err(e) => push_error(
+                                    &mut batch,
+                                    id,
+                                    Some(utf8_path(&path)),
+                                    Either::Left(e)
+                                )
+                            }
+                        }
                     }
                 },
                 WatchCmd::Stop(id) => match watched.remove_watch(&id) {
                     None => (),
-                    Some(RemoveAction::Remove(path)) => {
+                    Some(path) => {
                         or_push!(path, id, watcher.unwatch(&path))
-                    }
-                    Some(RemoveAction::ChangeRecursion(rec, path)) => {
-                        or_push!(path, id, watcher.unwatch(&path));
-                        or_push!(path, id, watcher.watch(&path, rec))
                     }
                 }
             },
@@ -695,7 +685,6 @@ pub(super) struct WatchBuiltIn {
     id: BindId,
     top_id: ExprId,
     interest: Option<BitFlags<Interest>>,
-    rec: Option<bool>,
     path: Option<ArcStr>,
 }
 
@@ -703,20 +692,14 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for WatchBuiltIn {
     const NAME: &str = "fs_watch";
     deftype!(
         "fs",
-        "fn(?#interest:Array<Interest>, ?#recursive:bool, string) -> Result<string, `WatchError(string)>"
+        "fn(?#interest:Array<Interest>, string) -> Result<string, `WatchError(string)>"
     );
 
     fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
         Arc::new(|ctx, _, _, _, top_id| {
             let id = BindId::new();
             ctx.rt.ref_var(id, top_id);
-            Ok(Box::new(WatchBuiltIn {
-                id,
-                top_id,
-                interest: None,
-                rec: None,
-                path: None,
-            }))
+            Ok(Box::new(WatchBuiltIn { id, top_id, interest: None, path: None }))
         })
     }
 }
@@ -729,30 +712,25 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for WatchBuiltIn {
         event: &mut Event<E>,
     ) -> Option<Value> {
         let mut up = false;
-        if let Some(Ok(int)) =
-            from[0].update(ctx, event).map(|v| v.cast_to::<BitFlags<Interest>>())
+        if let Some(Ok(mut int)) =
+            from[0].update(ctx, event).map(|v| v.cast_to::<LPooled<Vec<Interest>>>())
         {
+            let int = int.drain(..).fold(BitFlags::empty(), |mut acc, fl| {
+                acc.insert(fl);
+                acc
+            });
             up |= self.interest != Some(int);
             self.interest = Some(int);
         }
-        if let Some(Ok(rec)) = from[1].update(ctx, event).map(|v| v.cast_to::<bool>()) {
-            up |= self.rec != Some(rec);
-            self.rec = Some(rec);
-        }
-        let mut path_up = false;
-        if let Some(Ok(path)) = from[2].update(ctx, event).map(|v| v.cast_to::<ArcStr>())
+        if let Some(Ok(path)) = from[1].update(ctx, event).map(|v| v.cast_to::<ArcStr>())
         {
             let path = Some(path);
-            path_up = path != self.path;
+            up = path != self.path;
             self.path = path;
         }
-        if path_up && let Some(path) = &self.path {
-            ctx.rt.set_var(self.id, path.clone().into());
-        }
-        if (up || path_up)
+        if up
             && let Some(path) = &self.path
             && let Some(interest) = self.interest
-            && let Some(recursive) = self.rec
         {
             let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
             if let Err(e) = wctx.send(WatchCmd::Watch(Watch {
@@ -760,18 +738,21 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for WatchBuiltIn {
                 canonical_path: PathBuf::new(),
                 id: self.id,
                 interest,
-                recursive,
             })) {
                 ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}"));
             }
         }
         if let Some(mut w) = event.custom.remove(&self.id)
-            && let Some(w) = WatchEvent::downcast_mut(&mut w)
+            && let Some(w) = (&mut *w as &mut dyn Any).downcast_mut::<WatchEvent>()
             && let Some(path) = &self.path
         {
             match &w.event {
-                Ok(_) => ctx.rt.set_var(self.id, path.clone().into()),
-                Err(e) => ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}")),
+                WatchEventKind::Established | WatchEventKind::Event(_) => {
+                    ctx.rt.set_var(self.id, path.clone().into())
+                }
+                WatchEventKind::Error(e) => {
+                    ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}"))
+                }
             }
         }
         event.variables.get(&self.id).cloned()

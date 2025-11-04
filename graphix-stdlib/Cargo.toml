@@ -50,3 +50,4 @@ triomphe = { workspace = true }
 graphix-rt = { version = "0.1.0", path = "../graphix-rt" }
 proptest = "1"
 env_logger = "0.11"
+tempfile = "3"

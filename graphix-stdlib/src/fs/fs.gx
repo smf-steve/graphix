@@ -1,11 +1,11 @@
-/// The type of file system events you are interested in.
-/// The short names, e.g. `Access mean ANY kind of access event.
-/// The longer names e.g. `AccessOpen mean a more specific subset
-/// of the short named class event. There are sometimes multiple
-/// levels of this. For example `Modify expresses interest in
-/// any modification, `ModifyRename expresses interest in any
-/// kind of rename operation, and `ModifyRenameTo expresses interest
-/// only on rename to.
+// The type of file system events you are interested in.
+// The short names, e.g. `Access mean ANY kind of access event.
+// The longer names e.g. `AccessOpen mean a more specific subset
+// of the short named class event. There are sometimes multiple
+// levels of this. For example `Modify expresses interest in
+// any modification, `ModifyRename expresses interest in any
+// kind of rename operation, and `ModifyRenameTo expresses interest
+// only on rename to.
 type Interest = [
     `Any,
     `Access,
@@ -48,4 +48,4 @@ type Interest = [
 /// - path updates
 /// - an event occurrs that matches interest
 /// - an error occurrs when trying to establish the watch
-let watch = |#interest = [`Create, `Modify, `Delete], #recursive = false, path| 'fs_watch
+let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch
