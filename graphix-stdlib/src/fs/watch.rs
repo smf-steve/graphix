@@ -1,3 +1,4 @@
+use crate::deftype;
 use anyhow::{anyhow, bail};
 use arcstr::{literal, ArcStr};
 use compact_str::{format_compact, CompactString};
@@ -24,15 +25,13 @@ use poolshark::{
 use std::{
     any::Any,
     collections::{hash_set, HashSet},
+    ffi::OsStr,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
-    pin::Pin,
     result::{self, Result},
     sync::{Arc, LazyLock},
 };
 use tokio::{fs, select, sync::mpsc as tmpsc, task};
-
-use crate::deftype;
 
 static PATHS: LazyLock<Pool<FxHashSet<ArcStr>>> = LazyLock::new(|| Pool::new(1000, 1000));
 
@@ -75,94 +74,65 @@ enum Interest {
     Other,
 }
 
-impl FromValue for Interest {
-    fn from_value(v: Value) -> anyhow::Result<Self> {
-        match v {
-            Value::String(s) => match &*s {
-                "Any" => Ok(Self::Any),
-                "Access" => Ok(Self::Access),
-                "AccessOpen" => Ok(Self::AccessOpen),
-                "AccessClose" => Ok(Self::AccessClose),
-                "AccessRead" => Ok(Self::AccessRead),
-                "AccessOther" => Ok(Self::AccessOther),
-                "Create" => Ok(Self::Create),
-                "CreateFile" => Ok(Self::CreateFile),
-                "CreateFolder" => Ok(Self::CreateFolder),
-                "CreateOther" => Ok(Self::CreateOther),
-                "Modify" => Ok(Self::Modify),
-                "ModifyData" => Ok(Self::ModifyData),
-                "ModifyDataSize" => Ok(Self::ModifyDataSize),
-                "ModifyDataContent" => Ok(Self::ModifyDataContent),
-                "ModifyDataOther" => Ok(Self::ModifyDataOther),
-                "ModifyMetadata" => Ok(Self::ModifyMetadata),
-                "ModifyMetadataAccessTime" => Ok(Self::ModifyMetadataAccessTime),
-                "ModifyMetadataWriteTime" => Ok(Self::ModifyMetadataWriteTime),
-                "ModifyMetadataPermissions" => Ok(Self::ModifyMetadataPermissions),
-                "ModifyMetadataOwnership" => Ok(Self::ModifyMetadataOwnership),
-                "ModifyMetadataExtended" => Ok(Self::ModifyMetadataExtended),
-                "ModifyMetadataOther" => Ok(Self::ModifyMetadataOther),
-                "ModifyRename" => Ok(Self::ModifyRename),
-                "ModifyRenameTo" => Ok(Self::ModifyRenameTo),
-                "ModifyRenameFrom" => Ok(Self::ModifyRenameFrom),
-                "ModifyRenameBoth" => Ok(Self::ModifyRenameBoth),
-                "ModifyRenameOther" => Ok(Self::ModifyRenameOther),
-                "ModifyOther" => Ok(Self::ModifyOther),
-                "Delete" => Ok(Self::Delete),
-                "DeleteFile" => Ok(Self::DeleteFile),
-                "DeleteFolder" => Ok(Self::DeleteFolder),
-                "DeleteOther" => Ok(Self::DeleteOther),
-                "Other" => Ok(Self::Other),
-                _ => Err(anyhow::anyhow!("Invalid Interest variant: {}", s)),
-            },
-            _ => Err(anyhow::anyhow!("Expected string value for Interest, got: {:?}", v)),
+macro_rules! impl_value_conv {
+    ($enum:ident { $($variant:ident),* $(,)? }) => {
+        impl FromValue for $enum {
+            fn from_value(v: Value) -> anyhow::Result<Self> {
+                match v {
+                    Value::String(s) => match &*s {
+                        $(stringify!($variant) => Ok(Self::$variant),)*
+                        _ => Err(anyhow::anyhow!("Invalid {} variant: {}", stringify!($enum), s)),
+                    },
+                    _ => Err(anyhow::anyhow!("Expected string value for {}, got: {:?}", stringify!($enum), v)),
+                }
+            }
         }
-    }
+
+        impl Into<Value> for $enum {
+            fn into(self) -> Value {
+                match self {
+                    $(Self::$variant => Value::String(literal!(stringify!($variant))),)*
+                }
+            }
+        }
+    };
 }
 
-impl Into<Value> for Interest {
-    fn into(self) -> Value {
-        use Interest::*;
-        match self {
-            Any => Value::String(literal!("Any")),
-            Access => Value::String(literal!("Access")),
-            AccessOpen => Value::String(literal!("AccessOpen")),
-            AccessClose => Value::String(literal!("AccessClose")),
-            AccessRead => Value::String(literal!("AccessRead")),
-            AccessOther => Value::String(literal!("AccessOther")),
-            Create => Value::String(literal!("Create")),
-            CreateFile => Value::String(literal!("CreateFile")),
-            CreateFolder => Value::String(literal!("CreateFolder")),
-            CreateOther => Value::String(literal!("CreateOther")),
-            Modify => Value::String(literal!("Modify")),
-            ModifyData => Value::String(literal!("ModifyData")),
-            ModifyDataSize => Value::String(literal!("ModifyDataSize")),
-            ModifyDataContent => Value::String(literal!("ModifyDataContent")),
-            ModifyDataOther => Value::String(literal!("ModifyDataOther")),
-            ModifyMetadata => Value::String(literal!("ModifyMetadata")),
-            ModifyMetadataAccessTime => {
-                Value::String(literal!("ModifyMetadataAccessTime"))
-            }
-            ModifyMetadataWriteTime => Value::String(literal!("ModifyMetadataWriteTime")),
-            ModifyMetadataPermissions => {
-                Value::String(literal!("ModifyMetadataPermissions"))
-            }
-            ModifyMetadataOwnership => Value::String(literal!("ModifyMetadataOwnership")),
-            ModifyMetadataExtended => Value::String(literal!("ModifyMetadataExtended")),
-            ModifyMetadataOther => Value::String(literal!("ModifyMetadataOther")),
-            ModifyRename => Value::String(literal!("ModifyRename")),
-            ModifyRenameTo => Value::String(literal!("ModifyRenameTo")),
-            ModifyRenameFrom => Value::String(literal!("ModifyRenameFrom")),
-            ModifyRenameBoth => Value::String(literal!("ModifyRenameBoth")),
-            ModifyRenameOther => Value::String(literal!("ModifyRenameOther")),
-            ModifyOther => Value::String(literal!("ModifyOther")),
-            Delete => Value::String(literal!("Delete")),
-            DeleteFile => Value::String(literal!("DeleteFile")),
-            DeleteFolder => Value::String(literal!("DeleteFolder")),
-            DeleteOther => Value::String(literal!("DeleteOther")),
-            Other => Value::String(literal!("Other")),
-        }
-    }
-}
+impl_value_conv!(Interest {
+    Any,
+    Access,
+    AccessOpen,
+    AccessClose,
+    AccessRead,
+    AccessOther,
+    Create,
+    CreateFile,
+    CreateFolder,
+    CreateOther,
+    Modify,
+    ModifyData,
+    ModifyDataSize,
+    ModifyDataContent,
+    ModifyDataOther,
+    ModifyMetadata,
+    ModifyMetadataAccessTime,
+    ModifyMetadataWriteTime,
+    ModifyMetadataPermissions,
+    ModifyMetadataOwnership,
+    ModifyMetadataExtended,
+    ModifyMetadataOther,
+    ModifyRename,
+    ModifyRenameTo,
+    ModifyRenameFrom,
+    ModifyRenameBoth,
+    ModifyRenameOther,
+    ModifyOther,
+    Delete,
+    DeleteFile,
+    DeleteFolder,
+    DeleteOther,
+    Other,
+});
 
 impl From<&EventKind> for Interest {
     fn from(kind: &EventKind) -> Self {
@@ -401,22 +371,34 @@ impl WatchEvent {
 /// like fs::cananocialize, but will never fail. It will canonicalize
 /// as much of the path as it's possible to canonicalize and leave the
 /// rest untouched.
-fn best_effort_canonicalize(
-    path: PathBuf,
-) -> Pin<Box<dyn Future<Output = PathBuf> + Send + Sync + 'static>> {
-    Box::pin(async move {
-        match fs::canonicalize(&path).await {
-            Ok(p) => p,
-            Err(_) => match (path.parent(), path.file_name()) {
-                (None, None) => PathBuf::new(),
-                (None, Some(_)) => PathBuf::from(path),
-                (Some(parent), None) => best_effort_canonicalize(parent.into()).await,
+async fn best_effort_canonicalize(path: &Path) -> PathBuf {
+    let mut skipped: LPooled<Vec<&OsStr>> = LPooled::take();
+    let mut root: &Path = &path;
+    macro_rules! finish {
+        ($p:expr) => {{
+            for part in skipped.drain(..) {
+                $p.push(part)
+            }
+            break $p;
+        }};
+    }
+    loop {
+        match fs::canonicalize(root).await {
+            Ok(mut p) => finish!(p),
+            Err(_) => match (root.parent(), root.file_name()) {
+                (None, None) => break PathBuf::from(path),
+                (None, Some(_)) => {
+                    let mut p = PathBuf::from(root);
+                    finish!(p)
+                }
+                (Some(parent), None) => root = parent,
                 (Some(parent), Some(file)) => {
-                    best_effort_canonicalize(parent.into()).await.join(file)
+                    skipped.push(file);
+                    root = parent;
                 }
             },
         }
-    })
+    }
 }
 
 fn utf8_path(path: &PathBuf) -> ArcStr {
@@ -425,6 +407,11 @@ fn utf8_path(path: &PathBuf) -> ArcStr {
         Ok(s) => ArcStr::from(s),
         Err(_) => ArcStr::from(CompactString::from_utf8_lossy(path).as_str()),
     }
+}
+
+enum RemoveAction {
+    Remove(PathBuf),
+    ChangeRecursion(RecursiveMode, PathBuf),
 }
 
 #[derive(Default)]
@@ -438,6 +425,7 @@ impl Watched {
     fn relevant_to<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a Watch> {
         struct I<'a> {
             t: &'a Watched,
+            root: &'a Path,
             path: Option<&'a Path>,
             curr: Option<hash_set::Iter<'a, BindId>>,
         }
@@ -450,7 +438,13 @@ impl Watched {
                         && let Some(id) = sl.next()
                     {
                         match self.t.by_id.get(id) {
-                            Some(w) => break Some(w),
+                            Some(w) => {
+                                if w.recursive || &w.canonical_path == self.root {
+                                    break Some(w);
+                                } else {
+                                    continue;
+                                }
+                            }
                             None => continue,
                         }
                     }
@@ -467,13 +461,16 @@ impl Watched {
                 }
             }
         }
-        I { t: self, path: Some(path), curr: None }
+        I { t: self, path: Some(path), root: path, curr: None }
     }
 
     /// add a watch and return the canonicalized path if adding a watch is necessary
     async fn add_watch(&mut self, mut w: Watch) -> Option<(PathBuf, RecursiveMode)> {
         let id = w.id;
-        let path = best_effort_canonicalize(PathBuf::from(&*w.path)).await;
+        let path = match self.by_id.get(&id) {
+            Some(ow) if ow.path == w.path => ow.canonical_path.clone(),
+            Some(_) | None => best_effort_canonicalize(&Path::new(&*w.path)).await,
+        };
         w.canonical_path = path.clone();
         let rec = if w.recursive {
             RecursiveMode::Recursive
@@ -489,19 +486,36 @@ impl Watched {
         add.then(|| (path, rec))
     }
 
-    /// remove a watch, and return it's root path if it is the last
-    /// watch with that root
-    fn remove_watch(&mut self, id: &BindId) -> Option<PathBuf> {
+    /// remove a watch, and return an optional action to be performed on the
+    /// watcher
+    fn remove_watch(&mut self, id: &BindId) -> Option<RemoveAction> {
         self.by_id.remove(id).and_then(|w| {
             match self.by_root.get_mut(&w.canonical_path) {
-                None => Some(w.canonical_path),
-                Some((_, ids)) => {
+                None => Some(RemoveAction::Remove(w.canonical_path)),
+                Some((rec, ids)) => {
                     ids.remove(id);
                     if ids.is_empty() {
                         self.by_root.remove(&w.canonical_path);
-                        Some(w.canonical_path)
+                        Some(RemoveAction::Remove(w.canonical_path))
                     } else {
-                        None
+                        let rec_needed = ids
+                            .iter()
+                            .filter_map(|id| self.by_id.get(id))
+                            .fold(false, |acc, w| acc | w.recursive);
+                        let rec_needed = if rec_needed {
+                            RecursiveMode::Recursive
+                        } else {
+                            RecursiveMode::NonRecursive
+                        };
+                        if *rec != rec_needed {
+                            *rec = rec_needed;
+                            Some(RemoveAction::ChangeRecursion(
+                                rec_needed,
+                                w.canonical_path,
+                            ))
+                        } else {
+                            None
+                        }
                     }
                 }
             }
@@ -579,6 +593,14 @@ async fn file_watcher_loop(
     let mut watched = Watched::default();
     let mut recv_buf = vec![];
     let mut batch = CBATCH_POOL.take();
+    macro_rules! or_push {
+        ($path:expr, $id:expr, $r:expr) => {
+            if let Err(e) = $r {
+                let path = utf8_path(&$path);
+                push_error(&mut batch, $id, Some(path), Either::Left(e))
+            }
+        };
+    }
     loop {
         select! {
             n = rx_notify.recv_many(&mut recv_buf, 10000) => {
@@ -593,18 +615,17 @@ async fn file_watcher_loop(
                 WatchCmd::Watch(w) => {
                     let id = w.id;
                     if let Some((path, recursive)) = watched.add_watch(w).await {
-                        if let Err(e) = watcher.watch(&path, recursive) {
-                            let path = utf8_path(&path);
-                            push_error(&mut batch, id, Some(path), Either::Left(e))
-                        }
+                        or_push!(path, id, watcher.watch(&path, recursive))
                     }
                 },
-                WatchCmd::Stop(id) => {
-                    if let Some(path) = watched.remove_watch(&id) {
-                        if let Err(e) = watcher.unwatch(&path) {
-                            let path = utf8_path(&path);
-                            push_error(&mut batch, id, Some(path), Either::Left(e))
-                        }
+                WatchCmd::Stop(id) => match watched.remove_watch(&id) {
+                    None => (),
+                    Some(RemoveAction::Remove(path)) => {
+                        or_push!(path, id, watcher.unwatch(&path))
+                    }
+                    Some(RemoveAction::ChangeRecursion(rec, path)) => {
+                        or_push!(path, id, watcher.unwatch(&path));
+                        or_push!(path, id, watcher.watch(&path, rec))
                     }
                 }
             },
@@ -673,15 +694,15 @@ fn get_watcher<'a, R: Rt>(rt: &mut R, st: &'a mut LibState) -> &'a mut WatchCtx 
 pub(super) struct WatchBuiltIn {
     id: BindId,
     top_id: ExprId,
-    interest: BitFlags<Interest>,
-    rec: bool,
+    interest: Option<BitFlags<Interest>>,
+    rec: Option<bool>,
     path: Option<ArcStr>,
 }
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for WatchBuiltIn {
-    const NAME: &str = "is_err";
+    const NAME: &str = "fs_watch";
     deftype!(
-        "core",
+        "fs",
         "fn(?#interest:Array<Interest>, ?#recursive:bool, string) -> Result<string, `WatchError(string)>"
     );
 
@@ -692,8 +713,8 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for WatchBuiltIn {
             Ok(Box::new(WatchBuiltIn {
                 id,
                 top_id,
-                interest: BitFlags::empty(),
-                rec: false,
+                interest: None,
+                rec: None,
                 path: None,
             }))
         })
@@ -711,12 +732,12 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for WatchBuiltIn {
         if let Some(Ok(int)) =
             from[0].update(ctx, event).map(|v| v.cast_to::<BitFlags<Interest>>())
         {
-            up |= self.interest != int;
-            self.interest = int;
+            up |= self.interest != Some(int);
+            self.interest = Some(int);
         }
         if let Some(Ok(rec)) = from[1].update(ctx, event).map(|v| v.cast_to::<bool>()) {
-            up |= self.rec != rec;
-            self.rec = rec;
+            up |= self.rec != Some(rec);
+            self.rec = Some(rec);
         }
         let mut path_up = false;
         if let Some(Ok(path)) = from[2].update(ctx, event).map(|v| v.cast_to::<ArcStr>())
@@ -730,14 +751,16 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for WatchBuiltIn {
         }
         if (up || path_up)
             && let Some(path) = &self.path
+            && let Some(interest) = self.interest
+            && let Some(recursive) = self.rec
         {
             let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
             if let Err(e) = wctx.send(WatchCmd::Watch(Watch {
                 path: path.clone(),
                 canonical_path: PathBuf::new(),
                 id: self.id,
-                interest: self.interest,
-                recursive: self.rec,
+                interest,
+                recursive,
             })) {
                 ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}"));
             }

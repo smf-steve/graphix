@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo --version:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo build:*)",
+      "Bash(mdbook build:*)",
+      "Bash(cargo run:*)",
+      "Bash(for f in book/src/examples/tui/{barchart,block,text}_*.gx)",
+      "Bash(do echo \"=== $f ===\")",
+      "Bash(done)",
+      "Bash(/tmp/check_examples.sh)",
+      "Bash(for f in canvas_network canvas_animated scroll_basic scroll_paragraph scroll_list scroll_autoscroll browser_basic browser_navigation)",
+      "Bash(do echo \"=== $f.gx ===\")",
+      "Bash(for f in scroll_list.gx scroll_autoscroll.gx browser_basic.gx browser_navigation.gx calendar_basic.gx calendar_events.gx calendar_typed.gx chart_basic.gx)",
+      "Bash(do echo \"Checking $f\")",
+      "Bash(for f in book/src/examples/tui/chart_multi.gx book/src/examples/tui/chart_scatter.gx book/src/examples/tui/gauge_basic.gx book/src/examples/tui/gauge_threshold.gx book/src/examples/tui/gauge_resource.gx book/src/examples/tui/layout_basic.gx book/src/examples/tui/layout_focus.gx)",
+      "Bash(do if cargo run --bin graphix -- --check \"$f\")",
+      "Bash(fi)",
+      "Bash(for f in book/src/examples/tui/layout_nested.gx book/src/examples/tui/layout_header_footer.gx book/src/examples/tui/overview_input.gx book/src/examples/tui/overview_first.gx book/src/examples/tui/overview_styling.gx book/src/examples/tui/overview_layout.gx book/src/examples/tui/overview_state.gx book/src/examples/tui/overview_realtime.gx)",
+      "Bash(chmod:*)",
+      "Bash(/tmp/check_all_tui.sh:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(node -c:*)",
+      "Bash(test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

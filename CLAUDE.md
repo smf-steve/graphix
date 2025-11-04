@@ -120,7 +120,7 @@ Stdlib built-ins are in `graphix-stdlib/src/*.rs` with corresponding Graphix imp
 
 When doing code review, follow the CR/XCR comment system defined in AGENTS.md:
 
-1. Add comments as: `// CR <your-name> for <addressee>: comment text`
+1. Add comments as: `// CR <your-name> for <addressee>: comment text` to the relevant file near the relevant code
 2. When issues are addressed, the comment becomes: `// XCR ...`
 3. Review XCRs - delete if resolved, convert back to CR with explanation if not
 

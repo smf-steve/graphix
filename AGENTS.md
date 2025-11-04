@@ -51,6 +51,10 @@ I might also add additional explanation to the comment prefixed by my name, for 
 // XCR claude for estokes: This use of unsafe does not seem safe because ...
 // estokes: I think it's actually safe because ...
 
+When you write a CR. The first thing you should do is read the CR again and make
+sure you really agree with what you said. Sometimes our first pass at something
+turns out to be wrong on further reflection.
+
 When I ask you to review your XCRs please read the XCR my comments, and the
 code, and decide if my code change or my explanation really addresses the issue
 you had. If it does, then delete the XCR. If it doesn't then turn the XCR back
