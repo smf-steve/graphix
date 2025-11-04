@@ -369,7 +369,7 @@ struct WatchEvent {
 
 impl CustomBuiltinType for WatchEvent {}
 
-/// like fs::cananocialize, but will never fail. It will canonicalize
+/// like fs::canonicalize, but will never fail. It will canonicalize
 /// as much of the path as it's possible to canonicalize and leave the
 /// rest untouched.
 async fn best_effort_canonicalize(path: &Path) -> PathBuf {
@@ -572,7 +572,6 @@ async fn file_watcher_loop(
     mut rx: mpsc::UnboundedReceiver<WatchCmd>,
     mut tx: mpsc::Sender<GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>>,
 ) {
-    eprintln!("starting file watcher loop");
     let mut watched = Watched::default();
     let mut recv_buf = vec![];
     let mut batch = CBATCH_POOL.take();
