@@ -42,10 +42,62 @@ type Interest = [
     `Other
 ];
 
-/// Watch the specified path for events matching #interest. If #recursive is true,
-/// then also watch sub directories (if path is a directory). Return path, or an
-/// error if the watch could not be established. watch updates when
+type WatchEvent = {
+    paths: Array<string>,
+    event: [`Established, Interest]
+};
+
+/// Watch the specified path for events matching #interest. Return the canonical
+/// path of the filesystem object involved in the event, or an error if the
+/// watch could not be established. watch updates when,
 /// - path updates
-/// - an event occurrs that matches interest
-/// - an error occurrs when trying to establish the watch
-let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch
+/// - an event occurs that matches interest
+/// - an error occurs when trying to establish the watch
+///
+/// If path is a directory the watch will report events about immediate children.
+/// If the watch could not be established establishement will be retried every
+/// time path updates
+///
+/// Filesystem watches are a limited operating system resource, like file
+/// descriptors, or handles.
+let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch;
+
+/// Watch the specified path for events matching #interest. Return the full event
+/// describing what happened, or an error if the watch could not be established.
+/// watch_full updates when
+/// - path updates
+/// - an event occurs that matches interest
+/// - an error occurs when trying to establish the watch
+///
+/// If path is a directory the watch will report events about immediate children.
+/// If the watch could not be established establishement will be retried every
+/// time path updates
+///
+/// Filesystem watches are a limited operating system resource, like file
+/// descriptors, or handles.
+let watch_full = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch_full;
+
+/// Read the specified file into memory as a utf8 string and return it, or an
+/// error if,
+/// - path is not a file
+/// - path is not valid utf8
+/// - an OS specific error occurs while trying to read path
+///
+/// The file will be read again each time path updates, even if path did not change.
+/// Reads will be returned in the same order they are initiated, even if they complete
+/// out of order. For example, if we read_all on path0 and path1, read_all will always
+/// return the result for path0 first. If the result for path0 is not ready then read_all
+/// will wait for it even if the result for path1 has already been delivered.
+let read_all = |path| 'fs_read_all;
+
+/// Read the specified file into memory as a bytes and return it, or an
+/// error if,
+/// - path is not a file
+/// - an OS specific error occurs while trying to read path
+///
+/// The file will be read again each time path updates, even if path did not change.
+/// Reads will be returned in the same order they are initiated, even if they complete
+/// out of order. For example, if we read_all_bin on path0 and path1, read_all_bin will always
+/// return the result for path0 first. If the result for path0 is not ready then read_all_bin
+/// will wait for it even if the result for path1 has already been delivered.
+let read_all_bin = |path| 'fs_read_all_bin

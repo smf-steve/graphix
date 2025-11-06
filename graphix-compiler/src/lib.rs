@@ -528,6 +528,18 @@ pub trait Rt: Debug + 'static {
         f: F,
     ) -> Self::AbortHandle;
 
+    /// Spawn a task
+    ///
+    /// When the task completes it's output must be delivered as a
+    /// variable event using the returned `BindId`
+    ///
+    /// Calling `abort` must guarantee that if it is called before the
+    /// task completes then no update will be delivered.
+    fn spawn_var<F: Future<Output = (BindId, Value)> + Send + 'static>(
+        &mut self,
+        f: F,
+    ) -> Self::AbortHandle;
+
     /// Ask the runtime to watch a channel
     ///
     /// When event batches arrive via the channel the runtime must
@@ -536,6 +548,12 @@ pub trait Rt: Debug + 'static {
         &mut self,
         s: mpsc::Receiver<GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>>,
     );
+
+    /// Ask the runtime to watch a channel
+    ///
+    /// When event batches arrive via the channel the runtime must
+    /// deliver the events variable updates.
+    fn watch_var(&mut self, s: mpsc::Receiver<GPooled<Vec<(BindId, Value)>>>);
 }
 
 #[derive(Default)]

@@ -618,6 +618,13 @@ impl<X: GXExt> GX<X> {
                         }
                     }
                 };
+                (var_watches) => {
+                    for rx in self.ctx.rt.var_watches.iter_mut() {
+                        while let Ok(Some(mut up)) = rx.try_next() {
+                            tasks.extend(up.drain(..))
+                        }
+                    }
+                };
                 (rpcs) => {
                     if self.ctx.rt.rpc_overflow.is_empty() {
                         while let Ok(Some(up)) = self.ctx.rt.rpcs.try_next() {
@@ -640,33 +647,33 @@ impl<X: GXExt> GX<X> {
                     &mut self.ctx.rt.rpcs
                 ) => {
                     rpcs.push(rp);
-                    peek!(updates, tasks, custom_tasks, watches, writes, rpcs, input)
+                    peek!(updates, tasks, custom_tasks, watches, var_watches, writes, rpcs, input)
                 }
                 wr = maybe_next(
                     self.ctx.rt.net_writes.is_empty(),
                     &mut self.ctx.rt.writes
                 ) => {
                     writes = Some(wr);
-                    peek!(updates, tasks, custom_tasks, watches, rpcs, input);
+                    peek!(updates, tasks, custom_tasks, watches, var_watches, rpcs, input);
                 },
                 up = maybe_next(
                     self.ctx.rt.net_updates.is_empty(),
                     &mut self.ctx.rt.updates
                 ) => {
                     updates = Some(up);
-                    peek!(updates, writes, custom_tasks, watches, tasks, rpcs, input);
+                    peek!(updates, writes, custom_tasks, watches, var_watches, tasks, rpcs, input);
                 },
                 up = join_or_wait(&mut self.ctx.rt.tasks) => {
                     if let Ok(up) = up {
                         tasks.push(up);
                     }
-                    peek!(updates, writes, watches, tasks, custom_tasks, rpcs, input)
+                    peek!(updates, writes, watches, tasks, var_watches, custom_tasks, rpcs, input)
                 },
                 up = join_or_wait(&mut self.ctx.rt.custom_tasks) => {
                     if let Ok(up) = up {
                         custom_tasks.push(up);
                     }
-                    peek!(updates, writes, watches, tasks, custom_tasks, rpcs, input)
+                    peek!(updates, writes, watches, tasks, var_watches, custom_tasks, rpcs, input)
                 },
                 up = self.ctx.rt.watches.next() => {
                     if let Some(mut up) = up {
@@ -674,22 +681,30 @@ impl<X: GXExt> GX<X> {
                             custom_tasks.push(v);
                         }
                     }
-                    peek!(updates, writes, watches, tasks, custom_tasks, rpcs, input)
-                }
+                    peek!(updates, writes, watches, tasks, var_watches, custom_tasks, rpcs, input)
+                },
+                up = self.ctx.rt.var_watches.next() => {
+                    if let Some(mut up) = up {
+                        for v in up.drain(..) {
+                            tasks.push(v);
+                        }
+                    }
+                    peek!(updates, writes, watches, tasks, var_watches, custom_tasks, rpcs, input)
+                },
                 _ = or_never(ready) => {
-                    peek!(updates, writes, watches, tasks, custom_tasks, rpcs, input)
+                    peek!(updates, writes, watches, tasks, var_watches, custom_tasks, rpcs, input)
                 },
                 n = to_rt.recv_many(&mut input, 100000) => {
                     if n == 0 {
                         break 'main Ok(())
                     }
-                    peek!(updates, writes, watches, tasks, custom_tasks, rpcs);
+                    peek!(updates, writes, watches, tasks, var_watches, custom_tasks, rpcs);
                 },
                 r = self.ctx.rt.ext.update_sources() => {
                     if let Err(e) = r {
                         error!("failed to update custom event sources {e:?}")
                     }
-                    peek!(updates, writes, watches, tasks, custom_tasks, rpcs, input);
+                    peek!(updates, writes, watches, tasks, var_watches, custom_tasks, rpcs, input);
                 },
                 () = unsubscribe_ready(&self.ctx.rt.pending_unsubscribe, now) => {
                     while let Some((ts, _)) = self.ctx.rt.pending_unsubscribe.front() {

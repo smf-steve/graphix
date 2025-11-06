@@ -10,7 +10,7 @@ use graphix_compiler::{
     ExecCtx, LibState, Node, Rt, UserEvent, CBATCH_POOL,
 };
 use netidx::utils::Either;
-use netidx_value::{FromValue, Value};
+use netidx_value::{FromValue, ValArray, Value};
 use notify::{
     event::{
         AccessKind, CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind,
@@ -679,95 +679,140 @@ fn get_watcher<'a, R: Rt>(rt: &mut R, st: &'a mut LibState) -> &'a mut WatchCtx 
     })
 }
 
-#[derive(Debug)]
-pub(super) struct WatchBuiltIn {
-    id: BindId,
-    top_id: ExprId,
-    interest: Option<BitFlags<Interest>>,
-    path: Option<ArcStr>,
-}
-
-impl<R: Rt, E: UserEvent> BuiltIn<R, E> for WatchBuiltIn {
-    const NAME: &str = "fs_watch";
-    deftype!(
-        "fs",
-        "fn(?#interest:Array<Interest>, string) -> Result<string, `WatchError(string)>"
-    );
-
-    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
-        Arc::new(|ctx, _, _, _, top_id| {
-            let id = BindId::new();
-            ctx.rt.ref_var(id, top_id);
-            Ok(Box::new(WatchBuiltIn { id, top_id, interest: None, path: None }))
-        })
-    }
-}
-
-impl<R: Rt, E: UserEvent> Apply<R, E> for WatchBuiltIn {
-    fn update(
-        &mut self,
-        ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
-        event: &mut Event<E>,
-    ) -> Option<Value> {
-        let mut up = false;
-        if let Some(Ok(mut int)) =
-            from[0].update(ctx, event).map(|v| v.cast_to::<LPooled<Vec<Interest>>>())
-        {
-            let int = int.drain(..).fold(BitFlags::empty(), |mut acc, fl| {
-                acc.insert(fl);
-                acc
-            });
-            up |= self.interest != Some(int);
-            self.interest = Some(int);
+macro_rules! watch {
+    (
+        type_name: $type_name:ident,
+        builtin_name: $builtin_name:literal,
+        graphix_type: $graphix_type:literal,
+        handle_event: |$id:ident, $ctx:ident, $ev:ident| $handle_event:block
+    ) => {
+        #[derive(Debug)]
+        pub(super) struct $type_name {
+            id: BindId,
+            top_id: ExprId,
+            interest: Option<BitFlags<Interest>>,
+            path: Option<ArcStr>,
         }
-        if let Some(Ok(path)) = from[1].update(ctx, event).map(|v| v.cast_to::<ArcStr>())
-        {
-            let path = Some(path);
-            up = path != self.path;
-            self.path = path;
-        }
-        if up
-            && let Some(path) = &self.path
-            && let Some(interest) = self.interest
-        {
-            let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
-            if let Err(e) = wctx.send(WatchCmd::Watch(Watch {
-                path: path.clone(),
-                canonical_path: PathBuf::new(),
-                id: self.id,
-                interest,
-            })) {
-                ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}"));
+
+        impl<R: Rt, E: UserEvent> BuiltIn<R, E> for $type_name {
+            const NAME: &str = $builtin_name;
+            deftype!("fs", $graphix_type);
+
+            fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+                Arc::new(|ctx, _, _, _, top_id| {
+                    let id = BindId::new();
+                    ctx.rt.ref_var(id, top_id);
+                    Ok(Box::new($type_name { id, top_id, interest: None, path: None }))
+                })
             }
         }
-        if let Some(mut w) = event.custom.remove(&self.id)
-            && let Some(w) = (&mut *w as &mut dyn Any).downcast_mut::<WatchEvent>()
-            && let Some(path) = &self.path
-        {
-            match &w.event {
-                WatchEventKind::Established | WatchEventKind::Event(_) => {
-                    ctx.rt.set_var(self.id, path.clone().into())
+
+        impl<R: Rt, E: UserEvent> Apply<R, E> for $type_name {
+            fn update(
+                &mut self,
+                ctx: &mut ExecCtx<R, E>,
+                from: &mut [Node<R, E>],
+                event: &mut Event<E>,
+            ) -> Option<Value> {
+                let mut up = false;
+                if let Some(Ok(mut int)) = from[0]
+                    .update(ctx, event)
+                    .map(|v| v.cast_to::<LPooled<Vec<Interest>>>())
+                {
+                    let int = int.drain(..).fold(BitFlags::empty(), |mut acc, fl| {
+                        acc.insert(fl);
+                        acc
+                    });
+                    up |= self.interest != Some(int);
+                    self.interest = Some(int);
                 }
-                WatchEventKind::Error(e) => {
-                    ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}"))
+                if let Some(Ok(path)) =
+                    from[1].update(ctx, event).map(|v| v.cast_to::<ArcStr>())
+                {
+                    let path = Some(path);
+                    up = path != self.path;
+                    self.path = path;
                 }
+                if up
+                    && let Some(path) = &self.path
+                    && let Some(interest) = self.interest
+                {
+                    let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+                    if let Err(e) = wctx.send(WatchCmd::Watch(Watch {
+                        path: path.clone(),
+                        canonical_path: PathBuf::new(),
+                        id: self.id,
+                        interest,
+                    })) {
+                        ctx.rt.set_var(self.id, errf!("WatchError", "{e:?}"));
+                    }
+                }
+                if let Some(mut w) = event.custom.remove(&self.id)
+                    && let Some(w) =
+                        (&mut *w as &mut dyn Any).downcast_mut::<WatchEvent>()
+                {
+                    let $id = self.id;
+                    let $ctx = ctx;
+                    let $ev = w;
+                    $handle_event;
+                }
+                event.variables.get(&self.id).cloned()
+            }
+
+            fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+                let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+                let _ = wctx.send(WatchCmd::Stop(self.id));
+                ctx.rt.unref_var(self.id, self.top_id);
+                self.id = BindId::new();
+                ctx.rt.ref_var(self.id, self.top_id);
+            }
+
+            fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+                let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+                let _ = wctx.send(WatchCmd::Stop(self.id));
+                ctx.rt.unref_var(self.id, self.top_id);
             }
         }
-        event.variables.get(&self.id).cloned()
-    }
-
-    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
-        let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
-        let _ = wctx.send(WatchCmd::Stop(self.id));
-        ctx.rt.unref_var(self.id, self.top_id);
-        self.id = BindId::new();
-        ctx.rt.ref_var(self.id, self.top_id);
-    }
-
-    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
-        let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
-        let _ = wctx.send(WatchCmd::Stop(self.id));
-        ctx.rt.unref_var(self.id, self.top_id);
-    }
+    };
 }
+
+watch!(
+    type_name: WatchBuiltIn,
+    builtin_name: "fs_watch",
+    graphix_type: "fn(?#interest:Array<Interest>, string) -> Result<string, `WatchError(string)>",
+    handle_event: |id, ctx, w| {
+        match &w.event {
+            WatchEventKind::Established | WatchEventKind::Event(_) => {
+                for p in w.paths.drain() {
+                    ctx.rt.set_var(id, Value::String(p))
+                }
+            }
+            WatchEventKind::Error(e) => ctx.rt.set_var(id, errf!("WatchError", "{e:?}")),
+        }
+    }
+);
+
+watch!(
+    type_name: WatchFullBuiltIn,
+    builtin_name: "fs_watch_full",
+    graphix_type: "fn(?#interest:Array<Interest>, string) -> Result<WatchEvent, `WatchError(string)>",
+    handle_event: |id, ctx, w| {
+        let paths =
+            Value::Array(ValArray::from_iter_exact(w.paths.drain().map(Value::String)));
+        match &w.event {
+            WatchEventKind::Error(e) => ctx.rt.set_var(id, errf!("WatchError", "{e:?}")),
+            WatchEventKind::Established => {
+                let e = (
+                    (literal!("event"), literal!("Established")),
+                    (literal!("paths"), paths),
+                );
+                ctx.rt.set_var(id, e.into())
+            }
+            WatchEventKind::Event(int) => {
+                let e =
+                    ((literal!("event"), Value::from(int)), (literal!("paths"), paths));
+                ctx.rt.set_var(id, e.into())
+            }
+        }
+    }
+);
