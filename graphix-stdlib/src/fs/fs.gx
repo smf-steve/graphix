@@ -49,6 +49,7 @@ type WatchEvent = {
 };
 
 /// - poll_interval: how often to poll a batch of watched files. (default 1 second)
+/// the minimum allowed poll interval is 100ms.
 ///
 /// - poll_batch_size: how many watched files are in each poll batch (default 100)
 /// if poll_batch_size is set to 0 then polling will be DISABLED globally. If you

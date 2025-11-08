@@ -37,6 +37,7 @@ use tokio::{fs, select, sync::mpsc as tmpsc, task};
 static PATHS: LazyLock<Pool<FxHashSet<ArcStr>>> = LazyLock::new(|| Pool::new(1000, 1000));
 const MAX_NOTIFY_BATCH: usize = 10_000;
 const POLL_BATCH: usize = 100;
+const POLL_TIMEOUT: Duration = Duration::from_millis(250);
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy)]
@@ -516,6 +517,8 @@ impl Watched {
     /// necessary actions to the notify::Watcher
     async fn change_status(&mut self, id: BindId) -> ChangeOfStatus {
         let (w, remove) = self.remove_watch(&id);
+        // syn true means we need to generate a synthetic delete
+        // for a delete that otherwise would not be reported
         let mut syn = false;
         let add = match w {
             Some(w) => {
@@ -558,7 +561,8 @@ impl Watched {
                         Some(set) => match set.next() {
                             Some(id) => match self.t.by_id.get(id) {
                                 Some(w)
-                                    if self.level < 2 || !w.path_status.established() =>
+                                // limit established paths to the path itself and it's immediate parent
+                                if self.level < 2 || !w.path_status.established() =>
                                 {
                                     break Some(w)
                                 }
@@ -605,7 +609,11 @@ impl Watched {
             }
         }
         join_all(to_check.drain(..).map(|w| async {
-            let exists = tokio::fs::try_exists(&*w.watch.path).await.unwrap_or(false);
+            let exists =
+                tokio::time::timeout(POLL_TIMEOUT, tokio::fs::try_exists(&*w.watch.path))
+                    .await
+                    .unwrap_or(Ok(false))
+                    .unwrap_or(false);
             let established = w.path_status.established();
             if (established && !exists) || (!established && exists) {
                 Some(w.watch.id)
