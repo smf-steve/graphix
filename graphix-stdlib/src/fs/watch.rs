@@ -36,11 +36,14 @@ use tokio::{fs, select, sync::mpsc as tmpsc, task};
 
 static PATHS: LazyLock<Pool<FxHashSet<ArcStr>>> = LazyLock::new(|| Pool::new(1000, 1000));
 const MAX_NOTIFY_BATCH: usize = 10_000;
+const POLL_BATCH: usize = 100;
+const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy)]
 #[bitflags]
 #[repr(u64)]
 enum Interest {
+    Established,
     Any,
     Access,
     AccessOpen,
@@ -101,6 +104,7 @@ macro_rules! impl_value_conv {
 }
 
 impl_value_conv!(Interest {
+    Established,
     Any,
     Access,
     AccessOpen,
@@ -354,11 +358,11 @@ enum WatchCmd {
     Watch(Watch),
     Stop(BindId),
     SetPollInterval(Duration),
+    SetPollBatch(usize),
 }
 
 #[derive(Debug, Clone)]
 enum WatchEventKind {
-    Established,
     Error(ArcStr),
     Event(Interest),
 }
@@ -439,9 +443,10 @@ struct WatchInt {
 }
 
 enum AddAction {
-    AddWatch(PathBuf),
-    JustNotify(PathBuf),
-    AddPending { watch_path: PathBuf, full_path: PathBuf },
+    DoNothing,
+    Notify(PathBuf),
+    AddWatch { path: PathBuf, notify: bool },
+    AddPending { watch_path: PathBuf, full_path: PathBuf, notify: bool },
 }
 
 struct ChangeOfStatus {
@@ -454,6 +459,8 @@ struct ChangeOfStatus {
 struct Watched {
     by_id: FxHashMap<BindId, WatchInt>,
     by_root: FxHashMap<PathBuf, FxHashSet<BindId>>,
+    to_poll: Vec<BindId>,
+    poll_batch: Option<usize>,
 }
 
 impl Watched {
@@ -465,7 +472,11 @@ impl Watched {
                 let WatchInt { watch: Watch { path: _, id: _, interest }, path_status } =
                     ow;
                 *interest = w.interest;
-                return AddAction::JustNotify(path_status.full_path.clone());
+                if interest.contains(Interest::Established) {
+                    return AddAction::Notify(path_status.full_path.clone());
+                } else {
+                    return AddAction::DoNothing;
+                }
             }
             Some(_) | None => PathStatus::new(&Path::new(&*w.path)).await,
         };
@@ -473,12 +484,13 @@ impl Watched {
         let watch_path = w.path_status.exists.clone();
         let full_path = w.path_status.full_path.clone();
         let established = w.path_status.established();
+        let notify = w.watch.interest.contains(Interest::Established);
         self.by_root.entry(watch_path.clone()).or_default().insert(id);
         self.by_id.insert(id, w);
         if established {
-            AddAction::AddWatch(watch_path)
+            AddAction::AddWatch { path: watch_path, notify }
         } else {
-            AddAction::AddPending { watch_path, full_path }
+            AddAction::AddPending { watch_path, full_path, notify }
         }
     }
 
@@ -513,15 +525,16 @@ impl Watched {
             None => None,
         };
         let (remove, add) = match (&remove, &add) {
-            (Some(remove), Some(AddAction::AddPending { watch_path, full_path: _ }))
-            | (Some(remove), Some(AddAction::AddWatch(watch_path)))
+            (Some(remove), Some(AddAction::AddPending { watch_path, .. }))
+            | (Some(remove), Some(AddAction::AddWatch { path: watch_path, .. }))
                 if remove == watch_path =>
             {
                 (None, None)
             }
             (Some(_), Some(AddAction::AddPending { .. }))
-            | (Some(_), Some(AddAction::AddWatch(_)))
-            | (Some(_), Some(AddAction::JustNotify(_)))
+            | (Some(_), Some(AddAction::AddWatch { .. }))
+            | (Some(_), Some(AddAction::Notify(_)))
+            | (Some(_), Some(AddAction::DoNothing))
             | (None, Some(_))
             | (Some(_), None)
             | (None, None) => (remove, add),
@@ -571,13 +584,31 @@ impl Watched {
         I { level: 0, ids, t: self }
     }
 
+    fn poll_batch(&self) -> usize {
+        self.poll_batch.unwrap_or(POLL_BATCH)
+    }
+
     /// poll all watches and return a list of ids who's status might have changed
-    async fn poll_all(&self) -> LPooled<Vec<BindId>> {
-        join_all(self.by_id.iter().map(|(id, w)| async {
+    async fn poll_cycle(&mut self) -> LPooled<Vec<BindId>> {
+        if self.to_poll.is_empty() {
+            self.to_poll.extend(self.by_id.keys().map(|id| *id));
+        }
+        let poll_batch = self.poll_batch();
+        let mut to_check: LPooled<Vec<&WatchInt>> = LPooled::take();
+        let mut i = 0;
+        while i < poll_batch
+            && let Some(id) = self.to_poll.pop()
+        {
+            i += 1;
+            if let Some(w) = self.by_id.get(&id) {
+                to_check.push(w)
+            }
+        }
+        join_all(to_check.drain(..).map(|w| async {
             let exists = tokio::fs::try_exists(&*w.watch.path).await.unwrap_or(false);
             let established = w.path_status.established();
             if (established && !exists) || (!established && exists) {
-                Some(*id)
+                Some(w.watch.id)
             } else {
                 None
             }
@@ -724,7 +755,7 @@ async fn file_watcher_loop(
     let mut watched = Watched::default();
     let mut recv_buf = vec![];
     let mut batch = CBATCH_POOL.take();
-    let mut poll_interval = tokio::time::interval(Duration::from_secs(5));
+    let mut poll_interval = tokio::time::interval(DEFAULT_POLL_INTERVAL);
     macro_rules! or_push {
         ($path:expr, $id:expr, $r:expr) => {
             if let Err(e) = $r {
@@ -747,21 +778,36 @@ async fn file_watcher_loop(
         ($id:expr, $synthetic:expr) => {{
             let stc = watched.change_status($id).await;
             if let Some(path) = stc.remove {
-                if $synthetic && stc.syn {
+                if $synthetic
+                    && stc.syn
+                    && let Some(w) = watched.by_id.get(&$id)
+                    && w.watch.interest.intersects(
+                        Interest::Delete
+                        | Interest::DeleteFile
+                        | Interest::DeleteFolder
+                        | Interest::Other)
+                {
                     push_event(&mut batch, $id, &path, WatchEventKind::Event(Interest::Delete))
                 }
                 or_push!(&path, $id, watcher.unwatch(&path));
             }
             match stc.add {
-                None | Some(AddAction::JustNotify(_)) => (),
-                Some(AddAction::AddWatch(watch_path)) => {
+                None | Some(AddAction::Notify(_)) | Some(AddAction::DoNothing) => (),
+                Some(AddAction::AddWatch { path: watch_path, .. }) => {
                     add_watch!(&watch_path, $id, on_success: {
-                        if $synthetic {
+                        if $synthetic
+                            && let Some(w) = watched.by_id.get(&$id)
+                            && w.watch.interest.intersects(
+                                Interest::Create
+                                | Interest::CreateFile
+                                | Interest::CreateFolder
+                                | Interest::CreateOther)
+                        {
                             push_event(&mut batch, $id, &watch_path, WatchEventKind::Event(Interest::Create))
                         }
                     });
                 }
-                Some(AddAction::AddPending { watch_path, full_path: _}) => {
+                Some(AddAction::AddPending { watch_path, .. }) => {
                     add_watch!(&watch_path, $id, on_success: { () })
                 }
             }
@@ -770,8 +816,10 @@ async fn file_watcher_loop(
     loop {
         select! {
             _ = poll_interval.tick() => {
-                for id in watched.poll_all().await.drain(..) {
-                    status_change!(id, true)
+                if watched.poll_batch() > 0 {
+                    for id in watched.poll_cycle().await.drain(..) {
+                        status_change!(id, true)
+                    }
                 }
             },
             n = rx_notify.recv_many(&mut recv_buf, MAX_NOTIFY_BATCH) => {
@@ -789,17 +837,23 @@ async fn file_watcher_loop(
                 None => break,
                 Some(WatchCmd::Watch(w)) => {
                     let id = w.id;
+                    let nev = WatchEventKind::Event(Interest::Established);
                     match watched.add_watch(w).await {
-                        AddAction::JustNotify(path) =>
-                            push_event(&mut batch, id, &path, WatchEventKind::Established),
-                        AddAction::AddWatch(path) => {
+                        AddAction::DoNothing => (),
+                        AddAction::Notify(path) =>
+                            push_event(&mut batch, id, &path, nev),
+                        AddAction::AddWatch { path, notify } => {
                             add_watch!(&path, id, on_success: {
-                                push_event(&mut batch, id, &path, WatchEventKind::Established)
+                                if notify {
+                                    push_event(&mut batch, id, &path, nev)
+                                }
                             })
                         }
-                        AddAction::AddPending { watch_path, full_path } => {
+                        AddAction::AddPending { watch_path, full_path, notify } => {
                             add_watch!(&watch_path, id, on_success: {
-                                push_event(&mut batch, id, &full_path, WatchEventKind::Established);
+                                if notify {
+                                    push_event(&mut batch, id, &full_path, nev);
+                                }
                             })
                         }
                     }
@@ -813,6 +867,9 @@ async fn file_watcher_loop(
                 Some(WatchCmd::SetPollInterval(d)) => {
                     poll_interval = tokio::time::interval(d);
                 }
+                Some(WatchCmd::SetPollBatch(n)) => {
+                    watched.poll_batch = Some(n)
+                }
             },
         }
         if !batch.is_empty() {
@@ -825,7 +882,9 @@ async fn file_watcher_loop(
     let mut batch = CBATCH_POOL.take();
     while let Ok(Some(cmd)) = rx.try_next() {
         match cmd {
-            WatchCmd::Stop(_) | WatchCmd::SetPollInterval(_) => (),
+            WatchCmd::Stop(_)
+            | WatchCmd::SetPollBatch(_)
+            | WatchCmd::SetPollInterval(_) => (),
             WatchCmd::Watch(w) => {
                 let e = literal!("the watcher thread has stopped");
                 push_error(&mut batch, w.id, None, Either::Right(e));
@@ -873,6 +932,80 @@ fn get_watcher<'a, R: Rt>(rt: &mut R, st: &'a mut LibState) -> &'a mut WatchCtx 
             }
         }
     })
+}
+
+#[derive(Debug)]
+pub(super) struct SetGlobals;
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for SetGlobals {
+    const NAME: &str = "fs_set_global_watch_parameters";
+    deftype!(
+        "fs",
+        r#"fn(
+            ?poll_interval:[duration, null],
+            ?poll_batch_size:[i64, null]
+        ) -> Result<null, `WatchError(string)>"#
+    );
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|_, _, _, _, _| Ok(Box::new(SetGlobals)))
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for SetGlobals {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        let poll_interval = from[0]
+            .update(ctx, event)
+            .and_then(|v| v.cast_to::<Option<Duration>>().ok().flatten());
+        let batch_size = from[1]
+            .update(ctx, event)
+            .and_then(|v| v.cast_to::<Option<i64>>().ok().flatten());
+        match poll_interval {
+            Some(poll_interval) if poll_interval < Duration::from_millis(100) => {
+                return Some(errf!("WatchError", "poll_interval must be >= 100ms"))
+            }
+            None | Some(_) => (),
+        }
+        match batch_size {
+            Some(batch_size) if batch_size < 0 => {
+                return Some(errf!("WatchError", "batch_size must be >= 0"))
+            }
+            None | Some(_) => (),
+        }
+        let mut err = String::new();
+        use std::fmt::Write;
+        if let Some(poll_interval) = poll_interval {
+            let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+            if let Err(e) = wctx.send(WatchCmd::SetPollInterval(poll_interval)) {
+                write!(err, "could not set poll interval: {e:?}").unwrap();
+            }
+        }
+        if let Some(batch_size) = batch_size {
+            let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
+            if let Err(e) = wctx.send(WatchCmd::SetPollBatch(batch_size as usize)) {
+                if !err.is_empty() {
+                    write!(err, ", ").unwrap()
+                }
+                write!(err, "could not set poll interval: {e:?}").unwrap()
+            }
+        }
+        if poll_interval.is_some() || batch_size.is_some() {
+            if err.is_empty() {
+                Some(Value::Null)
+            } else {
+                Some(errf!("WatchError", "{err}"))
+            }
+        } else {
+            None
+        }
+    }
+
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {}
 }
 
 macro_rules! watch {
@@ -977,7 +1110,7 @@ watch!(
     graphix_type: "fn(?#interest:Array<Interest>, string) -> Result<string, `WatchError(string)>",
     handle_event: |id, ctx, w| {
         match &w.event {
-            WatchEventKind::Established | WatchEventKind::Event(_) => {
+            WatchEventKind::Event(_) => {
                 for p in w.paths.drain() {
                     ctx.rt.set_var(id, Value::String(p))
                 }
@@ -996,13 +1129,6 @@ watch!(
             Value::Array(ValArray::from_iter_exact(w.paths.drain().map(Value::String)));
         match &w.event {
             WatchEventKind::Error(e) => ctx.rt.set_var(id, errf!("WatchError", "{e:?}")),
-            WatchEventKind::Established => {
-                let e = (
-                    (literal!("event"), literal!("Established")),
-                    (literal!("paths"), paths),
-                );
-                ctx.rt.set_var(id, e.into())
-            }
             WatchEventKind::Event(int) => {
                 let e =
                     ((literal!("event"), Value::from(int)), (literal!("paths"), paths));

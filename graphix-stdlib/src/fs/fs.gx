@@ -7,6 +7,7 @@
 // kind of rename operation, and `ModifyRenameTo expresses interest
 // only on rename to.
 type Interest = [
+    `Established,
     `Any,
     `Access,
     `AccessOpen,
@@ -44,8 +45,25 @@ type Interest = [
 
 type WatchEvent = {
     paths: Array<string>,
-    event: [`Established, Interest]
+    event: Interest
 };
+
+/// - poll_interval: how often to poll a batch of watched files. (default 1 second)
+///
+/// - poll_batch_size: how many watched files are in each poll batch (default 100)
+/// if poll_batch_size is set to 0 then polling will be DISABLED globally. If you
+/// disable polling some of the stranger corner cases, such as your parent directory
+/// being renamed, will not be handled.
+///
+/// inotify, fsevents, etc have many problems, and so even though we use them
+/// we must also poll to ensure correct semantics. You can consider the worst
+/// case time you will find out about file creation, deletion, rename to be,
+/// (N / poll_batch_size) * poll_interval. Where N is the number of files you
+/// are watching globally.
+let set_global_watch_parameters = |
+    #poll_interval = null,
+    #poll_batch_size = null
+| 'fs_set_global_watch_parameters;
 
 /// Watch the specified path for events matching #interest. Return the canonical
 /// path of the filesystem object involved in the event, or an error if the
