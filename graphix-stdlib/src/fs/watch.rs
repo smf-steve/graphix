@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail};
 use arcstr::{literal, ArcStr};
 use compact_str::{format_compact, CompactString};
 use enumflags2::{bitflags, BitFlags};
-use futures::{channel::mpsc, SinkExt, StreamExt};
+use futures::{channel::mpsc, future::join_all, SinkExt, StreamExt};
 use fxhash::{FxHashMap, FxHashSet};
 use graphix_compiler::{
     errf, expr::ExprId, Apply, BindId, BuiltIn, BuiltInInitFn, CustomBuiltinType, Event,
@@ -24,12 +24,13 @@ use poolshark::{
 };
 use std::{
     any::Any,
-    collections::hash_set,
-    ffi::OsStr,
+    collections::{hash_set, VecDeque},
+    ffi::OsString,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
     result::Result,
     sync::{Arc, LazyLock},
+    time::Duration,
 };
 use tokio::{fs, select, sync::mpsc as tmpsc, task};
 
@@ -201,7 +202,6 @@ impl From<&EventKind> for Interest {
 #[derive(Debug, Clone)]
 struct Watch {
     path: ArcStr,
-    canonical_path: PathBuf,
     id: BindId,
     interest: BitFlags<Interest>,
 }
@@ -369,36 +369,56 @@ struct WatchEvent {
 
 impl CustomBuiltinType for WatchEvent {}
 
-/// like fs::canonicalize, but will never fail. It will canonicalize
-/// as much of the path as it's possible to canonicalize and leave the
-/// rest untouched.
-async fn best_effort_canonicalize(path: &Path) -> PathBuf {
-    let mut skipped: LPooled<Vec<&OsStr>> = LPooled::take();
-    let mut root: &Path = &path;
-    macro_rules! finish {
-        ($p:expr) => {{
-            for part in skipped.drain(..) {
-                $p.push(part)
-            }
-            break $p;
-        }};
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PathStatus {
+    /// the canonical part of the path that exists
+    exists: PathBuf,
+    /// the path parts that are missing, in reverse order
+    missing: LPooled<Vec<OsString>>,
+    /// the full path including the missing parts, which aren't canonical
+    full_path: PathBuf,
+}
+
+impl PathStatus {
+    fn established(&self) -> bool {
+        self.missing.is_empty()
     }
-    loop {
-        match fs::canonicalize(root).await {
-            Ok(mut p) => finish!(p),
-            Err(_) => match (root.parent(), root.file_name()) {
-                (None, None) => break PathBuf::from(path),
-                (None, Some(_)) => {
-                    let mut p = PathBuf::from(root);
-                    finish!(p)
+
+    async fn new(path: &Path) -> Self {
+        let mut missing: LPooled<Vec<OsString>> = LPooled::take();
+        let mut root: &Path = &path;
+        let mut t = loop {
+            match fs::canonicalize(root).await {
+                Ok(exists) => {
+                    break Self { exists: exists.clone(), missing, full_path: exists }
                 }
-                (Some(parent), None) => root = parent,
-                (Some(parent), Some(file)) => {
-                    skipped.push(file);
-                    root = parent;
-                }
-            },
+                Err(_) => match (root.parent(), root.file_name()) {
+                    (None, None) => {
+                        break Self {
+                            exists: PathBuf::from(path),
+                            missing,
+                            full_path: PathBuf::from(path),
+                        }
+                    }
+                    (None, Some(_)) => {
+                        break Self {
+                            exists: PathBuf::from(root),
+                            missing,
+                            full_path: PathBuf::from(root),
+                        }
+                    }
+                    (Some(parent), None) => root = parent,
+                    (Some(parent), Some(file)) => {
+                        missing.push(OsString::from(file));
+                        root = parent;
+                    }
+                },
+            }
+        };
+        for part in t.missing.iter().rev() {
+            t.full_path.push(part);
         }
+        t
     }
 }
 
@@ -410,107 +430,204 @@ fn utf8_path(path: &PathBuf) -> ArcStr {
     }
 }
 
+#[derive(Debug, Clone)]
+struct WatchInt {
+    watch: Watch,
+    path_status: PathStatus,
+}
+
 enum AddAction {
     AddWatch(PathBuf),
     JustNotify(PathBuf),
+    AddPending { watch_path: PathBuf, full_path: PathBuf },
+}
+
+struct ChangeOfStatus {
+    remove: Option<PathBuf>,
+    add: Option<AddAction>,
 }
 
 #[derive(Default)]
 struct Watched {
-    by_id: FxHashMap<BindId, Watch>,
+    by_id: FxHashMap<BindId, WatchInt>,
+    pending: FxHashMap<BindId, WatchInt>,
     by_root: FxHashMap<PathBuf, FxHashSet<BindId>>,
 }
 
 impl Watched {
-    /// add a watch and return the canonicalized path if adding a watch is necessary
-    async fn add_watch(&mut self, mut w: Watch) -> AddAction {
+    /// add a watch and return the necessary action to the notify::Watcher
+    async fn add_watch(&mut self, w: Watch) -> AddAction {
         let id = w.id;
-        let path = match self.by_id.get_mut(&id) {
-            Some(ow) if ow.path == w.path => {
-                let Watch { path: _, canonical_path, id: _, interest } = ow;
-                let canonical_path = canonical_path.clone();
-                *interest = w.interest;
-                return AddAction::JustNotify(canonical_path);
-            }
-            Some(_) | None => best_effort_canonicalize(&Path::new(&*w.path)).await,
-        };
-        w.canonical_path = path.clone();
-        self.by_id.insert(id, w);
-        self.by_root.entry(path.clone()).or_default().insert(id);
-        AddAction::AddWatch(path)
+        let path_status =
+            match self.by_id.get_mut(&id).or_else(|| self.pending.get_mut(&id)) {
+                Some(ow) if ow.watch.path == w.path => {
+                    let WatchInt {
+                        watch: Watch { path: _, id: _, interest },
+                        path_status,
+                    } = ow;
+                    *interest = w.interest;
+                    return AddAction::JustNotify(path_status.full_path.clone());
+                }
+                Some(_) | None => PathStatus::new(&Path::new(&*w.path)).await,
+            };
+        let w = WatchInt { watch: w, path_status };
+        let watch_path = w.path_status.exists.clone();
+        let full_path = w.path_status.full_path.clone();
+        let established = w.path_status.established();
+        self.by_root.entry(watch_path.clone()).or_default().insert(id);
+        if established {
+            self.by_id.insert(id, w);
+            AddAction::AddWatch(watch_path)
+        } else {
+            self.pending.insert(id, w);
+            AddAction::AddPending { watch_path, full_path }
+        }
     }
 
     /// remove a watch, and return an optional action to be performed on the
     /// watcher
-    fn remove_watch(&mut self, id: &BindId) -> Option<PathBuf> {
-        self.by_id.remove(id).and_then(|w| {
-            match self.by_root.get_mut(&w.canonical_path) {
-                None => Some(w.canonical_path),
+    fn remove_watch(&mut self, id: &BindId) -> (Option<WatchInt>, Option<PathBuf>) {
+        let w = self.by_id.remove(id).or_else(|| self.pending.remove(id));
+        let to_stop =
+            w.as_ref().and_then(|w| match self.by_root.get_mut(&w.path_status.exists) {
+                None => Some(w.path_status.exists.clone()),
                 Some(ids) => {
                     ids.remove(id);
                     ids.is_empty().then(|| {
-                        self.by_root.remove(&w.canonical_path);
-                        w.canonical_path
+                        self.by_root.remove(&w.path_status.exists);
+                        w.path_status.exists.clone()
                     })
                 }
-            }
-        })
+            });
+        (w, to_stop)
     }
 
-    fn relevant_to<'a>(&'a self, path: &'a PathBuf) -> impl Iterator<Item = &'a Watch> {
+    /// inform of a change of status for this watch id, return a set of
+    /// necessary actions to the notify::Watcher
+    async fn change_status(&mut self, id: BindId) -> ChangeOfStatus {
+        let (w, remove) = self.remove_watch(&id);
+        let add = match w {
+            Some(w) => Some(self.add_watch(w.watch).await),
+            None => None,
+        };
+        let (remove, add) = match (&remove, &add) {
+            (Some(remove), Some(AddAction::AddPending { watch_path, full_path: _ }))
+            | (Some(remove), Some(AddAction::AddWatch(watch_path)))
+                if remove == watch_path =>
+            {
+                (None, None)
+            }
+            (Some(_), Some(AddAction::AddPending { .. }))
+            | (Some(_), Some(AddAction::AddWatch(_)))
+            | (Some(_), Some(AddAction::JustNotify(_)))
+            | (None, Some(_))
+            | (Some(_), None)
+            | (None, None) => (remove, add),
+        };
+        ChangeOfStatus { remove, add }
+    }
+
+    fn relevant_to<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a WatchInt> {
         struct I<'a> {
-            root_ids: Option<hash_set::Iter<'a, BindId>>,
-            path_ids: Option<hash_set::Iter<'a, BindId>>,
+            level: usize,
+            ids: LPooled<VecDeque<hash_set::Iter<'a, BindId>>>,
             t: &'a Watched,
         }
         impl<'a> Iterator for I<'a> {
-            type Item = &'a Watch;
+            type Item = &'a WatchInt;
 
             fn next(&mut self) -> Option<Self::Item> {
-                macro_rules! next {
-                    ($set:expr) => {
-                        if let Some(set) = $set
-                            && let Some(id) = set.next()
-                        {
-                            match self.t.by_id.get(id) {
-                                Some(w) => return Some(w),
-                                None => continue,
-                            }
-                        }
-                    };
-                }
                 loop {
-                    next!(&mut self.path_ids);
-                    next!(&mut self.root_ids);
-                    return None;
+                    match self.ids.front_mut() {
+                        None => break None,
+                        Some(set) => match set.next() {
+                            Some(id) => match self.t.by_id.get(id) {
+                                Some(w) if self.level < 2 => break Some(w),
+                                Some(_) => continue,
+                                None => match self.t.pending.get(id) {
+                                    Some(w) => break Some(w),
+                                    None => continue,
+                                },
+                            },
+                            None => {
+                                self.level += 1;
+                                self.ids.pop_front();
+                            }
+                        },
+                    }
                 }
             }
         }
-        I {
-            path_ids: self.by_root.get(path).map(|h| h.iter()),
-            root_ids: path.parent().and_then(|p| self.by_root.get(p).map(|h| h.iter())),
-            t: self,
+        let mut ids: LPooled<VecDeque<hash_set::Iter<'a, BindId>>> = LPooled::take();
+        let mut root = Some(path);
+        while let Some(path) = root {
+            if let Some(h) = self.by_root.get(path) {
+                ids.push_back(h.iter())
+            }
+            root = path.parent();
         }
+        I { level: 0, ids, t: self }
     }
 
-    fn process_event(
+    /// poll all the pending watches and return a list of ids who's status might have changed
+    async fn poll_pending(&self) -> LPooled<Vec<BindId>> {
+        join_all(self.pending.iter().map(|(id, w)| async {
+            if tokio::fs::try_exists(&*w.watch.path).await.unwrap_or(false) {
+                Some(*id)
+            } else {
+                None
+            }
+        }))
+        .await
+        .into_iter()
+        .filter_map(|x| x)
+        .collect()
+    }
+
+    async fn process_event(
         &mut self,
         batch: &mut GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>,
         ev: Result<notify::Event, notify::Error>,
-    ) {
+    ) -> LPooled<Vec<BindId>> {
         let mut by_id: LPooled<FxHashMap<BindId, WatchEvent>> = LPooled::take();
+        let mut status_changed: LPooled<Vec<BindId>> = LPooled::take();
         match ev {
             Ok(ev) => {
                 let event = WatchEventKind::Event((&ev.kind).into());
                 for path in ev.paths.iter() {
                     let utf8_path = utf8_path(path);
                     for w in self.relevant_to(path) {
-                        if w.interested(&ev.kind) {
-                            let wev = by_id.entry(w.id).or_insert_with(|| WatchEvent {
-                                event: event.clone(),
-                                paths: PATHS.take(),
-                            });
-                            wev.paths.insert(utf8_path.clone());
+                        macro_rules! report {
+                            () => {{
+                                let wev = by_id.entry(w.watch.id).or_insert_with(|| {
+                                    WatchEvent {
+                                        event: event.clone(),
+                                        paths: PATHS.take(),
+                                    }
+                                });
+                                wev.paths.insert(utf8_path.clone());
+                            }};
+                        }
+                        if w.path_status.established() {
+                            if w.watch.interested(&ev.kind) {
+                                report!();
+                            }
+                            if let EventKind::Remove(_) = &ev.kind
+                                && path == &w.path_status.exists
+                            {
+                                status_changed.push(w.watch.id)
+                            }
+                        } else {
+                            if let EventKind::Create(_) = &ev.kind {
+                                if w.watch.interested(&ev.kind)
+                                    && tokio::fs::try_exists(&*w.watch.path)
+                                        .await
+                                        .unwrap_or(false)
+                                {
+                                    report!()
+                                }
+                                status_changed.push(w.watch.id);
+                            }
                         }
                     }
                 }
@@ -520,11 +637,20 @@ impl Watched {
                 for path in e.paths.iter() {
                     let utf8_path = utf8_path(path);
                     for w in self.relevant_to(&path) {
-                        let wev = by_id.entry(w.id).or_insert_with(|| WatchEvent {
-                            paths: PATHS.take(),
-                            event: WatchEventKind::Error(err.clone()),
-                        });
-                        wev.paths.insert(utf8_path.clone());
+                        match &e.kind {
+                            notify::ErrorKind::PathNotFound => {
+                                status_changed.push(w.watch.id)
+                            }
+                            _ => {
+                                let wev = by_id.entry(w.watch.id).or_insert_with(|| {
+                                    WatchEvent {
+                                        paths: PATHS.take(),
+                                        event: WatchEventKind::Error(err.clone()),
+                                    }
+                                });
+                                wev.paths.insert(utf8_path.clone());
+                            }
+                        }
                     }
                 }
             }
@@ -532,7 +658,8 @@ impl Watched {
         let evs = by_id
             .drain()
             .map(|(id, wev)| (id, Box::new(wev) as Box<dyn CustomBuiltinType>));
-        batch.extend(evs)
+        batch.extend(evs);
+        status_changed
     }
 }
 
@@ -575,6 +702,7 @@ async fn file_watcher_loop(
     let mut watched = Watched::default();
     let mut recv_buf = vec![];
     let mut batch = CBATCH_POOL.take();
+    let mut poll_interval = tokio::time::interval(Duration::from_secs(1));
     macro_rules! or_push {
         ($path:expr, $id:expr, $r:expr) => {
             if let Err(e) = $r {
@@ -583,35 +711,67 @@ async fn file_watcher_loop(
             }
         };
     }
+    macro_rules! add_watch {
+        ($path:expr, $id:expr, on_success: $success:block) => {
+            match watcher.watch($path, RecursiveMode::NonRecursive) {
+                Ok(()) => $success,
+                Err(e) => {
+                    push_error(&mut batch, $id, Some(utf8_path($path)), Either::Left(e))
+                }
+            }
+        };
+    }
+    macro_rules! status_change {
+        ($id:expr) => {{
+            let stc = watched.change_status($id).await;
+            if let Some(path) = stc.remove {
+                or_push!(&path, $id, watcher.unwatch(&path));
+            }
+            match stc.add {
+                None | Some(AddAction::JustNotify(_)) => (),
+                Some(AddAction::AddWatch(watch_path)) | Some(AddAction::AddPending { watch_path, full_path: _}) => {
+                    add_watch!(&watch_path, $id, on_success: { () })
+                }
+            }
+        }}
+    }
     loop {
         select! {
+            _ = poll_interval.tick() => {
+                for id in watched.poll_pending().await.drain(..) {
+                    status_change!(id)
+                }
+            },
             n = rx_notify.recv_many(&mut recv_buf, 10000) => {
                 if n == 0 {
                     break
                 }
                 for ev in recv_buf.drain(..) {
-                    watched.process_event(&mut batch, ev)
+                    let mut status = watched.process_event(&mut batch, ev).await;
+                    for id in status.drain(..) {
+                        status_change!(id)
+                    }
                 }
             },
-            cmd = rx.select_next_some() => match cmd {
-                WatchCmd::Watch(w) => {
+            cmd = rx.next() => match cmd {
+                None => break,
+                Some(WatchCmd::Watch(w)) => {
                     let id = w.id;
                     match watched.add_watch(w).await {
                         AddAction::JustNotify(path) => push_established(&mut batch, id, &path),
                         AddAction::AddWatch(path) => {
-                            match watcher.watch(&path, RecursiveMode::NonRecursive) {
-                                Ok(()) => push_established(&mut batch, id, &path),
-                                Err(e) => push_error(
-                                    &mut batch,
-                                    id,
-                                    Some(utf8_path(&path)),
-                                    Either::Left(e)
-                                )
-                            }
+                            add_watch!(&path, id, on_success: {
+                                push_established(&mut batch, id, &path)
+                            })
+                        }
+                        AddAction::AddPending { watch_path, full_path } => {
+                            add_watch!(&watch_path, id, on_success: {
+                                push_established(&mut batch, id, &full_path);
+                            })
                         }
                     }
                 },
-                WatchCmd::Stop(id) => match watched.remove_watch(&id) {
+                Some(WatchCmd::Stop(id)) => match watched.remove_watch(&id).1 {
                     None => (),
                     Some(path) => {
                         or_push!(path, id, watcher.unwatch(&path))
@@ -740,7 +900,6 @@ macro_rules! watch {
                     let wctx = get_watcher(&mut ctx.rt, &mut ctx.libstate);
                     if let Err(e) = wctx.send(WatchCmd::Watch(Watch {
                         path: path.clone(),
-                        canonical_path: PathBuf::new(),
                         id: self.id,
                         interest,
                     })) {
