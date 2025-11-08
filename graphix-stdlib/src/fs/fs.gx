@@ -60,7 +60,7 @@ type WatchEvent = {
 ///
 /// Filesystem watches are a limited operating system resource, like file
 /// descriptors, or handles.
-let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch;
+pub let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch;
 
 /// Watch the specified path for events matching #interest. Return the full event
 /// describing what happened, or an error if the watch could not be established.
@@ -75,7 +75,7 @@ let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch;
 ///
 /// Filesystem watches are a limited operating system resource, like file
 /// descriptors, or handles.
-let watch_full = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch_full;
+pub let watch_full = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch_full;
 
 /// Read the specified file into memory as a utf8 string and return it, or an
 /// error if,
@@ -88,7 +88,7 @@ let watch_full = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch_full;
 /// out of order. For example, if we read_all on path0 and path1, read_all will always
 /// return the result for path0 first. If the result for path0 is not ready then read_all
 /// will wait for it even if the result for path1 has already been delivered.
-let read_all = |path| 'fs_read_all;
+pub let read_all = |path| 'fs_read_all;
 
 /// Read the specified file into memory as a bytes and return it, or an
 /// error if,
@@ -100,4 +100,30 @@ let read_all = |path| 'fs_read_all;
 /// out of order. For example, if we read_all_bin on path0 and path1, read_all_bin will always
 /// return the result for path0 first. If the result for path0 is not ready then read_all_bin
 /// will wait for it even if the result for path1 has already been delivered.
-let read_all_bin = |path| 'fs_read_all_bin
+pub let read_all_bin = |path| 'fs_read_all_bin;
+
+/// Write data to path. If path does not exist it will be created. If path exists it
+/// will be truncated and it's contents will be replaced with data.
+///
+/// A write will occur whenever either path or data updates, even if they did not change.
+/// If multiple writes are in flight at once their completion order in the file
+/// system is not specified, but the results will always be reported in the order
+/// they were queued. For example if "hello world" is queued to be written to
+/// "foo.txt" and "bar.txt", there is no guarantee about when foo.txt and bar.txt will
+/// appear in the file system. However the first result will always be the result of writing to
+/// "foo.txt" and the second result will always be the result of writing to "bar.txt", and when
+/// the "bar.txt" result is reported it is guaranteed that both writes have been handed to the OS.
+pub let write_all = |#path, data| 'fs_write_all;
+
+/// Write data to path. If path does not exist it will be created. If path exists it
+/// will be truncated and it's contents will be replaced with data.
+///
+/// A write will occur whenever either path or data updates, even if they did not change.
+/// If multiple writes are in flight at once their completion order in the file
+/// system is not specified, but the results will always be reported in the order
+/// they were queued. For example if "hello world" is queued to be written to
+/// "foo.txt" and "bar.txt", there is no guarantee about when foo.txt and bar.txt will
+/// appear in the file system. However the first result will always be the result of writing to
+/// "foo.txt" and the second result will always be the result of writing to "bar.txt", and when
+/// the "bar.txt" result is reported it is guaranteed that both writes have been handed to the OS.
+pub let write_all_bin = |#path, data| 'fs_write_all_bin;

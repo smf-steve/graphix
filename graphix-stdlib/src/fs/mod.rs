@@ -10,5 +10,7 @@ pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<A
     ctx.register_builtin::<watch::WatchFullBuiltIn>()?;
     ctx.register_builtin::<file::ReadAll>()?;
     ctx.register_builtin::<file::ReadAllBin>()?;
+    ctx.register_builtin::<file::WriteAll>()?;
+    ctx.register_builtin::<file::WriteAllBin>()?;
     Ok(literal!(include_str!("fs.gx")))
 }
