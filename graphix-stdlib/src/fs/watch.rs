@@ -35,6 +35,7 @@ use std::{
 use tokio::{fs, select, sync::mpsc as tmpsc, task};
 
 static PATHS: LazyLock<Pool<FxHashSet<ArcStr>>> = LazyLock::new(|| Pool::new(1000, 1000));
+const MAX_NOTIFY_BATCH: usize = 10_000;
 
 #[derive(Debug, Clone, Copy)]
 #[bitflags]
@@ -352,6 +353,7 @@ impl Watch {
 enum WatchCmd {
     Watch(Watch),
     Stop(BindId),
+    SetPollInterval(Duration),
 }
 
 #[derive(Debug, Clone)]
@@ -445,12 +447,12 @@ enum AddAction {
 struct ChangeOfStatus {
     remove: Option<PathBuf>,
     add: Option<AddAction>,
+    syn: bool,
 }
 
 #[derive(Default)]
 struct Watched {
     by_id: FxHashMap<BindId, WatchInt>,
-    pending: FxHashMap<BindId, WatchInt>,
     by_root: FxHashMap<PathBuf, FxHashSet<BindId>>,
 }
 
@@ -458,28 +460,24 @@ impl Watched {
     /// add a watch and return the necessary action to the notify::Watcher
     async fn add_watch(&mut self, w: Watch) -> AddAction {
         let id = w.id;
-        let path_status =
-            match self.by_id.get_mut(&id).or_else(|| self.pending.get_mut(&id)) {
-                Some(ow) if ow.watch.path == w.path => {
-                    let WatchInt {
-                        watch: Watch { path: _, id: _, interest },
-                        path_status,
-                    } = ow;
-                    *interest = w.interest;
-                    return AddAction::JustNotify(path_status.full_path.clone());
-                }
-                Some(_) | None => PathStatus::new(&Path::new(&*w.path)).await,
-            };
+        let path_status = match self.by_id.get_mut(&id) {
+            Some(ow) if ow.watch.path == w.path => {
+                let WatchInt { watch: Watch { path: _, id: _, interest }, path_status } =
+                    ow;
+                *interest = w.interest;
+                return AddAction::JustNotify(path_status.full_path.clone());
+            }
+            Some(_) | None => PathStatus::new(&Path::new(&*w.path)).await,
+        };
         let w = WatchInt { watch: w, path_status };
         let watch_path = w.path_status.exists.clone();
         let full_path = w.path_status.full_path.clone();
         let established = w.path_status.established();
         self.by_root.entry(watch_path.clone()).or_default().insert(id);
+        self.by_id.insert(id, w);
         if established {
-            self.by_id.insert(id, w);
             AddAction::AddWatch(watch_path)
         } else {
-            self.pending.insert(id, w);
             AddAction::AddPending { watch_path, full_path }
         }
     }
@@ -487,7 +485,7 @@ impl Watched {
     /// remove a watch, and return an optional action to be performed on the
     /// watcher
     fn remove_watch(&mut self, id: &BindId) -> (Option<WatchInt>, Option<PathBuf>) {
-        let w = self.by_id.remove(id).or_else(|| self.pending.remove(id));
+        let w = self.by_id.remove(id);
         let to_stop =
             w.as_ref().and_then(|w| match self.by_root.get_mut(&w.path_status.exists) {
                 None => Some(w.path_status.exists.clone()),
@@ -506,8 +504,12 @@ impl Watched {
     /// necessary actions to the notify::Watcher
     async fn change_status(&mut self, id: BindId) -> ChangeOfStatus {
         let (w, remove) = self.remove_watch(&id);
+        let mut syn = false;
         let add = match w {
-            Some(w) => Some(self.add_watch(w.watch).await),
+            Some(w) => {
+                syn = &Some(w.path_status.exists) == &remove;
+                Some(self.add_watch(w.watch).await)
+            }
             None => None,
         };
         let (remove, add) = match (&remove, &add) {
@@ -524,7 +526,7 @@ impl Watched {
             | (Some(_), None)
             | (None, None) => (remove, add),
         };
-        ChangeOfStatus { remove, add }
+        ChangeOfStatus { remove, add, syn }
     }
 
     fn relevant_to<'a>(&'a self, path: &'a Path) -> impl Iterator<Item = &'a WatchInt> {
@@ -542,12 +544,12 @@ impl Watched {
                         None => break None,
                         Some(set) => match set.next() {
                             Some(id) => match self.t.by_id.get(id) {
-                                Some(w) if self.level < 2 => break Some(w),
-                                Some(_) => continue,
-                                None => match self.t.pending.get(id) {
-                                    Some(w) => break Some(w),
-                                    None => continue,
-                                },
+                                Some(w)
+                                    if self.level < 2 || !w.path_status.established() =>
+                                {
+                                    break Some(w)
+                                }
+                                Some(_) | None => continue,
                             },
                             None => {
                                 self.level += 1;
@@ -569,10 +571,12 @@ impl Watched {
         I { level: 0, ids, t: self }
     }
 
-    /// poll all the pending watches and return a list of ids who's status might have changed
-    async fn poll_pending(&self) -> LPooled<Vec<BindId>> {
-        join_all(self.pending.iter().map(|(id, w)| async {
-            if tokio::fs::try_exists(&*w.watch.path).await.unwrap_or(false) {
+    /// poll all watches and return a list of ids who's status might have changed
+    async fn poll_all(&self) -> LPooled<Vec<BindId>> {
+        join_all(self.by_id.iter().map(|(id, w)| async {
+            let exists = tokio::fs::try_exists(&*w.watch.path).await.unwrap_or(false);
+            let established = w.path_status.established();
+            if (established && !exists) || (!established && exists) {
                 Some(*id)
             } else {
                 None
@@ -612,21 +616,38 @@ impl Watched {
                             if w.watch.interested(&ev.kind) {
                                 report!();
                             }
-                            if let EventKind::Remove(_) = &ev.kind
-                                && path == &w.path_status.exists
-                            {
-                                status_changed.push(w.watch.id)
+                            match &ev.kind {
+                                EventKind::Remove(_)
+                                | EventKind::Modify(ModifyKind::Name(RenameMode::From))
+                                    if path == &w.path_status.exists =>
+                                {
+                                    status_changed.push(w.watch.id)
+                                }
+                                EventKind::Any
+                                | EventKind::Access(_)
+                                | EventKind::Create(_)
+                                | EventKind::Modify(_)
+                                | EventKind::Remove(_)
+                                | EventKind::Other => (),
                             }
                         } else {
-                            if let EventKind::Create(_) = &ev.kind {
-                                if w.watch.interested(&ev.kind)
-                                    && tokio::fs::try_exists(&*w.watch.path)
-                                        .await
-                                        .unwrap_or(false)
-                                {
-                                    report!()
+                            match &ev.kind {
+                                EventKind::Create(_)
+                                | EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
+                                    if w.watch.interested(&ev.kind)
+                                        && tokio::fs::try_exists(&*w.watch.path)
+                                            .await
+                                            .unwrap_or(false)
+                                    {
+                                        report!()
+                                    }
+                                    status_changed.push(w.watch.id);
                                 }
-                                status_changed.push(w.watch.id);
+                                EventKind::Any
+                                | EventKind::Access(_)
+                                | EventKind::Modify(_)
+                                | EventKind::Remove(_)
+                                | EventKind::Other => (),
                             }
                         }
                     }
@@ -682,13 +703,14 @@ fn push_error(
     batch.push((id, Box::new(wev)))
 }
 
-fn push_established(
+fn push_event(
     batch: &mut GPooled<Vec<(BindId, Box<dyn CustomBuiltinType>)>>,
     id: BindId,
     path: &PathBuf,
+    event: WatchEventKind,
 ) {
     let path = utf8_path(path);
-    let mut wev = WatchEvent { paths: PATHS.take(), event: WatchEventKind::Established };
+    let mut wev = WatchEvent { paths: PATHS.take(), event };
     wev.paths.insert(path);
     batch.push((id, Box::new(wev)))
 }
@@ -702,7 +724,7 @@ async fn file_watcher_loop(
     let mut watched = Watched::default();
     let mut recv_buf = vec![];
     let mut batch = CBATCH_POOL.take();
-    let mut poll_interval = tokio::time::interval(Duration::from_secs(1));
+    let mut poll_interval = tokio::time::interval(Duration::from_secs(5));
     macro_rules! or_push {
         ($path:expr, $id:expr, $r:expr) => {
             if let Err(e) = $r {
@@ -722,14 +744,24 @@ async fn file_watcher_loop(
         };
     }
     macro_rules! status_change {
-        ($id:expr) => {{
+        ($id:expr, $synthetic:expr) => {{
             let stc = watched.change_status($id).await;
             if let Some(path) = stc.remove {
+                if $synthetic && stc.syn {
+                    push_event(&mut batch, $id, &path, WatchEventKind::Event(Interest::Delete))
+                }
                 or_push!(&path, $id, watcher.unwatch(&path));
             }
             match stc.add {
                 None | Some(AddAction::JustNotify(_)) => (),
-                Some(AddAction::AddWatch(watch_path)) | Some(AddAction::AddPending { watch_path, full_path: _}) => {
+                Some(AddAction::AddWatch(watch_path)) => {
+                    add_watch!(&watch_path, $id, on_success: {
+                        if $synthetic {
+                            push_event(&mut batch, $id, &watch_path, WatchEventKind::Event(Interest::Create))
+                        }
+                    });
+                }
+                Some(AddAction::AddPending { watch_path, full_path: _}) => {
                     add_watch!(&watch_path, $id, on_success: { () })
                 }
             }
@@ -738,18 +770,18 @@ async fn file_watcher_loop(
     loop {
         select! {
             _ = poll_interval.tick() => {
-                for id in watched.poll_pending().await.drain(..) {
-                    status_change!(id)
+                for id in watched.poll_all().await.drain(..) {
+                    status_change!(id, true)
                 }
             },
-            n = rx_notify.recv_many(&mut recv_buf, 10000) => {
+            n = rx_notify.recv_many(&mut recv_buf, MAX_NOTIFY_BATCH) => {
                 if n == 0 {
                     break
                 }
                 for ev in recv_buf.drain(..) {
                     let mut status = watched.process_event(&mut batch, ev).await;
                     for id in status.drain(..) {
-                        status_change!(id)
+                        status_change!(id, false)
                     }
                 }
             },
@@ -758,15 +790,16 @@ async fn file_watcher_loop(
                 Some(WatchCmd::Watch(w)) => {
                     let id = w.id;
                     match watched.add_watch(w).await {
-                        AddAction::JustNotify(path) => push_established(&mut batch, id, &path),
+                        AddAction::JustNotify(path) =>
+                            push_event(&mut batch, id, &path, WatchEventKind::Established),
                         AddAction::AddWatch(path) => {
                             add_watch!(&path, id, on_success: {
-                                push_established(&mut batch, id, &path)
+                                push_event(&mut batch, id, &path, WatchEventKind::Established)
                             })
                         }
                         AddAction::AddPending { watch_path, full_path } => {
                             add_watch!(&watch_path, id, on_success: {
-                                push_established(&mut batch, id, &full_path);
+                                push_event(&mut batch, id, &full_path, WatchEventKind::Established);
                             })
                         }
                     }
@@ -776,6 +809,9 @@ async fn file_watcher_loop(
                     Some(path) => {
                         or_push!(path, id, watcher.unwatch(&path))
                     }
+                },
+                Some(WatchCmd::SetPollInterval(d)) => {
+                    poll_interval = tokio::time::interval(d);
                 }
             },
         }
@@ -789,7 +825,7 @@ async fn file_watcher_loop(
     let mut batch = CBATCH_POOL.take();
     while let Ok(Some(cmd)) = rx.try_next() {
         match cmd {
-            WatchCmd::Stop(_) => (),
+            WatchCmd::Stop(_) | WatchCmd::SetPollInterval(_) => (),
             WatchCmd::Watch(w) => {
                 let e = literal!("the watcher thread has stopped");
                 push_error(&mut batch, w.id, None, Either::Right(e));
@@ -828,7 +864,7 @@ fn get_watcher<'a, R: Rt>(rt: &mut R, st: &'a mut LibState) -> &'a mut WatchCtx 
             Err(e) => WatchCtx(Err(e.into())),
             Ok(watcher) => {
                 let (cmd_tx, cmd_rx) = mpsc::unbounded();
-                let (ev_tx, ev_rx) = mpsc::channel(1000);
+                let (ev_tx, ev_rx) = mpsc::channel(10);
                 task::spawn(async move {
                     file_watcher_loop(watcher, notify_rx, cmd_rx, ev_tx).await
                 });
