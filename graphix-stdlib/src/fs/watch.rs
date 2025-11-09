@@ -950,8 +950,8 @@ impl<R: Rt, E: UserEvent> BuiltIn<R, E> for SetGlobals {
     deftype!(
         "fs",
         r#"fn(
-            ?poll_interval:[duration, null],
-            ?poll_batch_size:[i64, null]
+            ?#poll_interval:[duration, null],
+            ?#poll_batch_size:[i64, null]
         ) -> Result<null, `WatchError(string)>"#
     );
 

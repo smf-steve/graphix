@@ -140,6 +140,829 @@ mod watch_tests {
         },
         expect: false
     }
+
+    // Test watching a non-existent file that gets created
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_nonexistent_file_created() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let test_file = temp_dir.path().join("nonexistent.txt");
+
+        // Ensure file doesn't exist
+        let _ = fs::remove_file(&test_file).await;
+
+        // Watch the non-existent file
+        let code = format!(
+            r#"fs::watch(#interest: [`Create, `Established], "{}")"#,
+            test_file.display()
+        );
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(5));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut file_created = false;
+        let mut got_create = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid {
+                                eprintln!("Event: {v}");
+                                if matches!(v, Value::String(_)) {
+                                    event_count += 1;
+                                    if event_count == 1 && !file_created {
+                                        // First event - watch is established as pending
+                                        // Now create the file
+                                        eprintln!("Creating file");
+                                        fs::write(&test_file, b"hello").await?;
+                                        file_created = true;
+                                    } else if event_count >= 2 {
+                                        // Should get the create event
+                                        got_create = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_create, "Did not receive create event for non-existent file");
+        Ok(())
+    }
+
+    // Test watching existing file, deleting it, then recreating it
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_delete_then_recreate() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let test_file = temp_dir.path().join("delete_recreate.txt");
+
+        // Create initial file
+        fs::write(&test_file, b"initial").await?;
+
+        // Watch for all events
+        let code = format!(
+            r#"fs::watch(#interest: [`Create, `Delete, `Modify], "{}")"#,
+            test_file.display()
+        );
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(6));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_delete = false;
+        let mut got_create = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, delete the file
+                                    eprintln!("Deleting file");
+                                    fs::remove_file(&test_file).await?;
+                                } else if event_count == 2 {
+                                    // Should be delete event
+                                    got_delete = true;
+                                    eprintln!("Recreating file");
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                    fs::write(&test_file, b"recreated").await?;
+                                } else if event_count == 3 {
+                                    // Should be create event
+                                    got_create = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_delete, "Did not receive delete event");
+        assert!(got_create, "Did not receive create event after recreation");
+        Ok(())
+    }
+
+    // Test renaming parent directory
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_parent_rename() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let parent_dir = temp_dir.path().join("parent");
+        fs::create_dir(&parent_dir).await?;
+        let test_file = parent_dir.join("file.txt");
+        fs::write(&test_file, b"content").await?;
+
+        // Watch the file
+        let code = format!(
+            r#"fs::watch(#interest: [`Delete, `Create], "{}")"#,
+            test_file.display()
+        );
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(4));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_delete = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, rename parent
+                                    let new_parent = temp_dir.path().join("parent_renamed");
+                                    eprintln!("Renaming parent directory");
+                                    fs::rename(&parent_dir, &new_parent).await?;
+                                } else {
+                                    // Should get delete event (via polling)
+                                    got_delete = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_delete, "Did not receive delete event after parent rename");
+        Ok(())
+    }
+
+    // Test multi-level parent creation
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_multilevel_parent_creation() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let deep_file = temp_dir.path().join("a/b/c/file.txt");
+
+        // Ensure nothing exists
+        let _ = fs::remove_dir_all(temp_dir.path().join("a")).await;
+
+        // Watch the deep file
+        let code =
+            format!(r#"fs::watch(#interest: [`Create], "{}")"#, deep_file.display());
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(5));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_create = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established as pending
+                                    // Create directories one by one
+                                    eprintln!("Creating /a");
+                                    fs::create_dir(temp_dir.path().join("a")).await?;
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+
+                                    eprintln!("Creating /a/b");
+                                    fs::create_dir(temp_dir.path().join("a/b")).await?;
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+
+                                    eprintln!("Creating /a/b/c");
+                                    fs::create_dir(temp_dir.path().join("a/b/c")).await?;
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+
+                                    eprintln!("Creating file");
+                                    fs::write(&deep_file, b"deep content").await?;
+                                } else {
+                                    // Should get create event when file appears
+                                    got_create = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_create, "Did not receive create event for deep file");
+        Ok(())
+    }
+
+    // Test deep parent rename (rename two levels up)
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_deep_parent_rename() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+
+        // Create deep structure /a/b/c/d/file.txt
+        let a = temp_dir.path().join("a");
+        let b = a.join("b");
+        let c = b.join("c");
+        let d = c.join("d");
+        fs::create_dir_all(&d).await?;
+        let test_file = d.join("file.txt");
+        fs::write(&test_file, b"content").await?;
+
+        // Watch the file
+        let code =
+            format!(r#"fs::watch(#interest: [`Delete], "{}")"#, test_file.display());
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(4));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_delete = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, rename /a/b to /a/b2
+                                    let b2 = a.join("b2");
+                                    eprintln!("Renaming /a/b to /a/b2 (two levels up)");
+                                    fs::rename(&b, &b2).await?;
+                                } else {
+                                    // Should get delete event
+                                    got_delete = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_delete, "Did not receive delete event after deep parent rename");
+        Ok(())
+    }
+
+    // Test race with parent deletion
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_parent_tree_deletion() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+
+        // Create structure /a/b/file.txt
+        let a = temp_dir.path().join("a");
+        let b = a.join("b");
+        fs::create_dir_all(&b).await?;
+        let test_file = b.join("file.txt");
+        fs::write(&test_file, b"content").await?;
+
+        // Watch the file
+        let code =
+            format!(r#"fs::watch(#interest: [`Delete], "{}")"#, test_file.display());
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(4));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_delete = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, delete entire /a tree
+                                    eprintln!("Deleting entire /a directory tree");
+                                    fs::remove_dir_all(&a).await?;
+                                } else {
+                                    // Should get delete event
+                                    got_delete = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_delete, "Did not receive delete event after parent tree deletion");
+        Ok(())
+    }
+
+    // Test multiple watches on related paths
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_multiple_related_paths() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+
+        let file1 = temp_dir.path().join("a/b/file.txt");
+        let file2 = temp_dir.path().join("a/b/c/file.txt");
+
+        // Ensure nothing exists
+        let _ = fs::remove_dir_all(temp_dir.path().join("a")).await;
+
+        // Watch both files
+        let code1 = format!(r#"fs::watch(#interest: [`Create], "{}")"#, file1.display());
+        let code2 = format!(r#"fs::watch(#interest: [`Create], "{}")"#, file2.display());
+
+        let compiled1 = ctx.rt.compile(ArcStr::from(code1)).await?;
+        let compiled2 = ctx.rt.compile(ArcStr::from(code2)).await?;
+        let eid1 = compiled1.exprs[0].id;
+        let eid2 = compiled2.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(5));
+        tokio::pin!(timeout);
+        let mut watch1_ready = false;
+        let mut watch2_ready = false;
+        let mut got_create_file1 = false;
+        let mut got_create_file2 = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if matches!(v, Value::String(_)) {
+                                eprintln!("Event for {}: {v}", id.inner());
+
+                                if id == eid1 && !watch1_ready {
+                                    watch1_ready = true;
+                                    eprintln!("Watch 1 ready");
+                                } else if id == eid2 && !watch2_ready {
+                                    watch2_ready = true;
+                                    eprintln!("Watch 2 ready");
+                                } else if id == eid1 {
+                                    got_create_file1 = true;
+                                } else if id == eid2 {
+                                    got_create_file2 = true;
+                                }
+
+                                if watch1_ready && watch2_ready && !got_create_file1 && !got_create_file2 {
+                                    // Both watches ready, create only file2
+                                    eprintln!("Creating deep file only (file2)");
+                                    fs::create_dir_all(temp_dir.path().join("a/b/c")).await?;
+                                    fs::write(&file2, b"deep").await?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(!got_create_file1, "Should not get create event for file1");
+        assert!(got_create_file2, "Should get create event for file2");
+        Ok(())
+    }
+
+    // Test established -> pending transition
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_established_to_pending() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+
+        // Create file in subdirectory
+        let subdir = temp_dir.path().join("subdir");
+        fs::create_dir(&subdir).await?;
+        let test_file = subdir.join("file.txt");
+        fs::write(&test_file, b"content").await?;
+
+        // Watch with Established interest
+        let code = format!(
+            r#"fs::watch(#interest: [`Delete, `Established], "{}")"#,
+            test_file.display()
+        );
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(4));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_established = false;
+        let mut got_delete = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Should get Established event
+                                    got_established = true;
+                                    eprintln!("Deleting parent directory");
+                                    fs::remove_dir_all(&subdir).await?;
+                                } else {
+                                    // Should get Delete event
+                                    got_delete = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_established, "Did not receive Established event");
+        assert!(got_delete, "Did not receive Delete event after parent deletion");
+        Ok(())
+    }
+
+    // Test file -> directory transition
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_file_to_directory() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let path = temp_dir.path().join("transform");
+
+        // Create as regular file
+        fs::write(&path, b"file content").await?;
+
+        // Watch it
+        let code =
+            format!(r#"fs::watch(#interest: [`Delete, `Create], "{}")"#, path.display());
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(4));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_delete = false;
+        let mut got_create = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, transform to directory
+                                    eprintln!("Deleting file and creating directory");
+                                    fs::remove_file(&path).await?;
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                    fs::create_dir(&path).await?;
+                                } else if event_count == 2 {
+                                    got_delete = true;
+                                } else if event_count == 3 {
+                                    got_create = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_delete, "Did not receive delete event");
+        assert!(got_create, "Did not receive create event for directory");
+        Ok(())
+    }
+
+    // Test symlink with non-existent target
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_symlink_nonexistent_target() -> Result<()> {
+        use std::os::unix::fs::symlink;
+
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let target = temp_dir.path().join("target.txt");
+        let link = temp_dir.path().join("link.txt");
+
+        // Create symlink to non-existent target
+        symlink(&target, &link)?;
+
+        // Watch the symlink
+        let code =
+            format!(r#"fs::watch(#interest: [`Create, `Modify], "{}")"#, link.display());
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(4));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_event = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, create the target
+                                    eprintln!("Creating symlink target");
+                                    fs::write(&target, b"target content").await?;
+                                } else {
+                                    // Should get event when target appears
+                                    got_event = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_event, "Did not receive event when symlink target was created");
+        Ok(())
+    }
+
+    // Test deleting and recreating symlink itself
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_symlink_recreate() -> Result<()> {
+        use std::os::unix::fs::symlink;
+
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let target = temp_dir.path().join("target.txt");
+        let link = temp_dir.path().join("link.txt");
+
+        // Create target and symlink
+        fs::write(&target, b"content").await?;
+        symlink(&target, &link)?;
+
+        // Watch the symlink
+        let code =
+            format!(r#"fs::watch(#interest: [`Delete, `Create], "{}")"#, link.display());
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(4));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+        let mut got_delete = false;
+        let mut got_create = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, delete and recreate symlink
+                                    eprintln!("Deleting symlink");
+                                    fs::remove_file(&link).await?;
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                    eprintln!("Recreating symlink");
+                                    symlink(&target, &link)?;
+                                } else if event_count == 2 {
+                                    got_delete = true;
+                                } else if event_count == 3 {
+                                    got_create = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_delete, "Did not receive delete event for symlink");
+        assert!(got_create, "Did not receive create event for symlink");
+        Ok(())
+    }
+
+    // Test rapid delete-recreate within poll interval
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_rapid_transitions() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+        let temp_dir = tempfile::tempdir()?;
+        let test_file = temp_dir.path().join("rapid.txt");
+
+        // Create initial file
+        fs::write(&test_file, b"v1").await?;
+
+        // Watch it
+        let code = format!(
+            r#"fs::watch(#interest: [`Delete, `Create, `Modify], "{}")"#,
+            test_file.display()
+        );
+
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(5));
+        tokio::pin!(timeout);
+        let mut event_count = 0;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid && matches!(v, Value::String(_)) {
+                                event_count += 1;
+                                eprintln!("Event #{event_count}: {v}");
+
+                                if event_count == 1 {
+                                    // Watch established, perform rapid transitions
+                                    eprintln!("Performing rapid delete-recreate cycle");
+                                    fs::remove_file(&test_file).await?;
+                                    // Very short delay - faster than poll interval
+                                    tokio::time::sleep(Duration::from_millis(10)).await;
+                                    fs::write(&test_file, b"v2").await?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // After rapid transition, file should exist with final content
+        assert!(test_file.exists(), "File should exist after rapid transitions");
+        let content = fs::read(&test_file).await?;
+        assert_eq!(content, b"v2", "File should have final content");
+
+        // We should get some events, but exact count depends on timing
+        assert!(event_count >= 1, "Should get at least the initial event");
+        eprintln!("Total events received: {event_count}");
+        Ok(())
+    }
+
+    // Test SetGlobals - disable polling
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_set_globals_disable_polling() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+
+        // Set poll_batch_size to 0 to disable polling
+        let code = r#"fs::set_global_watch_parameters(#poll_batch_size: 0, #poll_interval: duration:1.s)"#;
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(2));
+        tokio::pin!(timeout);
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => panic!("timeout waiting for set_watch_globals"),
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid {
+                                eprintln!("set_watch_globals result: {v}");
+                                // Should return Ok(null)
+                                assert!(matches!(v, Value::Null), "Expected Null (success), got: {v:?}");
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Test SetGlobals - configure fast polling
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_watch_set_globals_fast_polling() -> Result<()> {
+        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+        let ctx = init(tx).await?;
+
+        // Set very fast polling (100ms interval, batch size 200)
+        let code = r#"fs::set_global_watch_parameters(#poll_batch_size: 200u64, #poll_interval: 100u64)"#;
+        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+        let eid = compiled.exprs[0].id;
+
+        let timeout = tokio::time::sleep(Duration::from_secs(2));
+        tokio::pin!(timeout);
+        let mut got_result = false;
+
+        loop {
+            tokio::select! {
+                _ = &mut timeout => break,
+                Some(mut batch) = rx.recv() => {
+                    for event in batch.drain(..) {
+                        if let GXEvent::Updated(id, v) = event {
+                            if id == eid {
+                                eprintln!("set_watch_globals result: {v}");
+                                assert!(matches!(v, Value::Null), "Expected Null (success), got: {v:?}");
+                                got_result = true;
+
+                                // Now test that fast polling works by watching a non-existent file
+                                let temp_dir = tempfile::tempdir()?;
+                                let test_file = temp_dir.path().join("fast_poll.txt");
+
+                                let watch_code = format!(
+                                    r#"fs::watch(#interest: [`Create], "{}")"#,
+                                    test_file.display()
+                                );
+                                let watch_compiled = ctx.rt.compile(ArcStr::from(watch_code)).await?;
+                                let watch_eid = watch_compiled.exprs[0].id;
+
+                                // Wait a bit for watch to establish
+                                tokio::time::sleep(Duration::from_millis(200)).await;
+
+                                // Create the file
+                                eprintln!("Creating file with fast polling enabled");
+                                fs::write(&test_file, b"fast").await?;
+
+                                // With 100ms polling, should get event quickly
+                                let timeout = tokio::time::sleep(Duration::from_millis(500));
+                                tokio::pin!(timeout);
+
+                                loop {
+                                    tokio::select! {
+                                        _ = &mut timeout => {
+                                            panic!("timeout waiting for fast poll event");
+                                        },
+                                        Some(mut batch) = rx.recv() => {
+                                            for event in batch.drain(..) {
+                                                if let GXEvent::Updated(id, v) = event {
+                                                    if id == watch_eid && matches!(v, Value::String(_)) {
+                                                        eprintln!("Got watch event: {v}");
+                                                        return Ok(());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(got_result, "Did not receive result from set_watch_globals");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
