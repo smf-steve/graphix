@@ -15,6 +15,42 @@ mod watch_tests {
     /// Macro to create fs::watch tests with common setup/teardown logic.
     /// Supports both simple single-action tests and complex multi-event sequences.
     macro_rules! watch_test {
+        // Simple pattern: single action after establishment, boolean expectation
+        // This delegates to the complex pattern with sensible defaults
+        (
+            name: $test_name:ident,
+            interest: $interest:expr,
+            setup: |$temp_dir:ident| $setup:block,
+            action: |$action_dir:ident| $action:block,
+            expect: $expect:expr
+        ) => {
+            watch_test! {
+                name: $test_name,
+                interest: $interest,
+                timeout_secs: 2,
+                setup: |$temp_dir| {
+                    $setup
+                    $temp_dir.path()
+                },
+                state: {
+                    _event_count: usize = 0,
+                },
+                on_event: |count, temp_dir, _event_count| {
+                    *_event_count = count;
+                    if count == 1 {
+                        eprintln!("watch established, performing action");
+                        let $action_dir = &temp_dir;
+                        $action
+                    }
+                },
+                verify: {
+                    let got_event = _event_count > 1;
+                    assert_eq!(got_event, $expect,
+                        "Expected event: {}, Got event: {}", $expect, got_event)
+                }
+            }
+        };
+
         // Complex pattern: multi-event sequence with state tracking
         (
             name: $test_name:ident,
@@ -73,76 +109,6 @@ mod watch_tests {
                 }
 
                 $($verify;)*
-                Ok(())
-            }
-        };
-
-        // Simple pattern: single action after establishment, boolean expectation
-        (
-            name: $test_name:ident,
-            interest: $interest:expr,
-            setup: |$temp_dir:ident| $setup:block,
-            action: |$action_dir:ident| $action:block,
-            expect: $expect:expr
-        ) => {
-            #[tokio::test(flavor = "current_thread")]
-            async fn $test_name() -> Result<()> {
-                let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
-                let ctx = init(tx).await?;
-                let $temp_dir = tempfile::tempdir()?;
-                let watch_path = $temp_dir.path().to_str().unwrap();
-
-                // Run setup block
-                $setup
-
-                // Start watching
-                let code = format!(
-                    r#"fs::watch(#interest: {}, "{}")"#,
-                    $interest, watch_path
-                );
-
-                let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-                let eid = compiled.exprs[0].id;
-
-                // Wait for events
-                // First event will be the initial path return when watch starts
-                // Subsequent events are actual filesystem events
-                let mut event_count = 0;
-                let timeout = tokio::time::sleep(Duration::from_secs(2));
-                tokio::pin!(timeout);
-
-                loop {
-                    tokio::select! {
-                        _ = &mut timeout => break,
-                        Some(mut batch) = rx.recv() => {
-                            for event in batch.drain(..) {
-                                match event {
-                                    GXEvent::Env(_) => (),
-                                    GXEvent::Updated(id, v) => {
-                                        eprintln!("got event {}: {v}", id.inner());
-                                        if id == eid {
-                                            if matches!(v, Value::String(_)) {
-                                                event_count += 1;
-                                                eprintln!("Watch event #{}: {}", event_count, v);
-                                                if event_count == 1 {
-                                                    eprintln!("watch established, performing action");
-                                                    let $action_dir = &$temp_dir;
-                                                    $action
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // event_count > 1 means we got filesystem events after the initial path return
-                let got_event = event_count > 1;
-
-                assert_eq!(got_event, $expect,
-                    "Expected event: {}, Got event: {}", $expect, got_event);
                 Ok(())
             }
         };
@@ -206,61 +172,32 @@ mod watch_tests {
     }
 
     // Test watching a non-existent file that gets created
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_watch_nonexistent_file_created() -> Result<()> {
-        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
-        let ctx = init(tx).await?;
-        let temp_dir = tempfile::tempdir()?;
-        let test_file = temp_dir.path().join("nonexistent.txt");
-
-        // Ensure file doesn't exist
-        let _ = fs::remove_file(&test_file).await;
-
-        // Watch the non-existent file
-        let code = format!(
-            r#"fs::watch(#interest: [`Create, `Established], "{}")"#,
-            test_file.display()
-        );
-
-        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-        let eid = compiled.exprs[0].id;
-
-        let timeout = tokio::time::sleep(Duration::from_secs(5));
-        tokio::pin!(timeout);
-        let mut event_count = 0;
-        let mut file_created = false;
-        let mut got_create = false;
-
-        loop {
-            tokio::select! {
-                _ = &mut timeout => break,
-                Some(mut batch) = rx.recv() => {
-                    for event in batch.drain(..) {
-                        if let GXEvent::Updated(id, v) = event {
-                            if id == eid {
-                                eprintln!("Event: {v}");
-                                if matches!(v, Value::String(_)) {
-                                    event_count += 1;
-                                    if event_count == 1 && !file_created {
-                                        // First event - watch is established as pending
-                                        // Now create the file
-                                        eprintln!("Creating file");
-                                        fs::write(&test_file, b"hello").await?;
-                                        file_created = true;
-                                    } else if event_count >= 2 {
-                                        // Should get the create event
-                                        got_create = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+    watch_test! {
+        name: test_watch_nonexistent_file_created,
+        interest: "[`Create, `Established]",
+        timeout_secs: 5,
+        setup: |temp_dir| {
+            let test_file = temp_dir.path().join("nonexistent.txt");
+            let _ = std::fs::remove_file(&test_file);
+            test_file
+        },
+        state: {
+            file_created: bool = false,
+            got_create: bool = false,
+        },
+        on_event: |count, temp_dir, file_created, got_create| {
+            let test_file = temp_dir.path().join("nonexistent.txt");
+            if count == 1 && !*file_created {
+                eprintln!("Creating file");
+                fs::write(&test_file, b"hello").await?;
+                *file_created = true;
+            } else if count >= 2 {
+                *got_create = true;
             }
+        },
+        verify: {
+            assert!(got_create, "Did not receive create event for non-existent file");
         }
-
-        assert!(got_create, "Did not receive create event for non-existent file");
-        Ok(())
     }
 
     // Test watching existing file, deleting it, then recreating it
@@ -505,62 +442,35 @@ mod watch_tests {
     }
 
     // Test established -> pending transition
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_watch_established_to_pending() -> Result<()> {
-        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
-        let ctx = init(tx).await?;
-        let temp_dir = tempfile::tempdir()?;
-
-        // Create file in subdirectory
-        let subdir = temp_dir.path().join("subdir");
-        fs::create_dir(&subdir).await?;
-        let test_file = subdir.join("file.txt");
-        fs::write(&test_file, b"content").await?;
-
-        // Watch with Established interest
-        let code = format!(
-            r#"fs::watch(#interest: [`Delete, `Established], "{}")"#,
-            test_file.display()
-        );
-
-        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-        let eid = compiled.exprs[0].id;
-
-        let timeout = tokio::time::sleep(Duration::from_secs(4));
-        tokio::pin!(timeout);
-        let mut event_count = 0;
-        let mut got_established = false;
-        let mut got_delete = false;
-
-        loop {
-            tokio::select! {
-                _ = &mut timeout => break,
-                Some(mut batch) = rx.recv() => {
-                    for event in batch.drain(..) {
-                        if let GXEvent::Updated(id, v) = event {
-                            if id == eid && matches!(v, Value::String(_)) {
-                                event_count += 1;
-                                eprintln!("Event #{event_count}: {v}");
-
-                                if event_count == 1 {
-                                    // Should get Established event
-                                    got_established = true;
-                                    eprintln!("Deleting parent directory");
-                                    fs::remove_dir_all(&subdir).await?;
-                                } else {
-                                    // Should get Delete event
-                                    got_delete = true;
-                                }
-                            }
-                        }
-                    }
-                }
+    watch_test! {
+        name: test_watch_established_to_pending,
+        interest: "[`Delete, `Established]",
+        timeout_secs: 4,
+        setup: |temp_dir| {
+            let subdir = temp_dir.path().join("subdir");
+            fs::create_dir(&subdir).await?;
+            let test_file = subdir.join("file.txt");
+            fs::write(&test_file, b"content").await?;
+            test_file
+        },
+        state: {
+            got_established: bool = false,
+            got_delete: bool = false,
+        },
+        on_event: |count, temp_dir, got_established, got_delete| {
+            if count == 1 {
+                *got_established = true;
+                eprintln!("Deleting parent directory");
+                let subdir = temp_dir.path().join("subdir");
+                fs::remove_dir_all(&subdir).await?;
+            } else {
+                *got_delete = true;
             }
+        },
+        verify: {
+            assert!(got_established, "Did not receive Established event");
+            assert!(got_delete, "Did not receive Delete event after parent deletion");
         }
-
-        assert!(got_established, "Did not receive Established event");
-        assert!(got_delete, "Did not receive Delete event after parent deletion");
-        Ok(())
     }
 
     // Test file -> directory transition
@@ -597,60 +507,32 @@ mod watch_tests {
     }
 
     // Test symlink with non-existent target
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_watch_symlink_nonexistent_target() -> Result<()> {
-        use std::os::unix::fs::symlink;
-
-        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
-        let ctx = init(tx).await?;
-        let temp_dir = tempfile::tempdir()?;
-        let target = temp_dir.path().join("target.txt");
-        let link = temp_dir.path().join("link.txt");
-
-        // Create symlink to non-existent target
-        symlink(&target, &link)?;
-
-        // Watch the symlink
-        let code = format!(
-            r#"fs::watch(#interest: [`Established, `Create, `Modify], "{}")"#,
-            link.display()
-        );
-
-        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-        let eid = compiled.exprs[0].id;
-
-        let timeout = tokio::time::sleep(Duration::from_secs(4));
-        tokio::pin!(timeout);
-        let mut event_count = 0;
-        let mut got_event = false;
-
-        loop {
-            tokio::select! {
-                _ = &mut timeout => break,
-                Some(mut batch) = rx.recv() => {
-                    for event in batch.drain(..) {
-                        if let GXEvent::Updated(id, v) = event {
-                            if id == eid && matches!(v, Value::String(_)) {
-                                event_count += 1;
-                                eprintln!("Event #{event_count}: {v}");
-
-                                if event_count == 1 {
-                                    // Watch established, create the target
-                                    eprintln!("Creating symlink target");
-                                    fs::write(&target, b"target content").await?;
-                                } else {
-                                    // Should get event when target appears
-                                    got_event = true;
-                                }
-                            }
-                        }
-                    }
-                }
+    watch_test! {
+        name: test_watch_symlink_nonexistent_target,
+        interest: "[`Established, `Create, `Modify]",
+        timeout_secs: 4,
+        setup: |temp_dir| {
+            use std::os::unix::fs::symlink;
+            let target = temp_dir.path().join("target.txt");
+            let link = temp_dir.path().join("link.txt");
+            symlink(&target, &link).unwrap();
+            link
+        },
+        state: {
+            got_event: bool = false,
+        },
+        on_event: |count, temp_dir, got_event| {
+            let target = temp_dir.path().join("target.txt");
+            if count == 1 {
+                eprintln!("Creating symlink target");
+                fs::write(&target, b"target content").await?;
+            } else {
+                *got_event = true;
             }
+        },
+        verify: {
+            assert!(got_event, "Did not receive event when symlink target was created");
         }
-
-        assert!(got_event, "Did not receive event when symlink target was created");
-        Ok(())
     }
 
     // Test deleting and recreating symlink target (watches resolve through symlinks)
@@ -691,63 +573,37 @@ mod watch_tests {
     }
 
     // Test rapid delete-recreate within poll interval
-    #[tokio::test(flavor = "current_thread")]
-    async fn test_watch_rapid_transitions() -> Result<()> {
-        let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
-        let ctx = init(tx).await?;
-        let temp_dir = tempfile::tempdir()?;
-        let test_file = temp_dir.path().join("rapid.txt");
-
-        // Create initial file
-        fs::write(&test_file, b"v1").await?;
-
-        // Watch it
-        let code = format!(
-            r#"fs::watch(#interest: [`Established, `Delete, `Create, `Modify], "{}")"#,
-            test_file.display()
-        );
-
-        let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-        let eid = compiled.exprs[0].id;
-
-        let timeout = tokio::time::sleep(Duration::from_secs(5));
-        tokio::pin!(timeout);
-        let mut event_count = 0;
-
-        loop {
-            tokio::select! {
-                _ = &mut timeout => break,
-                Some(mut batch) = rx.recv() => {
-                    for event in batch.drain(..) {
-                        if let GXEvent::Updated(id, v) = event {
-                            if id == eid && matches!(v, Value::String(_)) {
-                                event_count += 1;
-                                eprintln!("Event #{event_count}: {v}");
-
-                                if event_count == 1 {
-                                    // Watch established, perform rapid transitions
-                                    eprintln!("Performing rapid delete-recreate cycle");
-                                    fs::remove_file(&test_file).await?;
-                                    // Very short delay - faster than poll interval
-                                    tokio::time::sleep(Duration::from_millis(10)).await;
-                                    fs::write(&test_file, b"v2").await?;
-                                }
-                            }
-                        }
-                    }
-                }
+    watch_test! {
+        name: test_watch_rapid_transitions,
+        interest: "[`Established, `Delete, `Create, `Modify]",
+        timeout_secs: 5,
+        setup: |temp_dir| {
+            let test_file = temp_dir.path().join("rapid.txt");
+            fs::write(&test_file, b"v1").await?;
+            test_file.clone()
+        },
+        state: {
+            total_events: usize = 0,
+            test_file_path: std::path::PathBuf = std::path::PathBuf::new(),
+        },
+        on_event: |count, temp_dir, total_events, test_file_path| {
+            *total_events = count;
+            if count == 1 {
+                eprintln!("Performing rapid delete-recreate cycle");
+                let test_file = temp_dir.path().join("rapid.txt");
+                *test_file_path = test_file.clone();
+                fs::remove_file(&test_file).await?;
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                fs::write(&test_file, b"v2").await?;
             }
+        },
+        verify: {
+            assert!(test_file_path.exists(), "File should exist after rapid transitions");
+            let content = fs::read(&test_file_path).await?;
+            assert_eq!(content, b"v2", "File should have final content");
+            assert!(total_events >= 1, "Should get at least the initial event");
+            eprintln!("Total events received: {total_events}");
         }
-
-        // After rapid transition, file should exist with final content
-        assert!(test_file.exists(), "File should exist after rapid transitions");
-        let content = fs::read(&test_file).await?;
-        assert_eq!(content, b"v2", "File should have final content");
-
-        // We should get some events, but exact count depends on timing
-        assert!(event_count >= 1, "Should get at least the initial event");
-        eprintln!("Total events received: {event_count}");
-        Ok(())
     }
 
     // Test SetGlobals - disable polling
