@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use arcstr::ArcStr;
 use netidx::subscriber::Value;
 use tokio::fs;

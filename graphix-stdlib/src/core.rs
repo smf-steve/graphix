@@ -134,6 +134,50 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Once {
     }
 }
 
+#[derive(Debug)]
+struct Skip {
+    n: Option<usize>,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Skip {
+    const NAME: &str = "skip";
+    deftype!("core", "fn(#n:Any, 'a) -> 'a");
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|_, _, _, _, _| Ok(Box::new(Skip { n: None })))
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for Skip {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if let Some(n) =
+            from[0].update(ctx, event).and_then(|v| v.cast_to::<usize>().ok())
+        {
+            self.n = Some(n)
+        }
+        match from[1].update(ctx, event) {
+            None => None,
+            Some(v) => match &mut self.n {
+                None => return Some(v),
+                Some(n) if *n > 0 => {
+                    *n -= 1;
+                    return Some(v);
+                }
+                Some(_) => None,
+            },
+        }
+    }
+
+    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
+        self.n = None
+    }
+}
+
 #[derive(Debug, Default)]
 struct AllEv;
 
@@ -1080,6 +1124,7 @@ pub(super) fn register<R: Rt, E: UserEvent>(ctx: &mut ExecCtx<R, E>) -> Result<A
     ctx.register_builtin::<Min>()?;
     ctx.register_builtin::<Never>()?;
     ctx.register_builtin::<Once>()?;
+    ctx.register_builtin::<Skip>()?;
     ctx.register_builtin::<Seq>()?;
     ctx.register_builtin::<Or>()?;
     ctx.register_builtin::<Product>()?;

@@ -73,6 +73,9 @@ pub let min = |a, @args| 'min;
 /// and once will return nothing
 pub let once = |v| 'once;
 
+/// skip n updates from e. the internal count is reset when n updates.
+pub let skip = |#n, e| 'skip;
+
 /// seq will update j - i times, starting at i and ending at j - 1
 pub let seq = |i, j| 'seq;
 
