@@ -182,6 +182,9 @@ pub trait UserEvent: Clone + Debug + Any {
 
 pub trait CustomBuiltinType: Debug + Any + Send + Sync {}
 
+impl CustomBuiltinType for Value {}
+impl CustomBuiltinType for Option<Value> {}
+
 #[derive(Debug, Clone)]
 pub struct NoUserEvent;
 

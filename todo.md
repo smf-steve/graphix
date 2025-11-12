@@ -34,6 +34,7 @@ This document tracks improvements and additions needed for both the Graphix comp
   output
 
 ### Consider making ~ put it's rhs to sleep
+- or implement "if"
 
 ### Eliminate Double Typecheck at call sites
 - implement Clone for nodes so we can instantiate the node tree of a function and just clone it

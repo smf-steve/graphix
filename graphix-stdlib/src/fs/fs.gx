@@ -6,6 +6,9 @@
 // any modification, `ModifyRename expresses interest in any
 // kind of rename operation, and `ModifyRenameTo expresses interest
 // only on rename to.
+//
+// `Established is a special event that happens when the watch is
+// successfully established
 type Interest = [
     `Established,
     `Any,
@@ -150,7 +153,12 @@ pub let write_all_bin = |#path, data| 'fs_write_all_bin;
 /// Every time trigger updates, create and return a randomly generated
 /// temporary directory, and remove any previous temporary directories.
 /// return an error if the temporary directory can't be created.
-pub let tempdir = |trigger| 'fs_tempdir;
+///
+/// if `in` is specified, the temporary directory will be created as a child of `in`
+///
+/// if `name` is specified, the temporary directory will have either a prefix of name
+/// or a suffix of name.
+pub let tempdir = |#in = null, #name = null, trigger| 'fs_tempdir;
 
 /// join parts to path using the OS specific path separator
 pub let join_path = |path, @args| 'fs_join_path

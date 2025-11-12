@@ -12,9 +12,11 @@ use graphix_compiler::{
 };
 use netidx::{path::Path, subscriber::Value};
 use netidx_core::utils::Either;
+use netidx_value::FromValue;
 use poolshark::local::LPooled;
 use std::{
-    collections::hash_map::Entry,
+    any::Any,
+    collections::{hash_map::Entry, VecDeque},
     fmt::Debug,
     iter,
     marker::PhantomData,
@@ -125,6 +127,10 @@ impl CachedVals {
             Some(v) => Either::Right(v.clone().flatten().map(Some)),
         })
     }
+
+    pub fn get<T: FromValue>(&self, i: usize) -> Option<T> {
+        self.0.get(i).and_then(|v| v.as_ref()).and_then(|v| v.clone().cast_to::<T>().ok())
+    }
 }
 
 pub trait EvalCached: Debug + Default + Send + Sync + 'static {
@@ -168,6 +174,85 @@ impl<R: Rt, E: UserEvent, T: EvalCached> Apply<R, E> for CachedArgs<T> {
 
     fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
         self.cached.clear()
+    }
+}
+
+pub trait EvalCachedAsync: Debug + Default + Send + Sync + 'static {
+    const NAME: &str;
+    const TYP: LazyLock<FnType>;
+    type Args: Debug + Any + Send + Sync;
+
+    fn prepare_args(&mut self, cached: &CachedVals) -> Option<Self::Args>;
+    fn eval(args: Self::Args) -> impl Future<Output = Value> + Send;
+}
+
+#[derive(Debug)]
+pub struct CachedArgsAsync<T: EvalCachedAsync> {
+    cached: CachedVals,
+    id: BindId,
+    top_id: ExprId,
+    queued: VecDeque<T::Args>,
+    running: bool,
+    t: T,
+}
+
+impl<R: Rt, E: UserEvent, T: EvalCachedAsync> BuiltIn<R, E> for CachedArgsAsync<T> {
+    const NAME: &str = T::NAME;
+    const TYP: LazyLock<FnType> = T::TYP;
+
+    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
+        Arc::new(|ctx, _, _, from, top_id| {
+            let id = BindId::new();
+            ctx.rt.ref_var(id, top_id);
+            let t = CachedArgsAsync::<T> {
+                id,
+                top_id,
+                cached: CachedVals::new(from),
+                queued: VecDeque::new(),
+                running: false,
+                t: T::default(),
+            };
+            Ok(Box::new(t))
+        })
+    }
+}
+
+impl<R: Rt, E: UserEvent, T: EvalCachedAsync> Apply<R, E> for CachedArgsAsync<T> {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        if self.cached.update(ctx, from, event)
+            && let Some(args) = self.t.prepare_args(&self.cached)
+        {
+            self.queued.push_back(args);
+        }
+        let res = event.variables.remove(&self.id).map(|v| {
+            self.running = false;
+            v
+        });
+        if !self.running
+            && let Some(args) = self.queued.pop_front()
+        {
+            self.running = true;
+            let id = self.id;
+            ctx.rt.spawn_var(async move { (id, T::eval(args).await) });
+        }
+        res
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.rt.unref_var(self.id, self.top_id);
+        self.queued.clear();
+        self.cached.clear();
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        self.delete(ctx);
+        let id = BindId::new();
+        ctx.rt.ref_var(id, self.top_id);
     }
 }
 

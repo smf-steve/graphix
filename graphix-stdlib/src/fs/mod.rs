@@ -1,59 +1,100 @@
-use crate::{deftype, CachedArgs, CachedVals, EvalCached};
+use crate::{
+    deftype, CachedArgs, CachedArgsAsync, CachedVals, EvalCached, EvalCachedAsync,
+};
 use anyhow::Result;
 use arcstr::{literal, ArcStr};
 use compact_str::CompactString;
-use graphix_compiler::{
-    errf, Apply, BuiltIn, BuiltInInitFn, Event, ExecCtx, Node, Rt, UserEvent,
-};
+use graphix_compiler::{errf, ExecCtx, Rt, UserEvent};
 use netidx_value::Value;
+use parking_lot::Mutex;
 use poolshark::local::LPooled;
-use std::{path::PathBuf, sync::Arc};
+use std::{fmt, path::PathBuf, sync::Arc};
 use tempfile::TempDir;
 
 mod file;
 mod watch;
 
 #[derive(Debug)]
-struct GxTempDir {
-    current: Option<TempDir>,
+enum Name {
+    Prefix(ArcStr),
+    Suffix(ArcStr),
 }
 
-impl<R: Rt, E: UserEvent> BuiltIn<R, E> for GxTempDir {
-    const NAME: &str = "fs_tempdir";
-    deftype!("fs", "fn(Any) -> Result<string, `IOError(string)>");
+struct TempDirArgs {
+    dir: Option<ArcStr>,
+    name: Option<Name>,
+    t: Arc<Mutex<Option<TempDir>>>,
+}
 
-    fn init(_: &mut ExecCtx<R, E>) -> BuiltInInitFn<R, E> {
-        Arc::new(|_, _, _, _, _| Ok(Box::new(GxTempDir { current: None })))
+impl fmt::Debug for TempDirArgs {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{ dir: {:?}, name: {:?} }}", self.dir, self.name)
     }
 }
 
-impl<R: Rt, E: UserEvent> Apply<R, E> for GxTempDir {
-    fn update(
-        &mut self,
-        ctx: &mut ExecCtx<R, E>,
-        from: &mut [Node<R, E>],
-        event: &mut Event<E>,
-    ) -> Option<Value> {
-        if from[0].update(ctx, event).is_some() {
-            match TempDir::new() {
-                Err(e) => Some(errf!("IOError", "failed to create temp dir {e:?}")),
-                Ok(td) => {
-                    use std::fmt::Write;
-                    let mut buf = CompactString::new("");
-                    write!(buf, "{}", td.path().display()).unwrap();
-                    self.current = Some(td);
-                    Some(Value::String(ArcStr::from(buf.as_str())))
-                }
-            }
-        } else {
+#[derive(Debug, Default)]
+struct GxTempDirEv {
+    current: Arc<Mutex<Option<TempDir>>>,
+}
+
+impl EvalCachedAsync for GxTempDirEv {
+    const NAME: &str = "fs_tempdir";
+    deftype!(
+        "fs",
+        r#"fn(?#in:[null, string],
+              ?#name:[null, `Prefix(string), `Suffix(string)],
+              Any)
+           -> Result<string, `IOError(string)>"#
+    );
+    type Args = TempDirArgs;
+
+    fn prepare_args(&mut self, cached: &CachedVals) -> Option<Self::Args> {
+        if cached.0.iter().any(|v| v.is_none()) {
             None
+        } else {
+            let dir = cached.get::<ArcStr>(0);
+            let name =
+                cached.get::<(ArcStr, ArcStr)>(1).and_then(|(tag, v)| match &*tag {
+                    "Prefix" => Some(Name::Prefix(v)),
+                    "Suffix" => Some(Name::Suffix(v)),
+                    _ => None,
+                });
+            let _ = cached.get::<Value>(2)?;
+            Some(TempDirArgs { dir, name, t: self.current.clone() })
         }
     }
 
-    fn sleep(&mut self, _ctx: &mut ExecCtx<R, E>) {
-        self.current = None
+    fn eval(args: Self::Args) -> impl Future<Output = Value> + Send {
+        async move {
+            let td = tokio::task::spawn_blocking(|| match (args.dir, args.name) {
+                (None, None) => TempDir::new(),
+                (None, Some(Name::Prefix(pfx))) => TempDir::with_prefix(&*pfx),
+                (None, Some(Name::Suffix(sfx))) => TempDir::with_suffix(&*sfx),
+                (Some(dir), None) => TempDir::new_in(&*dir),
+                (Some(dir), Some(Name::Prefix(pfx))) => {
+                    TempDir::with_prefix_in(&*pfx, &*dir)
+                }
+                (Some(dir), Some(Name::Suffix(sfx))) => {
+                    TempDir::with_suffix_in(&*sfx, &*dir)
+                }
+            })
+            .await;
+            match td {
+                Err(e) => errf!("IOError", "failed to spawn create temp dir {e:?}"),
+                Ok(Err(e)) => errf!("IOError", "failed to create temp dir {e:?}"),
+                Ok(Ok(td)) => {
+                    use std::fmt::Write;
+                    let mut buf = CompactString::new("");
+                    write!(buf, "{}", td.path().display()).unwrap();
+                    *args.t.lock() = Some(td);
+                    Value::String(ArcStr::from(buf.as_str()))
+                }
+            }
+        }
     }
 }
+
+type GxTempDir = CachedArgsAsync<GxTempDirEv>;
 
 #[derive(Debug, Default)]
 struct JoinPathEv;
