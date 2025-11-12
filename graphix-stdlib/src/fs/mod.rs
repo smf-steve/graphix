@@ -52,9 +52,11 @@ impl EvalCachedAsync for GxTempDirEv {
         if cached.0.iter().any(|v| v.is_none()) {
             None
         } else {
-            let dir = cached.get::<ArcStr>(0);
-            let name =
-                cached.get::<(ArcStr, ArcStr)>(1).and_then(|(tag, v)| match &*tag {
+            let dir = cached.get::<Option<ArcStr>>(0).flatten();
+            let name = cached
+                .get::<Option<(ArcStr, ArcStr)>>(1)
+                .and_then(|v| v)
+                .and_then(|(tag, v)| match &*tag {
                     "Prefix" => Some(Name::Prefix(v)),
                     "Suffix" => Some(Name::Suffix(v)),
                     _ => None,
