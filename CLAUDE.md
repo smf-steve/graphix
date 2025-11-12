@@ -196,3 +196,34 @@ Some examples are code snippets that reference undefined variables and are meant
 - Rust edition 2024 is used throughout
 - The project uses `triomphe::Arc` instead of `std::sync::Arc` for better performance
 - Pooling is used extensively (`poolshark`, `immutable-chunkmap`) to reduce allocations
+
+## Recent Changes
+
+### Filesystem Module Refactoring (Nov 2025)
+
+The `graphix-stdlib/src/fs/` module was refactored to split functionality into separate files:
+- `mod.rs`: Core tempdir and join_path functionality
+- `file.rs`: Read/write operations (read_all, read_all_bin, write_all, write_all_bin)
+- `watch.rs`: Filesystem watch functionality
+
+**fs::tempdir enhancements:**
+- Added `#in` parameter to specify parent directory for temp directory creation
+- Added `#name` parameter with two variants:
+  - `Prefix(string)`: Add prefix to temp directory name
+  - `Suffix(string)`: Add suffix to temp directory name
+- All combinations of `#in` and `#name` are supported
+- The temp directory is kept alive via `Arc<Mutex<Option<TempDir>>>` and automatically cleaned up when replaced or dropped
+
+**Documentation improvements:**
+- Updated `fs.gx` to clarify that read/write operations are queued and executed in order
+- Previous documentation suggested results arrived in order but execution could be concurrent
+- New documentation accurately reflects that operations complete sequentially in queue order
+
+**Test coverage:**
+- Created comprehensive test suite in `graphix-stdlib/src/test/lib/fs/tempdir.rs` covering:
+  - Basic tempdir creation
+  - Parent directory specification
+  - Prefix and suffix naming
+  - Error handling for invalid paths
+  - Integration with read/write operations
+- All fs tests passing (40 tests total as of Nov 2025)

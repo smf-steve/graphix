@@ -8,4 +8,7 @@ mod read;
 mod write;
 
 #[cfg(test)]
+mod tempdir;
+
+#[cfg(test)]
 mod integration;

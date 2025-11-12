@@ -106,10 +106,9 @@ pub let watch_full = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch_f
 /// - an OS specific error occurs while trying to read path
 ///
 /// The file will be read again each time path updates, even if path did not change.
-/// Reads will be returned in the same order they are initiated, even if they complete
-/// out of order. For example, if we read_all on path0 and path1, read_all will always
-/// return the result for path0 first. If the result for path0 is not ready then read_all
-/// will wait for it even if the result for path1 has already been delivered.
+/// Reads are queued and executed in the order they are initiated. For example, if we
+/// read_all on path0 and path1, the read of path0 will complete before the read of path1
+/// begins. Results are always returned in the same order the reads were queued.
 pub let read_all = |path| 'fs_read_all;
 
 /// Read the specified file into memory as a bytes and return it, or an
@@ -118,36 +117,29 @@ pub let read_all = |path| 'fs_read_all;
 /// - an OS specific error occurs while trying to read path
 ///
 /// The file will be read again each time path updates, even if path did not change.
-/// Reads will be returned in the same order they are initiated, even if they complete
-/// out of order. For example, if we read_all_bin on path0 and path1, read_all_bin will always
-/// return the result for path0 first. If the result for path0 is not ready then read_all_bin
-/// will wait for it even if the result for path1 has already been delivered.
+/// Reads are queued and executed in the order they are initiated. For example, if we
+/// read_all_bin on path0 and path1, the read of path0 will complete before the read of
+/// path1 begins. Results are always returned in the same order the reads were queued.
 pub let read_all_bin = |path| 'fs_read_all_bin;
 
 /// Write data to path. If path does not exist it will be created. If path exists it
 /// will be truncated and it's contents will be replaced with data.
 ///
 /// A write will occur whenever either path or data updates, even if they did not change.
-/// If multiple writes are in flight at once their completion order in the file
-/// system is not specified, but the results will always be reported in the order
-/// they were queued. For example if "hello world" is queued to be written to
-/// "foo.txt" and "bar.txt", there is no guarantee about when foo.txt and bar.txt will
-/// appear in the file system. However the first result will always be the result of writing to
-/// "foo.txt" and the second result will always be the result of writing to "bar.txt", and when
-/// the "bar.txt" result is reported it is guaranteed that both writes have been handed to the OS.
+/// Writes are queued and executed in the order they are initiated. For example, if "hello world"
+/// is queued to be written to "foo.txt" and then "bar.txt", the write to "foo.txt" will complete
+/// before the write to "bar.txt" begins. Results are always returned in the same order the writes
+/// were queued.
 pub let write_all = |#path, data| 'fs_write_all;
 
 /// Write data to path. If path does not exist it will be created. If path exists it
 /// will be truncated and it's contents will be replaced with data.
 ///
 /// A write will occur whenever either path or data updates, even if they did not change.
-/// If multiple writes are in flight at once their completion order in the file
-/// system is not specified, but the results will always be reported in the order
-/// they were queued. For example if "hello world" is queued to be written to
-/// "foo.txt" and "bar.txt", there is no guarantee about when foo.txt and bar.txt will
-/// appear in the file system. However the first result will always be the result of writing to
-/// "foo.txt" and the second result will always be the result of writing to "bar.txt", and when
-/// the "bar.txt" result is reported it is guaranteed that both writes have been handed to the OS.
+/// Writes are queued and executed in the order they are initiated. For example, if "hello world"
+/// is queued to be written to "foo.txt" and then "bar.txt", the write to "foo.txt" will complete
+/// before the write to "bar.txt" begins. Results are always returned in the same order the writes
+/// were queued.
 pub let write_all_bin = |#path, data| 'fs_write_all_bin;
 
 /// Every time trigger updates, create and return a randomly generated
@@ -161,4 +153,28 @@ pub let write_all_bin = |#path, data| 'fs_write_all_bin;
 pub let tempdir = |#in = null, #name = null, trigger| 'fs_tempdir;
 
 /// join parts to path using the OS specific path separator
-pub let join_path = |path, @args| 'fs_join_path
+pub let join_path = |path, @args| 'fs_join_path;
+
+/// if path is a file (it can be read on unix, or is a file on windows) then return path
+/// otherwise return an `IOError. Check again every time path updates.
+pub let is_file = |path| 'fs_is_file;
+
+/// if path is a directory then return path, otherwise return an `IOError.
+/// check again every time path updates.
+pub let is_dir = |path| 'fs_is_dir;
+
+/// Filesystem metadata. Not all kind fields are possible on all platforms.
+/// permissions will only be set on unix platforms, windows will only
+/// expose the `ReadOnly flag.
+type Metadata = {
+    accessed: [datetime, null],
+    created: [datetime, null],
+    modified: [datetime, null],
+    kind: [`Dir, `File, `Symlink, `SymlinkDir, `BlockDev, `CharDev, `Fifo, `Socket, null],
+    len: u64,
+    permissions: [u32, `ReadOnly(bool)]
+};
+
+/// Return the metadata for a filesystem object, or an error. Check again every
+/// time an argument updates.
+pub let metadata = |#follow_symlinks = true, string| 'fs_metadata
