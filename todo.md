@@ -33,6 +33,8 @@ This document tracks improvements and additions needed for both the Graphix comp
   automatically queues input in front of f until f generates an
   output
 
+### Consider making ~ put it's rhs to sleep
+
 ### Eliminate Double Typecheck at call sites
 - implement Clone for nodes so we can instantiate the node tree of a function and just clone it
 
