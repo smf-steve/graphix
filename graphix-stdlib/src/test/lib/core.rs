@@ -51,6 +51,98 @@ run!(once, ONCE, |v: Result<&Value>| match v {
     _ => false,
 });
 
+const SKIP: &str = r#"
+{
+  let x = [1, 2, 3, 4, 5, 6];
+  array::group(skip(#n: 3, array::iter(x)), |n, _| n == 3)
+}
+"#;
+
+run!(skip, SKIP, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::I64(4), Value::I64(5), Value::I64(6)] => true,
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+const SKIP_ZERO: &str = r#"
+{
+  let x = [1, 2, 3];
+  array::group(skip(#n: 0, array::iter(x)), |n, _| n == 3)
+}
+"#;
+
+run!(skip_zero, SKIP_ZERO, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::I64(1), Value::I64(2), Value::I64(3)] => true,
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+const SKIP_ALL: &str = r#"
+{
+  let timeout = time::timer(1, false) ~ 0;
+  any(skip(#n: 5, array::iter([1, 2, 3])), timeout)
+}
+"#;
+
+run!(skip_all, SKIP_ALL, |v: Result<&Value>| match v {
+    Ok(Value::I64(0)) => true,
+    _ => false,
+});
+
+const TAKE: &str = r#"
+{
+  let x = [1, 2, 3, 4, 5, 6];
+  array::group(take(#n: 3, array::iter(x)), |n, _| n == 3)
+}
+"#;
+
+run!(take, TAKE, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::I64(1), Value::I64(2), Value::I64(3)] => true,
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+const TAKE_ZERO: &str = r#"
+{
+  let timeout = time::timer(1, false) ~ 0;
+  any(take(#n: 0, array::iter([1, 2, 3])), timeout)
+}
+"#;
+
+run!(take_zero, TAKE_ZERO, |v: Result<&Value>| match v {
+    Ok(Value::I64(0)) => true,
+    _ => false,
+});
+
+const TAKE_MORE: &str = r#"
+{
+  let x = [1, 2, 3];
+  array::group(take(#n: 10, array::iter(x)), |n, _| n == 3)
+}
+"#;
+
+run!(take_more, TAKE_MORE, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => match &a[..] {
+            [Value::I64(1), Value::I64(2), Value::I64(3)] => true,
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
 const ALL: &str = r#"
 {
   let x = 1;

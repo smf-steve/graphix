@@ -23,14 +23,14 @@ const WRITE_THEN_WATCH_MODIFY: &str = r#"{
     {dir: temp, file: write_result ~ file_path}
   };
 
-  let watch_stream = fs::watch(#interest: [`Established, `Modify], paths.dir);
+  let watch_stream = dbg(fs::watch(#interest: [`Established, `Modify], paths.dir));
   let established = once(watch_stream);
+  let modify_event = skip(#n: 1, watch_stream);
   let write_done = established ~ fs::write_all(#path: paths.file, "modified by write_all");
   let content = write_done ~ fs::read_all(paths.file);
-  let modify_event = skip(#n: 1, watch_stream);
 
   let content_ok = content == "modified by write_all";
-  let modify_ok = modify_event != "";
+  let modify_ok = dbg(modify_event) != "";
 
   content_ok && modify_ok
 }"#;

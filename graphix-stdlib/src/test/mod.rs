@@ -53,8 +53,8 @@ macro_rules! run {
                                     match e {
                                         graphix_rt::GXEvent::Env(_) => (),
                                         graphix_rt::GXEvent::Updated(id, v) => {
-                                            assert_eq!(id, eid);
                                             eprintln!("{v}");
+                                            assert_eq!(id, eid);
                                             assert!($pred(Ok(&v)));
                                             return Ok(());
                                         }
