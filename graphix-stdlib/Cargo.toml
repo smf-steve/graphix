@@ -43,6 +43,7 @@ regex = { workspace = true }
 serde_derive = { workspace = true }
 serde = { workspace = true }
 smallvec = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true }
 triomphe = { workspace = true }
 
@@ -50,4 +51,3 @@ triomphe = { workspace = true }
 graphix-rt = { version = "0.1.0", path = "../graphix-rt" }
 proptest = "1"
 env_logger = "0.11"
-tempfile = "3"

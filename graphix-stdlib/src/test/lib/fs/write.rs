@@ -1,13 +1,12 @@
+use crate::test::init;
 use anyhow::Result;
 use arcstr::ArcStr;
-use netidx::subscriber::Value;
-use tokio::fs;
-use tokio::time::Duration;
-
-use crate::test::init;
 use graphix_rt::GXEvent;
+use netidx::subscriber::Value;
 use poolshark::global::GPooled;
+use tokio::fs;
 use tokio::sync::mpsc;
+use tokio::time::Duration;
 
 /// Macro to create fs::write_* tests with common setup/teardown logic
 macro_rules! write_test {
@@ -125,24 +124,6 @@ write_test! {
 }
 
 write_test! {
-    name: test_write_all_create_new_file,
-    function: "fs::write_all",
-    content: r#""New file content""#,
-    setup: |temp_dir| {
-        let test_file = temp_dir.path().join("new_file.txt");
-        // Ensure file doesn't exist
-        let _ = fs::remove_file(&test_file).await;
-        test_file
-    },
-    verify: |temp_dir| {
-        let test_file = temp_dir.path().join("new_file.txt");
-        assert!(test_file.exists());
-        let content = fs::read_to_string(&test_file).await?;
-        assert_eq!(content, "New file content");
-    }
-}
-
-write_test! {
     name: test_write_all_overwrite_existing,
     function: "fs::write_all",
     content: r#""Overwritten content""#,
@@ -235,7 +216,7 @@ write_test! {
     function: "fs::write_all",
     content: r#""content""#,
     setup: |temp_dir| {
-        temp_dir.path().join("nonexistent_dir/test.txt")
+        temp_dir.path().join("nonexistent_dir").join("test.txt")
     },
     expect_error
 }

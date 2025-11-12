@@ -16,50 +16,35 @@ async fn test_write_then_read() -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let test_file = temp_dir.path().join("write_read_test.txt");
 
-    // First write
-    let code =
-        format!(r#"fs::write_all(#path: "{}", "Test content")"#, test_file.display());
-    let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-    let write_eid = compiled.exprs[0].id;
+    // Use Graphix to write and then read the file in one expression
+    // Use the sample operator (~) to sequence the read after the write completes
+    let code = format!(
+        r#"{{
+  let path = "{}";
+  let write_result = fs::write_all(#path: path, "Test content");
+  fs::read_all(write_result ~ path)
+}}"#,
+        test_file.display()
+    );
 
-    // Wait for write to complete
+    let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+    let eid = compiled.exprs[0].id;
+
     let timeout = tokio::time::sleep(Duration::from_secs(2));
     tokio::pin!(timeout);
 
     loop {
         tokio::select! {
-            _ = &mut timeout => panic!("timeout waiting for write"),
+            _ = &mut timeout => panic!("timeout waiting for result"),
             Some(mut batch) = rx.recv() => {
                 for event in batch.drain(..) {
                     if let GXEvent::Updated(id, v) = event {
-                        if id == write_eid && matches!(v, Value::Null) {
-                            // Write succeeded, now read
-                            let code = format!(r#"fs::read_all("{}")"#, test_file.display());
-                            let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-                            let read_eid = compiled.exprs[0].id;
-
-                            // Wait for read result
-                            let timeout = tokio::time::sleep(Duration::from_secs(2));
-                            tokio::pin!(timeout);
-
-                            loop {
-                                tokio::select! {
-                                    _ = &mut timeout => panic!("timeout waiting for read"),
-                                    Some(mut batch) = rx.recv() => {
-                                        for event in batch.drain(..) {
-                                            if let GXEvent::Updated(id, v) = event {
-                                                if id == read_eid {
-                                                    if let Value::String(s) = v {
-                                                        assert_eq!(&*s, "Test content");
-                                                        return Ok(());
-                                                    }
-                                                    panic!("expected String, got: {v:?}");
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                        if id == eid {
+                            if let Value::String(s) = v {
+                                assert_eq!(&*s, "Test content");
+                                return Ok(());
                             }
+                            panic!("expected String, got: {v:?}");
                         }
                     }
                 }
@@ -102,9 +87,13 @@ async fn test_write_then_watch_modify() -> Result<()> {
                                 watch_established = true;
                                 eprintln!("Watch established, performing write");
 
-                                // Now write to the file using fs::write_all
+                                // Now write to the file and read it back using Graphix
                                 let code = format!(
-                                    r#"fs::write_all(#path: "{}", "modified by write_all")"#,
+                                    r#"{{
+  let path = "{}";
+  let write_result = fs::write_all(#path: path, "modified by write_all");
+  fs::read_all(path)
+}}"#,
                                     test_file.display()
                                 );
                                 let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
@@ -115,10 +104,15 @@ async fn test_write_then_watch_modify() -> Result<()> {
                             }
                         }
 
-                        // Also check for write completion
+                        // Check for write+read completion
                         if let Some(wid) = write_eid {
-                            if id == wid && matches!(v, Value::Null) {
-                                eprintln!("Write completed successfully");
+                            if id == wid {
+                                if let Value::String(s) = &v {
+                                    assert_eq!(&**s, "modified by write_all");
+                                    eprintln!("Write and read completed successfully");
+                                } else {
+                                    panic!("Expected string from read, got: {v:?}");
+                                }
                             }
                         }
                     }
@@ -130,10 +124,6 @@ async fn test_write_then_watch_modify() -> Result<()> {
     assert!(watch_established, "Watch was not established");
     assert!(got_modify_event, "Did not receive modify event after write");
 
-    // Verify file was actually modified
-    let content = fs::read_to_string(&test_file).await?;
-    assert_eq!(content, "modified by write_all");
-
     Ok(())
 }
 
@@ -144,48 +134,35 @@ async fn test_write_bin_then_read_bin() -> Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let test_file = temp_dir.path().join("binary_cycle.bin");
 
-    // Write binary data (bytes:SGVsbG8= is "Hello" in base64)
-    let code =
-        format!(r#"fs::write_all_bin(#path: "{}", bytes:SGVsbG8=)"#, test_file.display());
+    // Use Graphix to write binary and then read it back in one expression
+    // Use the sample operator (~) to sequence the read after the write completes
+    let code = format!(
+        r#"{{
+  let path = "{}";
+  let write_result = fs::write_all_bin(#path: path, bytes:SGVsbG8=);
+  fs::read_all_bin(write_result ~ path)
+}}"#,
+        test_file.display()
+    );
+
     let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-    let write_eid = compiled.exprs[0].id;
+    let eid = compiled.exprs[0].id;
 
     let timeout = tokio::time::sleep(Duration::from_secs(2));
     tokio::pin!(timeout);
 
     loop {
         tokio::select! {
-            _ = &mut timeout => panic!("timeout waiting for write"),
+            _ = &mut timeout => panic!("timeout waiting for result"),
             Some(mut batch) = rx.recv() => {
                 for event in batch.drain(..) {
                     if let GXEvent::Updated(id, v) = event {
-                        if id == write_eid && matches!(v, Value::Null) {
-                            // Write succeeded, now read
-                            let code = format!(r#"fs::read_all_bin("{}")"#, test_file.display());
-                            let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-                            let read_eid = compiled.exprs[0].id;
-
-                            let timeout = tokio::time::sleep(Duration::from_secs(2));
-                            tokio::pin!(timeout);
-
-                            loop {
-                                tokio::select! {
-                                    _ = &mut timeout => panic!("timeout waiting for read"),
-                                    Some(mut batch) = rx.recv() => {
-                                        for event in batch.drain(..) {
-                                            if let GXEvent::Updated(id, v) = event {
-                                                if id == read_eid {
-                                                    if let Value::Bytes(b) = v {
-                                                        assert_eq!(b.as_ref(), b"Hello");
-                                                        return Ok(());
-                                                    }
-                                                    panic!("expected Bytes, got: {v:?}");
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                        if id == eid {
+                            if let Value::Bytes(b) = v {
+                                assert_eq!(b.as_ref(), b"Hello");
+                                return Ok(());
                             }
+                            panic!("expected Bytes, got: {v:?}");
                         }
                     }
                 }

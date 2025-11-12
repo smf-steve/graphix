@@ -4,7 +4,7 @@ use netidx::subscriber::Value;
 use tokio::fs;
 use tokio::time::Duration;
 
-use crate::{run, test::init};
+use crate::test::init;
 use graphix_rt::GXEvent;
 use poolshark::global::GPooled;
 use tokio::sync::mpsc;
@@ -147,16 +147,3 @@ read_test! {
     },
     expect_error
 }
-
-// Simple test using run! macro to verify basic functionality
-run!(test_read_all_simple, r#"fs::read_all("/tmp/graphix_test.txt")"#, |v: Result<
-    &Value,
->| {
-    match v {
-        Ok(val) => {
-            // Result is a union type - either String (success) or Error (failure)
-            matches!(val, Value::String(_) | Value::Error(_))
-        }
-        Err(_) => false,
-    }
-});

@@ -146,3 +146,11 @@ pub let write_all = |#path, data| 'fs_write_all;
 /// "foo.txt" and the second result will always be the result of writing to "bar.txt", and when
 /// the "bar.txt" result is reported it is guaranteed that both writes have been handed to the OS.
 pub let write_all_bin = |#path, data| 'fs_write_all_bin;
+
+/// Every time trigger updates, create and return a randomly generated
+/// temporary directory, and remove any previous temporary directories.
+/// return an error if the temporary directory can't be created.
+pub let tempdir = |trigger| 'fs_tempdir;
+
+/// join parts to path using the OS specific path separator
+pub let join_path = |path, @args| 'fs_join_path
