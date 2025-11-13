@@ -169,6 +169,18 @@ pub let is_file = |path| 'fs_is_file;
 /// check again every time path updates.
 pub let is_dir = |path| 'fs_is_dir;
 
+type FileType = [
+    `Dir,
+    `File,
+    `Symlink,
+    `SymlinkDir,
+    `BlockDev,
+    `CharDev,
+    `Fifo,
+    `Socket,
+    null
+];
+
 // Filesystem metadata. Not all kind fields are possible on all platforms.
 // permissions will only be set on unix platforms, windows will only
 // expose the ReadOnly flag.
@@ -176,11 +188,43 @@ type Metadata = {
     accessed: [datetime, null],
     created: [datetime, null],
     modified: [datetime, null],
-    kind: [`Dir, `File, `Symlink, `SymlinkDir, `BlockDev, `CharDev, `Fifo, `Socket, null],
+    kind: FileType,
     len: u64,
     permissions: [u32, `ReadOnly(bool)]
 };
 
 /// Return the metadata for a filesystem object, or an error. Check again every
 /// time an argument updates.
-pub let metadata = |#follow_symlinks = true, path| 'fs_metadata
+pub let metadata = |#follow_symlinks = true, path| 'fs_metadata;
+
+// a directory entry
+type DirEntry = {
+    path: string,
+    file_name: string,
+    depth: i64,
+    kind: FileType
+};
+
+/// readdir reads a directory and returns an array of directory entries.
+/// By default it will read only immediate children, however it can be
+/// configured to search at greater depth.
+///
+/// depth appears in several places, The root path is depth 0, immediate children
+/// are depth 1, and so on.
+///
+/// - min_depth: controls the minimum search depth. default 1.
+/// - max_depth: controls the maximum search depth. default 1.
+/// - contents_first: directory contents will be arranged
+///   before the directory itself. default false.
+/// - follow_symlinks: if true, follow symlinks when traversing, default false.
+/// - follow_root_symlink: if the root path is a symlink follow it. default true.
+/// - same_filesystem: don't traverse across filesystem boundaries. default false.
+pub let readdir = |
+    #max_depth = 1,
+    #min_depth = 1,
+    #contents_first = false,
+    #follow_symlinks = false,
+    #follow_root_symlink = true,
+    #same_filesystem = false,
+    path
+| 'fs_readdir

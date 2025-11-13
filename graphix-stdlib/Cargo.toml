@@ -46,6 +46,7 @@ smallvec = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 triomphe = { workspace = true }
+walkdir = { workspace = true }
 
 [dev-dependencies]
 graphix-rt = { version = "0.1.0", path = "../graphix-rt" }
