@@ -1364,9 +1364,17 @@ fn prop0() {
 
     */
     let s = r#"
-/// Return the metadata for a filesystem object, or an error. Check again every
-/// time an argument updates.
-pub let metadata = |#follow_symlinks = true, string| 'fs_metadata
+// Filesystem metadata. Not all kind fields are possible on all platforms.
+// permissions will only be set on unix platforms, windows will only
+// expose the ReadOnly flag.
+type Metadata = {
+    accessed: [datetime, null],
+    created: [datetime, null],
+    modified: [datetime, null],
+    kind: [`Dir, `File, `Symlink, `SymlinkDir, `BlockDev, `CharDev, `Fifo, `Socket, null],
+    len: u64,
+    permissions: [u32, `ReadOnly(bool)]
+}
 "#;
     dbg!(parse_one(s).unwrap());
 }
