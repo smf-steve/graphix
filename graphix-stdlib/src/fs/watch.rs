@@ -387,7 +387,7 @@ struct PathStatus {
 }
 
 impl PathStatus {
-    fn established(&self) -> bool {
+    fn exists(&self) -> bool {
         self.missing.is_empty()
     }
 
@@ -444,8 +444,6 @@ struct WatchInt {
 }
 
 enum AddAction {
-    DoNothing,
-    Notify(PathBuf),
     AddWatch { path: PathBuf, notify: bool },
     AddPending { watch_path: PathBuf, full_path: PathBuf, notify: bool },
 }
@@ -468,27 +466,15 @@ impl Watched {
     /// add a watch and return the necessary action to the notify::Watcher
     async fn add_watch(&mut self, w: Watch) -> AddAction {
         let id = w.id;
-        let path_status = match self.by_id.get_mut(&id) {
-            Some(ow) if ow.watch.path == w.path => {
-                let WatchInt { watch: Watch { path: _, id: _, interest }, path_status } =
-                    ow;
-                *interest = w.interest;
-                if interest.contains(Interest::Established) {
-                    return AddAction::Notify(path_status.full_path.clone());
-                } else {
-                    return AddAction::DoNothing;
-                }
-            }
-            Some(_) | None => PathStatus::new(&Path::new(&*w.path)).await,
-        };
+        let path_status = PathStatus::new(&Path::new(&*w.path)).await;
         let w = WatchInt { watch: w, path_status };
         let watch_path = w.path_status.exists.clone();
         let full_path = w.path_status.full_path.clone();
-        let established = w.path_status.established();
+        let exists = w.path_status.exists();
         let notify = w.watch.interest.contains(Interest::Established);
         self.by_root.entry(watch_path.clone()).or_default().insert(id);
         self.by_id.insert(id, w);
-        if established {
+        if exists {
             AddAction::AddWatch { path: watch_path, notify }
         } else {
             AddAction::AddPending { watch_path, full_path, notify }
@@ -536,8 +522,6 @@ impl Watched {
             }
             (Some(_), Some(AddAction::AddPending { .. }))
             | (Some(_), Some(AddAction::AddWatch { .. }))
-            | (Some(_), Some(AddAction::Notify(_)))
-            | (Some(_), Some(AddAction::DoNothing))
             | (None, Some(_))
             | (Some(_), None)
             | (None, None) => (remove, add),
@@ -562,7 +546,7 @@ impl Watched {
                             Some(id) => match self.t.by_id.get(id) {
                                 Some(w)
                                 // limit established paths to the path itself and it's immediate parent
-                                if self.level < 2 || !w.path_status.established() =>
+                                if self.level < 2 || !w.path_status.exists() =>
                                 {
                                     break Some(w)
                                 }
@@ -614,7 +598,7 @@ impl Watched {
                     .await
                     .unwrap_or(Ok(false))
                     .unwrap_or(false);
-            let established = w.path_status.established();
+            let established = w.path_status.exists();
             if (established && !exists) || (!established && exists) {
                 Some(w.watch.id)
             } else {
@@ -651,7 +635,7 @@ impl Watched {
                                 wev.paths.insert(utf8_path.clone());
                             }};
                         }
-                        if w.path_status.established() {
+                        if w.path_status.exists() {
                             if w.watch.interested(&ev.kind) {
                                 report!();
                             }
@@ -800,9 +784,9 @@ async fn file_watcher_loop(
                 or_push!(&path, $id, watcher.unwatch(&path));
             }
             match stc.add {
-                None | Some(AddAction::Notify(_)) | Some(AddAction::DoNothing) => (),
-                Some(AddAction::AddWatch { path: watch_path, .. }) => {
-                    add_watch!(&watch_path, $id, on_success: {
+                None => (),
+                Some(AddAction::AddWatch { path, .. }) => {
+                    add_watch!(&path, $id, on_success: {
                         if $synthetic
                             && let Some(w) = watched.by_id.get(&$id)
                             && w.watch.interest.intersects(
@@ -811,7 +795,7 @@ async fn file_watcher_loop(
                                 | Interest::CreateFolder
                                 | Interest::CreateOther)
                         {
-                            push_event(&mut batch, $id, &watch_path, WatchEventKind::Event(Interest::Create))
+                            push_event(&mut batch, $id, &path, WatchEventKind::Event(Interest::Create))
                         }
                     });
                 }
@@ -846,16 +830,28 @@ async fn file_watcher_loop(
                 Some(WatchCmd::Watch(w)) => {
                     let id = w.id;
                     let nev = WatchEventKind::Event(Interest::Established);
+                    let mut same_path = false;
+                    if let (Some(old_w), Some(remove)) = watched.remove_watch(&id) {
+                        if old_w.watch.path == w.path {
+                            same_path = true
+                        } else {
+                            if let Err(e) = watcher.unwatch(&remove) {
+                                log::warn!("could not unwatch {} when switching {e:?}", remove.display())
+                            }
+                        }
+                    }
                     match watched.add_watch(w).await {
-                        AddAction::DoNothing => (),
-                        AddAction::Notify(path) =>
-                            push_event(&mut batch, id, &path, nev),
-                        AddAction::AddWatch { path, notify } => {
+                        AddAction::AddWatch { path, notify } if !same_path => {
                             add_watch!(&path, id, on_success: {
                                 if notify {
                                     push_event(&mut batch, id, &path, nev)
                                 }
                             })
+                        }
+                        AddAction::AddWatch { path, notify } => {
+                            if notify {
+                                push_event(&mut batch, id, &path, nev)
+                            }
                         }
                         AddAction::AddPending { watch_path, full_path, notify } => {
                             add_watch!(&watch_path, id, on_success: {

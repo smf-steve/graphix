@@ -72,9 +72,12 @@ let set_global_watch_parameters = |
 /// Watch the specified path for events matching #interest. Return the canonical
 /// path of the filesystem object involved in the event, or an error if the
 /// watch could not be established. watch updates when,
-/// - path updates
 /// - an event occurs that matches interest
 /// - an error occurs when trying to establish the watch
+///
+/// If you wish to know when the watch is established, you must express interest
+/// in the `Established event (which is in the default set). If you do so, you will
+/// also get a new established event if you change the interest or the path.
 ///
 /// If path is a directory the watch will report events about immediate children.
 /// If the watch could not be established establishement will be retried every
@@ -82,14 +85,17 @@ let set_global_watch_parameters = |
 ///
 /// Filesystem watches are a limited operating system resource, like file
 /// descriptors, or handles.
-pub let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch;
+pub let watch = |#interest = [`Established, `Create, `Modify, `Delete], path| 'fs_watch;
 
 /// Watch the specified path for events matching #interest. Return the full event
 /// describing what happened, or an error if the watch could not be established.
 /// watch_full updates when
-/// - path updates
 /// - an event occurs that matches interest
 /// - an error occurs when trying to establish the watch
+///
+/// If you wish to know when the watch is established, you must express interest
+/// in the `Established event (which is in the default set). If you do so, you will
+/// also get a new established event if you change the interest or the path.
 ///
 /// If path is a directory the watch will report events about immediate children.
 /// If the watch could not be established establishement will be retried every
@@ -97,7 +103,7 @@ pub let watch = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch;
 ///
 /// Filesystem watches are a limited operating system resource, like file
 /// descriptors, or handles.
-pub let watch_full = |#interest = [`Create, `Modify, `Delete], path| 'fs_watch_full;
+pub let watch_full = |#interest = [`Established, `Create, `Modify, `Delete], path| 'fs_watch_full;
 
 /// Read the specified file into memory as a utf8 string and return it, or an
 /// error if,
