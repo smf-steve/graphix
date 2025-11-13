@@ -23,7 +23,9 @@
       "Bash(grep:*)",
       "Bash(find:*)",
       "Bash(node -c:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(cat:*)",
+      "Bash(cargo clean:*)"
     ],
     "deny": [],
     "ask": []

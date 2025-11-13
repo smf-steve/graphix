@@ -156,16 +156,16 @@ pub let tempdir = |#in = null, #name = null, trigger| 'fs_tempdir;
 pub let join_path = |path, @args| 'fs_join_path;
 
 /// if path is a file (it can be read on unix, or is a file on windows) then return path
-/// otherwise return an `IOError. Check again every time path updates.
+/// otherwise return an IOError. Check again every time path updates.
 pub let is_file = |path| 'fs_is_file;
 
-/// if path is a directory then return path, otherwise return an `IOError.
+/// if path is a directory then return path, otherwise return an IOError.
 /// check again every time path updates.
 pub let is_dir = |path| 'fs_is_dir;
 
-/// Filesystem metadata. Not all kind fields are possible on all platforms.
-/// permissions will only be set on unix platforms, windows will only
-/// expose the `ReadOnly flag.
+// Filesystem metadata. Not all kind fields are possible on all platforms.
+// permissions will only be set on unix platforms, windows will only
+// expose the ReadOnly flag.
 type Metadata = {
     accessed: [datetime, null],
     created: [datetime, null],
@@ -177,4 +177,4 @@ type Metadata = {
 
 /// Return the metadata for a filesystem object, or an error. Check again every
 /// time an argument updates.
-pub let metadata = |#follow_symlinks = true, string| 'fs_metadata
+pub let metadata = |#follow_symlinks = true, path| 'fs_metadata

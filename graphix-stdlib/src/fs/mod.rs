@@ -112,23 +112,11 @@ impl EvalCachedAsync for IsFileEv {
     }
 
     fn eval(path: Self::Args) -> impl Future<Output = Value> + Send {
-        #[cfg(unix)]
-        {
-            async move {
-                match tokio::fs::OpenOptions::new().read(true).open(&*path).await {
-                    Err(e) => errf!("IOError", "can't read {e:?}"),
-                    Ok(_) => Value::String(path),
-                }
-            }
-        }
-        #[cfg(windows)]
-        {
-            async move {
-                match tokio::fs::metadata(&*path).await {
-                    Err(e) => errf!("IOError", "can't stat {e:?}"),
-                    Ok(m) if m.is_file() => Value::String(path),
-                    Ok(_) => errf!("IOError", "(path) is not a file"),
-                }
+        async move {
+            match tokio::fs::metadata(&*path).await {
+                Err(e) => errf!("IOError", "can't stat {e:?}"),
+                Ok(m) if m.is_file() => Value::String(path),
+                Ok(_) => errf!("IOError", "not a file"),
             }
         }
     }
@@ -166,7 +154,10 @@ struct MetadataEv;
 
 impl EvalCachedAsync for MetadataEv {
     const NAME: &str = "fs_metadata";
-    deftype!("fs", "fn(?#follow_symlinks, string) -> Result<Metadata, `IOError(string)>");
+    deftype!(
+        "fs",
+        "fn(?#follow_symlinks:bool, string) -> Result<Metadata, `IOError(string)>"
+    );
     type Args = (bool, ArcStr);
 
     fn prepare_args(&mut self, cached: &CachedVals) -> Option<Self::Args> {

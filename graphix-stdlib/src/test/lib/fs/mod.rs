@@ -11,4 +11,7 @@ mod write;
 mod tempdir;
 
 #[cfg(test)]
+mod metadata;
+
+#[cfg(test)]
 mod integration;
