@@ -5,7 +5,10 @@ use graphix_rt::{GXConfig, GXEvent, GXHandle, GXRt, NoExt};
 use poolshark::global::GPooled;
 use tokio::sync::mpsc;
 
+#[cfg(test)]
 mod lang;
+
+#[cfg(test)]
 mod lib;
 
 pub struct TestCtx {
@@ -66,6 +69,70 @@ macro_rules! run {
                 }
             }
             Ok(())
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! read_test {
+    // Error expectation case - delegates to main pattern
+    (
+        name: $test_name:ident,
+        code: $code:literal,
+        setup: |$temp_dir:ident| $setup:block,
+        expect_error
+    ) => {
+        read_test! {
+            name: $test_name,
+            code: $code,
+            setup: |$temp_dir| $setup,
+            expect: |v: Value| -> Result<()> {
+                if matches!(v, Value::Error(_)) {
+                    Ok(())
+                } else {
+                    panic!("expected Error value, got: {v:?}")
+                }
+            }
+        }
+    };
+    // Main pattern with custom expectation
+    (
+        name: $test_name:ident,
+        code: $code:literal,
+        setup: |$temp_dir:ident| $setup:block,
+        expect: $expect_payload:expr
+    ) => {
+        #[tokio::test(flavor = "current_thread")]
+        async fn $test_name() -> Result<()> {
+            let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
+            let ctx = init(tx).await?;
+            let $temp_dir = tempfile::tempdir()?;
+
+            // Run setup block which should return test_file
+            let test_file = { $setup };
+
+            let code = format!($code, test_file.display());
+            let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
+            let eid = compiled.exprs[0].id;
+
+            let timeout = tokio::time::sleep(Duration::from_secs(2));
+            tokio::pin!(timeout);
+
+            loop {
+                tokio::select! {
+                    _ = &mut timeout => panic!("timeout waiting for result"),
+                    Some(mut batch) = rx.recv() => {
+                        for event in batch.drain(..) {
+                            if let GXEvent::Updated(id, v) = event {
+                                if id == eid {
+                                    $expect_payload(v)?;
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     };
 }
