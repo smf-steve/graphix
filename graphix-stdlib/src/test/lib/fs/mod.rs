@@ -1,3 +1,4 @@
+mod dir_ops;
 mod integration;
 mod metadata;
 mod read;

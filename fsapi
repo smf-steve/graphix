@@ -104,76 +104,49 @@ let read_all_bin = |name: string| -> Result<bytes, `IOError(string)>;
 /// the write fails. The file will be closed immediately after the write is complete.
 let write_all_bin = |#name: string, buf: bytes| -> Result<null, `IOError(string)>;
 
-type Seek = [
-    `Beginning(u64),
-    `End(u64),
-    `Relative(i64)
-];
+type OpenOptions = {
+    path: string,
+    read: bool,
+    write: bool,
+    create: bool,
+    append: bool,
+};
 
-type OpenReadOpts = {
-   close_on_error: bool,
-   flags: [] // windows sharing flags, platform specific flags
-}
-
-type ReadCommand = [
-    `Open(string),
-    `OpenOpts(string, OpenReadOpts)
-    `Seek(Seek),
+type FileCmd = [
+    `Open(OpenOptions),
+    `Close,
+    `Sync,
+    `SetLen(u64),
+    `Metadata,
+    `Seek([Relative(i64), `Start(u64), `End(i64)]),
+    `Lock,
+    `TryLock,
+    `LockShared,
+    `TryLockShared,
+    `Unlock,
     `Read(i64),
-    `Close
+    `Write(bytes)
 ];
 
-/// Execute the read command stream, either as a single command, or as a batch. If batch
-/// execution, then if any command in the batch fails, subsequent commands will not execute.
-/// commands that do not cause a read return either nothing, or an error. The read command
-/// returns a bytes.
-///
-/// e.g. read(#command:[`Open("foo"), `Seek(End(u64:100)), `Read(50), `Read(50), `Close])
-/// will open "foo", read the last 100 bytes in two chunks of 50, and then close the file.
-/// assuming no error, this will cause read to update twice with a 50 byte chunk each time.
-///
-/// e.g. you can also feed commands singly
-/// let command = `Open("foo");
-/// command <- array::iter([`Seek(End(u64:100)), `Read(50), `Read(50), `Close]);
-/// read(#command)
-///
-/// will result in exactly the same behavior if no errors occur. However in the case of an
-/// error each command will execute whether it makes sense or not. However it can be reasonable
-/// to work this way.
-///
-/// e.g.
-/// let command: [ReadCommand, Array<ReadCommand>] = [`Open("foo"), `Seek(`Beginning(u64:100))];
-/// command <- `Read(50);
-/// let b = read(#command)?;
-/// select b {
-///     bytes as b if len(b) > 0 => command <- b ~ `Read(50),
-///     _ => command <- `Close
-/// }
-///
-/// read the file 50 bytes at a time into b and close it once EOF is reached.
-///
-/// This is a low level function which allows you total control over files, with the
-/// cost of having to deal with the complexity of files.
-let read = |#command:[ReadCommand, Array<ReadCommand>]|
-    -> Result<bytes, `ReadError(ReadCommand, string)>;
-
-type OpenWriteOpts = {
-   close_on_error: bool,
-   flags: [] // windows sharing flags, platform specific flags
-}
-
-type WriteCommand = [
-    `Open(string),
-    `OpenOpts(string, OpenWriteOpts),
-    `Seek(Seek),
-    `Write(bytes),
-    `Flush,
-    `Close
+type FileResult = [
+    `Open(Result<null, `IOError(string)>),
+    `Clone(Result<null, `IOError(string)>),
+    `Sync(Result<null, `IOError(string)>),
+    `SetLen(Result<null, `IOError(string)>),
+    `Metadata(Result<Metadata, `IOError(string)>),
+    `Seek(Result<u64, `IOError(string)>),
+    `Lock(Result<null, `IOError(string)>),
+    `TryLock(Result<null, `IOError(string)>),
+    `LockShared(Result<null, `IOError(string)>),
+    `TryLockShared(Result<null, `IOError(string)>),
+    `Read(Result<bytes, `IOError(string)>),
+    `Write(Result<null, `IOError(string)>)
 ];
 
-/// Execute the write command stream, either as a single command, or as a batch. If batch
-/// execution, then if any command in the batch fails, subsequent commands will not execute.
-/// commands other than write return either nothing or an error. The write command returns
-/// either null on completion, or an error.
-let write = |#command:[WriteCommand, Array<WriteCommand>]|
-    -> Result<null, `WriteError(WriteCommand, string)>;
+/// Execute commands on a file, return the corresponding result for the
+/// operation performed.
+///
+/// sending an Open command when a file is already open will close the current
+/// file and open the new one. The operation will return one null on success.
+/// If the close fails the failure will not be reported but will be logged.
+pub let file = |cmd| 'fs_file

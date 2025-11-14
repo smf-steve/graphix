@@ -161,7 +161,7 @@ pub let tempdir = |#in = null, #name = null, trigger| 'fs_tempdir;
 /// join parts to path using the OS specific path separator
 pub let join_path = |path, @args| 'fs_join_path;
 
-/// if path is a file (it can be read on unix, or is a file on windows) then return path
+/// if path is a file then return path
 /// otherwise return an IOError. Check again every time path updates.
 pub let is_file = |path| 'fs_is_file;
 
@@ -227,4 +227,15 @@ pub let readdir = |
     #follow_root_symlink = true,
     #same_filesystem = false,
     path
-| 'fs_readdir
+| 'fs_readdir;
+
+/// create a directory. If all is true (default false) create all intermediate
+/// directories as well.
+pub let create_dir = |#all = false, path| 'fs_create_dir;
+
+/// remove a directory. If all is true (default false) then recursively remove
+/// the contents as well. If all is false fail if the directory is not empty.
+pub let remove_dir = |#all = false, path| 'fs_remove_dir;
+
+/// remove a file
+pub let remove_file = |path| 'fs_remove_file

@@ -97,12 +97,33 @@ macro_rules! run_with_tempdir {
             }
         }
     };
-    // Main pattern with custom expectation
+    // Success case with verification - delegates to main pattern
+    (
+        name: $test_name:ident,
+        code: $code:literal,
+        setup: |$temp_dir:ident| $setup:block,
+        verify: |$verify_dir:ident| $verify:block
+    ) => {
+        run_with_tempdir! {
+            name: $test_name,
+            code: $code,
+            setup: |$temp_dir| $setup,
+            expect: |v: Value| -> Result<()> {
+                if !matches!(v, Value::Null) {
+                    panic!("expected Null (success), got: {v:?}");
+                }
+                Ok(())
+            },
+            verify: |$verify_dir| $verify
+        }
+    };
+    // Main pattern with custom expectation and optional verification
     (
         name: $test_name:ident,
         code: $code:literal,
         setup: |$temp_dir:ident| $setup:block,
         expect: $expect_payload:expr
+        $(, verify: |$verify_dir:ident| $verify:block)?
     ) => {
         #[tokio::test(flavor = "current_thread")]
         async fn $test_name() -> Result<()> {
@@ -128,6 +149,10 @@ macro_rules! run_with_tempdir {
                             if let GXEvent::Updated(id, v) = event {
                                 if id == eid {
                                     $expect_payload(v)?;
+                                    $(
+                                        let $verify_dir = &$temp_dir;
+                                        $verify
+                                    )?
                                     return Ok(());
                                 }
                             }

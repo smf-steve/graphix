@@ -119,3 +119,61 @@ impl EvalCachedAsync for ReadDirEv {
 }
 
 pub(super) type ReadDir = CachedArgsAsync<ReadDirEv>;
+
+#[derive(Debug, Default)]
+pub(super) struct CreateDirOp;
+
+impl EvalCachedAsync for CreateDirOp {
+    const NAME: &str = "fs_create_dir";
+    deftype!("fs", "fn(?#all:bool, string) -> Result<null, `IOError(string)>");
+    type Args = (bool, ArcStr);
+
+    fn prepare_args(&mut self, cached: &CachedVals) -> Option<Self::Args> {
+        Some((cached.get::<bool>(0)?, cached.get::<ArcStr>(1)?))
+    }
+
+    fn eval((all, path): Self::Args) -> impl Future<Output = Value> + Send {
+        async move {
+            let result = if all {
+                tokio::fs::create_dir_all(&*path).await
+            } else {
+                tokio::fs::create_dir(&*path).await
+            };
+            match result {
+                Ok(()) => Value::Null,
+                Err(e) => errf!("IOError", "could not create directory {path}, {e:?}"),
+            }
+        }
+    }
+}
+
+pub(super) type CreateDir = CachedArgsAsync<CreateDirOp>;
+
+#[derive(Debug, Default)]
+pub(super) struct RemoveDirOp;
+
+impl EvalCachedAsync for RemoveDirOp {
+    const NAME: &str = "fs_remove_dir";
+    deftype!("fs", "fn(?#all:bool, string) -> Result<null, `IOError(string)>");
+    type Args = (bool, ArcStr);
+
+    fn prepare_args(&mut self, cached: &CachedVals) -> Option<Self::Args> {
+        Some((cached.get::<bool>(0)?, cached.get::<ArcStr>(1)?))
+    }
+
+    fn eval((all, path): Self::Args) -> impl Future<Output = Value> + Send {
+        async move {
+            let result = if all {
+                tokio::fs::remove_dir_all(&*path).await
+            } else {
+                tokio::fs::remove_dir(&*path).await
+            };
+            match result {
+                Ok(()) => Value::Null,
+                Err(e) => errf!("IOError", "could not remove directory {path}, {e:?}"),
+            }
+        }
+    }
+}
+
+pub(super) type RemoveDir = CachedArgsAsync<RemoveDirOp>;

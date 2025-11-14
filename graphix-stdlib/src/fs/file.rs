@@ -100,3 +100,27 @@ impl EvalCachedAsync for WriteAllBinOp {
 }
 
 pub(super) type WriteAllBin = CachedArgsAsync<WriteAllBinOp>;
+
+#[derive(Debug, Default)]
+pub(super) struct RemoveFileOp;
+
+impl EvalCachedAsync for RemoveFileOp {
+    const NAME: &str = "fs_remove_file";
+    deftype!("fs", "fn(string) -> Result<null, `IOError(string)>");
+    type Args = ArcStr;
+
+    fn prepare_args(&mut self, cached: &CachedVals) -> Option<Self::Args> {
+        cached.get::<ArcStr>(0)
+    }
+
+    fn eval(path: Self::Args) -> impl Future<Output = Value> + Send {
+        async move {
+            match tokio::fs::remove_file(&*path).await {
+                Ok(()) => Value::Null,
+                Err(e) => errf!("IOError", "could not remove file {path}, {e:?}"),
+            }
+        }
+    }
+}
+
+pub(super) type RemoveFile = CachedArgsAsync<RemoveFileOp>;
