@@ -1,4 +1,4 @@
-use crate::{read_test, test::init};
+use crate::{run_with_tempdir, test::init};
 use anyhow::Result;
 use arcstr::ArcStr;
 use graphix_rt::GXEvent;
@@ -8,7 +8,7 @@ use tokio::fs;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 
-read_test! {
+run_with_tempdir! {
     name: test_read_all_basic,
     code: r#"fs::read_all("{}")"#,
     setup: |temp_dir| {
@@ -27,7 +27,7 @@ read_test! {
     }
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_read_all_nonexistent,
     code: r#"fs::read_all("{}")"#,
     setup: |temp_dir| {
@@ -36,7 +36,7 @@ read_test! {
     expect_error
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_read_all_utf8,
     code: r#"fs::read_all("{}")"#,
     setup: |temp_dir| {
@@ -55,7 +55,7 @@ read_test! {
     }
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_read_all_bin_basic,
     code: r#"fs::read_all_bin("{}")"#,
     setup: |temp_dir| {
@@ -74,7 +74,7 @@ read_test! {
     }
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_read_all_bin_nonexistent,
     code: r#"fs::read_all_bin("{}")"#,
     setup: |temp_dir| {

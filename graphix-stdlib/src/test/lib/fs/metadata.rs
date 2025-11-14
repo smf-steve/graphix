@@ -1,4 +1,4 @@
-use crate::test::init;
+use crate::{run_with_tempdir, test::init};
 use anyhow::Result;
 use arcstr::ArcStr;
 use graphix_rt::GXEvent;
@@ -28,76 +28,11 @@ fn metadata_to_map(v: &Value) -> Option<HashMap<String, Value>> {
     }
 }
 
-/// Macro to create fs metadata function tests with common setup/teardown logic
-macro_rules! metadata_test {
-    // Error expectation case - delegates to main pattern
-    (
-        name: $test_name:ident,
-        function: $func:expr,
-        setup: |$temp_dir:ident| $setup:block,
-        expect_error
-    ) => {
-        metadata_test! {
-            name: $test_name,
-            function: $func,
-            setup: |$temp_dir| $setup,
-            expect: |v: Value| -> Result<()> {
-                if matches!(v, Value::Error(_)) {
-                    Ok(())
-                } else {
-                    panic!("expected Error value, got: {v:?}")
-                }
-            }
-        }
-    };
-    // Main pattern with custom expectation
-    (
-        name: $test_name:ident,
-        function: $func:expr,
-        setup: |$temp_dir:ident| $setup:block,
-        expect: $expect_payload:expr
-    ) => {
-        #[tokio::test(flavor = "current_thread")]
-        async fn $test_name() -> Result<()> {
-            let (tx, mut rx) = mpsc::channel::<GPooled<Vec<GXEvent<_>>>>(10);
-            let ctx = init(tx).await?;
-            let $temp_dir = tempfile::tempdir()?;
-
-            // Run setup block which should return test_file
-            let test_file = { $setup };
-
-            // Support format strings with {} placeholder for the path
-            let code = format!($func, test_file.display());
-            let compiled = ctx.rt.compile(ArcStr::from(code)).await?;
-            let eid = compiled.exprs[0].id;
-
-            let timeout = tokio::time::sleep(Duration::from_secs(2));
-            tokio::pin!(timeout);
-
-            loop {
-                tokio::select! {
-                    _ = &mut timeout => panic!("timeout waiting for result"),
-                    Some(mut batch) = rx.recv() => {
-                        for event in batch.drain(..) {
-                            if let GXEvent::Updated(id, v) = event {
-                                if id == eid {
-                                    $expect_payload(v)?;
-                                    return Ok(());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    };
-}
-
 // ===== is_file tests =====
 
-metadata_test! {
+run_with_tempdir! {
     name: test_is_file_basic,
-    function: r#"fs::is_file("{}")"#,
+    code: r#"fs::is_file("{}")"#,
     setup: |temp_dir| {
         let test_file = temp_dir.path().join("test.txt");
         fs::write(&test_file, "content").await?;
@@ -113,18 +48,18 @@ metadata_test! {
     }
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_is_file_on_directory,
-    function: r#"fs::is_file("{}")"#,
+    code: r#"fs::is_file("{}")"#,
     setup: |temp_dir| {
         temp_dir.path().to_path_buf()
     },
     expect_error
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_is_file_nonexistent,
-    function: r#"fs::is_file("{}")"#,
+    code: r#"fs::is_file("{}")"#,
     setup: |temp_dir| {
         temp_dir.path().join("nonexistent.txt")
     },
@@ -132,9 +67,9 @@ metadata_test! {
 }
 
 #[cfg(unix)]
-metadata_test! {
+run_with_tempdir! {
     name: test_is_file_symlink_to_file,
-    function: r#"fs::is_file("{}")"#,
+    code: r#"fs::is_file("{}")"#,
     setup: |temp_dir| {
         let target = temp_dir.path().join("target.txt");
         fs::write(&target, "content").await?;
@@ -154,9 +89,9 @@ metadata_test! {
 
 // ===== is_dir tests =====
 
-metadata_test! {
+run_with_tempdir! {
     name: test_is_dir_basic,
-    function: r#"fs::is_dir("{}")"#,
+    code: r#"fs::is_dir("{}")"#,
     setup: |temp_dir| {
         let test_dir = temp_dir.path().join("test_dir");
         fs::create_dir(&test_dir).await?;
@@ -172,9 +107,9 @@ metadata_test! {
     }
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_is_dir_on_file,
-    function: r#"fs::is_dir("{}")"#,
+    code: r#"fs::is_dir("{}")"#,
     setup: |temp_dir| {
         let test_file = temp_dir.path().join("test.txt");
         fs::write(&test_file, "content").await?;
@@ -183,18 +118,18 @@ metadata_test! {
     expect_error
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_is_dir_nonexistent,
-    function: r#"fs::is_dir("{}")"#,
+    code: r#"fs::is_dir("{}")"#,
     setup: |temp_dir| {
         temp_dir.path().join("nonexistent_dir")
     },
     expect_error
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_is_dir_temp_dir,
-    function: r#"fs::is_dir("{}")"#,
+    code: r#"fs::is_dir("{}")"#,
     setup: |temp_dir| {
         temp_dir.path().to_path_buf()
     },
@@ -206,9 +141,9 @@ metadata_test! {
 }
 
 #[cfg(unix)]
-metadata_test! {
+run_with_tempdir! {
     name: test_is_dir_symlink_to_dir,
-    function: r#"fs::is_dir("{}")"#,
+    code: r#"fs::is_dir("{}")"#,
     setup: |temp_dir| {
         let target = temp_dir.path().join("target_dir");
         fs::create_dir(&target).await?;
@@ -228,9 +163,9 @@ metadata_test! {
 
 // ===== metadata tests =====
 
-metadata_test! {
+run_with_tempdir! {
     name: test_metadata_file_basic,
-    function: r#"fs::metadata("{}")"#,
+    code: r#"fs::metadata("{}")"#,
     setup: |temp_dir| {
         let test_file = temp_dir.path().join("test.txt");
         fs::write(&test_file, "hello world").await?;
@@ -251,9 +186,9 @@ metadata_test! {
     }
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_metadata_dir_basic,
-    function: r#"fs::metadata("{}")"#,
+    code: r#"fs::metadata("{}")"#,
     setup: |temp_dir| {
         let test_dir = temp_dir.path().join("test_dir");
         fs::create_dir(&test_dir).await?;
@@ -267,9 +202,9 @@ metadata_test! {
     }
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_metadata_nonexistent,
-    function: r#"fs::metadata("{}")"#,
+    code: r#"fs::metadata("{}")"#,
     setup: |temp_dir| {
         temp_dir.path().join("nonexistent.txt")
     },
@@ -277,9 +212,9 @@ metadata_test! {
 }
 
 #[cfg(unix)]
-metadata_test! {
+run_with_tempdir! {
     name: test_metadata_symlink_follow,
-    function: r#"fs::metadata("{}")"#,
+    code: r#"fs::metadata("{}")"#,
     setup: |temp_dir| {
         let target = temp_dir.path().join("target.txt");
         fs::write(&target, "content").await?;
@@ -297,9 +232,9 @@ metadata_test! {
 }
 
 #[cfg(unix)]
-metadata_test! {
+run_with_tempdir! {
     name: test_metadata_symlink_nofollow,
-    function: r#"fs::metadata(#follow_symlinks: false, "{}")"#,
+    code: r#"fs::metadata(#follow_symlinks: false, "{}")"#,
     setup: |temp_dir| {
         let target = temp_dir.path().join("target.txt");
         fs::write(&target, "content").await?;
@@ -320,9 +255,9 @@ metadata_test! {
 }
 
 #[cfg(unix)]
-metadata_test! {
+run_with_tempdir! {
     name: test_metadata_permissions_unix,
-    function: r#"fs::metadata("{}")"#,
+    code: r#"fs::metadata("{}")"#,
     setup: |temp_dir| {
         let test_file = temp_dir.path().join("test.txt");
         fs::write(&test_file, "content").await?;
@@ -346,9 +281,9 @@ metadata_test! {
     }
 }
 
-metadata_test! {
+run_with_tempdir! {
     name: test_metadata_timestamps,
-    function: r#"fs::metadata("{}")"#,
+    code: r#"fs::metadata("{}")"#,
     setup: |temp_dir| {
         let test_file = temp_dir.path().join("test.txt");
         fs::write(&test_file, "content").await?;

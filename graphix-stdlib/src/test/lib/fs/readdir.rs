@@ -1,4 +1,4 @@
-use crate::{read_test, test::init};
+use crate::{run_with_tempdir, test::init};
 use anyhow::{bail, Result};
 use arcstr::ArcStr;
 use graphix_rt::GXEvent;
@@ -39,7 +39,7 @@ fn get_field<'a>(entry: &'a Value, field: &str) -> Result<&'a Value> {
 
 // ===== Basic readdir tests =====
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_basic,
     code: r#"fs::readdir("{}")"#,
     setup: |temp_dir| {
@@ -72,7 +72,7 @@ read_test! {
     }
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_empty_dir,
     code: r#"fs::readdir("{}")"#,
     setup: |temp_dir| {
@@ -85,7 +85,7 @@ read_test! {
     }
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_nonexistent,
     code: r#"fs::readdir("{}")"#,
     setup: |temp_dir| {
@@ -96,7 +96,7 @@ read_test! {
 
 // ===== Depth tests =====
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_max_depth_2,
     code: r#"fs::readdir(#max_depth: 2, "{}")"#,
     setup: |temp_dir| {
@@ -135,7 +135,7 @@ read_test! {
     }
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_min_depth_2,
     code: r#"fs::readdir(#min_depth: 2, #max_depth: 3, "{}")"#,
     setup: |temp_dir| {
@@ -175,7 +175,7 @@ read_test! {
 
 // ===== Ordering tests =====
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_contents_first,
     code: r#"fs::readdir(#max_depth: 2, #contents_first: true, "{}")"#,
     setup: |temp_dir| {
@@ -215,7 +215,7 @@ read_test! {
 // ===== Symlink tests (Unix only) =====
 
 #[cfg(unix)]
-read_test! {
+run_with_tempdir! {
     name: test_readdir_follow_symlinks,
     code: r#"fs::readdir(#max_depth: 2, #follow_symlinks: true, "{}")"#,
     setup: |temp_dir| {
@@ -252,7 +252,7 @@ read_test! {
 }
 
 #[cfg(unix)]
-read_test! {
+run_with_tempdir! {
     name: test_readdir_no_follow_symlinks,
     code: r#"fs::readdir(#max_depth: 2, #follow_symlinks: false, "{}")"#,
     setup: |temp_dir| {
@@ -280,7 +280,7 @@ read_test! {
 }
 
 #[cfg(unix)]
-read_test! {
+run_with_tempdir! {
     name: test_readdir_follow_root_symlink,
     code: r#"fs::readdir("{}")"#,
     setup: |temp_dir| {
@@ -308,7 +308,7 @@ read_test! {
 }
 
 #[cfg(unix)]
-read_test! {
+run_with_tempdir! {
     name: test_readdir_no_follow_root_symlink,
     code: r#"fs::readdir(#follow_root_symlink: false, "{}")"#,
     setup: |temp_dir| {
@@ -329,7 +329,7 @@ read_test! {
 
 // ===== FileType tests =====
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_file_types,
     code: r#"fs::readdir("{}")"#,
     setup: |temp_dir| {
@@ -382,7 +382,7 @@ read_test! {
 
 // ===== Path tests =====
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_full_paths,
     code: r#"fs::readdir("{}")"#,
     setup: |temp_dir| {
@@ -407,7 +407,7 @@ read_test! {
 
 // ===== Error handling tests =====
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_invalid_depth_params,
     code: r#"fs::readdir(#max_depth: 1, #min_depth: 2, "{}")"#,
     setup: |temp_dir| {
@@ -416,7 +416,7 @@ read_test! {
     expect_error
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_negative_max_depth,
     code: r#"fs::readdir(#max_depth: -1, "{}")"#,
     setup: |temp_dir| {
@@ -425,7 +425,7 @@ read_test! {
     expect_error
 }
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_negative_min_depth,
     code: r#"fs::readdir(#min_depth: -1, "{}")"#,
     setup: |temp_dir| {
@@ -436,7 +436,7 @@ read_test! {
 
 // ===== Complex structure test =====
 
-read_test! {
+run_with_tempdir! {
     name: test_readdir_complex_structure,
     code: r#"fs::readdir(#max_depth: 3, "{}")"#,
     setup: |temp_dir| {

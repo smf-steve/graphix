@@ -73,8 +73,10 @@ macro_rules! run {
     };
 }
 
+/// run a test with a temp dir and setup code. The final output of the setup
+/// block is a path that will be passed to the code using format!
 #[macro_export]
-macro_rules! read_test {
+macro_rules! run_with_tempdir {
     // Error expectation case - delegates to main pattern
     (
         name: $test_name:ident,
@@ -82,7 +84,7 @@ macro_rules! read_test {
         setup: |$temp_dir:ident| $setup:block,
         expect_error
     ) => {
-        read_test! {
+        run_with_tempdir! {
             name: $test_name,
             code: $code,
             setup: |$temp_dir| $setup,
