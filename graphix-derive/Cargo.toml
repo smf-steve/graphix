@@ -10,6 +10,7 @@ repository = "https://github.com/graphix-lang/graphix"
 documentation = "https://docs.rs/graphix-derive"
 readme = "../README.md"
 categories = ["network-programming", "compilers", "gui"]
+exclude = ["../book"]
 
 [lib]
 proc-macro = true

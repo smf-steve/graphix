@@ -10,6 +10,7 @@ repository = "https://github.com/graphix-lang/graphix"
 documentation = "https://docs.rs/graphix-shell"
 readme = "../README.md"
 categories = ["network-programming", "compilers", "gui"]
+exclude = ["book", "../book"]
 
 [profile.release]
 codegen-units = 1
