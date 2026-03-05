@@ -1,3 +1,9 @@
+# 0.5.0
+
+- Fix type checker bug with multiple parameterized type refs in a set
+- Add universally quantified type variables to type aliases
+- Add graphix-package-gui using iced
+- Gate gui behind a feature so it can be disabled in tui only projects
 
 # 0.4.0
 
