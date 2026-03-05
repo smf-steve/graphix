@@ -1,0 +1,143 @@
+/// Widget types (content within a window)
+type Widget = [
+  `Button(button::Button),
+  `Canvas(canvas::Canvas),
+  `Chart(chart::Chart),
+  `Checkbox(checkbox::Checkbox),
+  `Column(column::Column),
+  `ComboBox(combo_box::ComboBox),
+  `ContextMenu(menu::ContextMenu),
+  `Container(container::Container),
+  `Grid(grid::Grid),
+  `HorizontalRule(rule::HorizontalRule),
+  `Image(image::Image),
+  `KeyboardArea(keyboard_area::KeyboardArea),
+  `Markdown(markdown::Markdown),
+  `MenuBar(menu::MenuBar),
+  `MouseArea(mouse_area::MouseArea),
+  `PickList(pick_list::PickList),
+  `ProgressBar(progress_bar::ProgressBar),
+  `QrCode(qr_code::QrCode),
+  `Radio(radio::Radio),
+  `Row(row::Row),
+  `Scrollable(scrollable::Scrollable),
+  `Slider(slider::Slider),
+  `Space(space::Space),
+  `Stack(stack::Stack),
+  `Table(table::Table),
+  `Text(text::Text),
+  `TextEditor(text_editor::TextEditor),
+  `TextInput(text_input::TextInput),
+  `Toggler(toggler::Toggler),
+  `Tooltip(tooltip::Tooltip),
+  `VerticalRule(rule::VerticalRule),
+  `VerticalSlider(vertical_slider::VerticalSlider)
+];
+
+type Length = [`Fill, `FillPortion(i64), `Shrink, `Fixed(f64)];
+type Padding = [`All(f64), `Axis({x: f64, y: f64}), `Each({top: f64, right: f64, bottom: f64, left: f64})];
+type Size = { width: f64, height: f64 };
+type HAlign = [`Left, `Center, `Right];
+type VAlign = [`Top, `Center, `Bottom];
+type Color;
+
+/// Create a color with components in [0, 1]
+val color: fn(?#r: f64, ?#g: f64, ?#b: f64, ?#a: f64) -> [Color, Error<`InvalidColor(string)>];
+type FontFamily = [`SansSerif, `Serif, `Monospace, `Name(string)];
+type FontWeight = [
+  `Thin, `ExtraLight, `Light, `Normal, `Medium,
+  `SemiBold, `Bold, `ExtraBold, `Black
+];
+type FontStyle = [`Normal, `Italic, `Oblique];
+type Font = { family: FontFamily, weight: FontWeight, style: FontStyle };
+
+type ScrollDirection = [`Vertical, `Horizontal, `Both];
+type TooltipPosition = [`Top, `Bottom, `Left, `Right, `FollowCursor];
+type ContentFit = [`Fill, `Contain, `Cover, `None, `ScaleDown];
+
+type Theme = [
+  `Light,
+  `Dark,
+  `Dracula,
+  `Nord,
+  `SolarizedLight,
+  `SolarizedDark,
+  `GruvboxLight,
+  `GruvboxDark,
+  `CatppuccinLatte,
+  `CatppuccinFrappe,
+  `CatppuccinMacchiato,
+  `CatppuccinMocha,
+  `TokyoNight,
+  `TokyoNightStorm,
+  `TokyoNightLight,
+  `KanagawaWave,
+  `KanagawaDragon,
+  `KanagawaLotus,
+  `Moonfly,
+  `Nightfly,
+  `Oxocarbon,
+  `Ferra,
+  `Custom(StyleSheet),
+  `CustomPalette(Palette)
+];
+
+type ImageSource = [string, `Bytes(bytes), `Svg(string), `Rgba({width: u32, height: u32, pixels: bytes})];
+
+/// A window description
+type Window = {
+  title: &string,
+  size: &Size,
+  theme: &Theme,
+  icon: &ImageSource,
+  content: &Widget
+};
+
+/// The custom display root type. An expression of this type
+/// triggers the GUI display mode in the shell.
+type Gui = Array<&Window>;
+
+val window: fn(
+  ?#title: &string,
+  ?#size: &Size,
+  ?#theme: &Theme,
+  ?#icon: &ImageSource,
+  &Widget
+) -> Window;
+
+mod style;
+mod text;
+mod column;
+mod row;
+mod container;
+mod button;
+mod space;
+mod text_input;
+mod checkbox;
+mod toggler;
+mod slider;
+mod progress_bar;
+mod scrollable;
+mod rule;
+mod tooltip;
+mod pick_list;
+mod stack;
+mod radio;
+mod vertical_slider;
+mod combo_box;
+mod text_editor;
+mod keyboard_area;
+mod mouse_area;
+mod image;
+mod canvas;
+mod chart;
+mod clipboard;
+mod grid;
+mod markdown;
+mod menu;
+mod qr_code;
+mod table
+
+// XCR estokes: The one thing that seems missing is context menus.
+// It seems like it would be pretty easy to use Overlay to Create
+// a widget that wraps any other widget and adds a context menu

@@ -7,7 +7,7 @@ use graphix_compiler::{
     expr::{ModuleResolver, Source},
     CFlag,
 };
-use graphix_package::{GraphixPM, PackageId};
+use graphix_package::{GraphixPM, MainThreadHandle, PackageId};
 use graphix_rt::NoExt;
 use graphix_shell::{Mode, ShellBuilder};
 use log::info;
@@ -284,77 +284,87 @@ async fn handle_package(action: PackageAction) -> Result<()> {
     }
 }
 
-#[tokio::main]
-async fn tokio_main(p: Params, cfg: Result<Config>) -> Result<()> {
-    if let Some(dir) = &p.log_dir {
-        let _ = Logger::try_with_env()
-            .context("initializing log")?
-            .log_to_file(
-                FileSpec::default()
-                    .directory(dir)
-                    .basename("graphix")
-                    .use_timestamp(false),
-            )
-            .start()
-            .context("starting log")?;
-    }
-    info!("graphix shell starting");
-    let mut _internal = None;
-    let (publisher, subscriber) = if p.no_netidx {
-        let i = InternalOnly::new().await?;
-        let (p, s) = (i.publisher().clone(), i.subscriber().clone());
-        _internal = Some(i);
-        (p, s)
-    } else {
-        p.get_pub_sub(cfg).await?
-    };
-    let mut shell = ShellBuilder::<NoExt>::default();
-    shell = shell.no_init(p.no_init);
-    if let Some(t) = p.publish_timeout {
-        shell = shell.publish_timeout(Duration::from_secs(t));
-    }
-    if let Some(t) = p.resolve_timeout {
-        shell = shell.resolve_timeout(Duration::from_secs(t));
-    }
-    if p.file.is_none() && p.check {
-        bail!("check mode requires a file to check")
-    }
-    if let Some(f) = &p.file {
-        let source = match f.strip_prefix("netidx:") {
-            Some(path) => {
-                shell = shell.module_resolvers(vec![ModuleResolver::Netidx {
-                    subscriber: subscriber.clone(),
-                    base: netidx::path::Path::from(ArcStr::from(path)),
-                    timeout: None,
-                }]);
-                Source::Netidx(Path::from(ArcStr::from(path)))
-            }
-            None => {
-                let path = PathBuf::from(&**f).canonicalize()?;
-                let path = if path.is_dir() { path.join("main.gx") } else { path };
-                match path.parent() {
-                    Some(p) if p.as_os_str().is_empty() => (),
-                    None => (),
-                    Some(p) => {
-                        let p = PathBuf::from(p);
-                        shell = shell.module_resolvers(vec![ModuleResolver::Files(p)]);
-                    }
-                };
-                Source::File(path)
-            }
+fn tokio_main(
+    p: Params,
+    cfg: Result<Config>,
+    run_on_main: MainThreadHandle,
+) -> Result<()> {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("building tokio runtime")?;
+    rt.block_on(async move {
+        if let Some(dir) = &p.log_dir {
+            let _ = Logger::try_with_env()
+                .context("initializing log")?
+                .log_to_file(
+                    FileSpec::default()
+                        .directory(dir)
+                        .basename("graphix")
+                        .use_timestamp(false),
+                )
+                .start()
+                .context("starting log")?;
+        }
+        info!("graphix shell starting");
+        let mut _internal = None;
+        let (publisher, subscriber) = if p.no_netidx {
+            let i = InternalOnly::new().await?;
+            let (p, s) = (i.publisher().clone(), i.subscriber().clone());
+            _internal = Some(i);
+            (p, s)
+        } else {
+            p.get_pub_sub(cfg).await?
         };
-        let mode = if p.check { Mode::Check(source) } else { Mode::Script(source) };
-        shell = shell.mode(mode);
-    }
-    let (enable, disable) = RawFlag::as_flags(&p.warn);
-    shell
-        .publisher(publisher)
-        .subscriber(subscriber)
-        .enable_flags(enable)
-        .disable_flags(disable)
-        .build()?
-        .run()
-        .await
+        let mut shell = ShellBuilder::<NoExt>::default();
+        shell = shell.no_init(p.no_init);
+        if let Some(t) = p.publish_timeout {
+            shell = shell.publish_timeout(Duration::from_secs(t));
+        }
+        if let Some(t) = p.resolve_timeout {
+            shell = shell.resolve_timeout(Duration::from_secs(t));
+        }
+        if p.file.is_none() && p.check {
+            bail!("check mode requires a file to check")
+        }
+        if let Some(f) = &p.file {
+            let source = match f.strip_prefix("netidx:") {
+                Some(path) => {
+                    shell = shell.module_resolvers(vec![ModuleResolver::Netidx {
+                        subscriber: subscriber.clone(),
+                        base: netidx::path::Path::from(ArcStr::from(path)),
+                        timeout: None,
+                    }]);
+                    Source::Netidx(Path::from(ArcStr::from(path)))
+                }
+                None => {
+                    let path = PathBuf::from(&**f).canonicalize()?;
+                    let path = if path.is_dir() { path.join("main.gx") } else { path };
+                    match path.parent() {
+                        Some(p) if p.as_os_str().is_empty() => (),
+                        None => (),
+                        Some(p) => {
+                            let p = PathBuf::from(p);
+                            shell =
+                                shell.module_resolvers(vec![ModuleResolver::Files(p)]);
+                        }
+                    };
+                    Source::File(path)
+                }
+            };
+            let mode = if p.check { Mode::Check(source) } else { Mode::Script(source) };
+            shell = shell.mode(mode);
+        }
+        let (enable, disable) = RawFlag::as_flags(&p.warn);
+        shell
+            .publisher(publisher)
+            .subscriber(subscriber)
+            .enable_flags(enable)
+            .disable_flags(disable)
+            .build()?
+            .run(run_on_main)
+            .await
+    })
 }
 
 fn main() -> Result<()> {
@@ -367,5 +377,13 @@ fn main() -> Result<()> {
         None => Config::load_default_or_local_only(),
         Some(p) => Config::load(p),
     };
-    tokio_main(p, cfg)
+    let (handle, main_rx) = MainThreadHandle::new();
+    let tokio_handle = std::thread::Builder::new()
+        .name("graphix-tokio".into())
+        .spawn(move || tokio_main(p, cfg, handle))
+        .expect("failed to spawn tokio thread");
+    while let Ok(f) = main_rx.recv() {
+        f();
+    }
+    tokio_handle.join().map_err(|_| anyhow::anyhow!("tokio thread panicked"))?
 }

@@ -18,9 +18,10 @@ use netidx_value::Value;
 use serde_json::json;
 use std::{
     any::Any,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     process::Stdio,
+    sync::mpsc as smpsc,
     time::Duration,
 };
 use tokio::{
@@ -35,6 +36,21 @@ use walkdir::WalkDir;
 #[cfg(test)]
 mod test;
 
+/// Handle to run a closure on the main thread
+#[derive(Clone)]
+pub struct MainThreadHandle(smpsc::Sender<Box<dyn FnOnce() + Send + 'static>>);
+
+impl MainThreadHandle {
+    pub fn new() -> (Self, smpsc::Receiver<Box<dyn FnOnce() + Send + 'static>>) {
+        let (tx, rx) = smpsc::channel();
+        (Self(tx), rx)
+    }
+
+    pub fn run(&self, f: Box<dyn FnOnce() + Send + 'static>) -> Result<()> {
+        self.0.send(f).map_err(|_| anyhow!("main thread receiver dropped"))
+    }
+}
+
 /// Trait implemented by custom Graphix displays, e.g. TUIs, GUIs, etc.
 #[async_trait]
 pub trait CustomDisplay<X: GXExt>: Any {
@@ -43,6 +59,9 @@ pub trait CustomDisplay<X: GXExt>: Any {
     /// This is called when the shell user has indicated that they
     /// want to return to the normal display mode or when the stop
     /// channel has been triggered by this custom display.
+    ///
+    /// If the custom display has started a closure on the main thread, it must
+    /// now stop it.
     async fn clear(&mut self);
 
     /// Process an update from the Graphix rt in the context of the
@@ -55,6 +74,7 @@ pub trait CustomDisplay<X: GXExt>: Any {
 }
 
 /// Trait implemented by Graphix packages
+#[allow(async_fn_in_trait)]
 pub trait Package<X: GXExt> {
     /// register builtins and return a resolver containing Graphix
     /// code contained in the package.
@@ -79,11 +99,17 @@ pub trait Package<X: GXExt> {
     /// user closed the last gui window), then the stop channel should
     /// be triggered, and the shell will call `CustomDisplay::clear`
     /// before dropping the `CustomDisplay`.
-    fn init_custom(
+    ///
+    /// `main_thread_rx` is `Some` if this package declared
+    /// `MAIN_THREAD` and the shell has a main-thread channel
+    /// available. The custom display should hold onto it and return
+    /// it from `clear()`.
+    async fn init_custom(
         gx: &GXHandle<X>,
         env: &Env,
         stop: oneshot::Sender<()>,
         e: CompExp<X>,
+        run_on_main: MainThreadHandle,
     ) -> Result<Box<dyn CustomDisplay<X>>>;
 
     /// Return the main program source if this package has one and the
@@ -171,6 +197,7 @@ const DEFAULT_PACKAGES: &[(&str, &str)] = &[
     ("re", SKEL.version),
     ("rand", SKEL.version),
     ("tui", SKEL.version),
+    ("gui", SKEL.version),
 ];
 
 fn is_stdlib_package(name: &str) -> bool {
@@ -522,6 +549,41 @@ impl GraphixPM {
                     );
                     deps[&crate_name] = toml_edit::Item::Value(tbl.into());
                 }
+            }
+        }
+        // Snapshot dep names so we can release the mutable borrow on doc
+        let dep_names: BTreeSet<String> =
+            deps.iter().map(|(k, _)| k.to_string()).collect();
+        // Clean up [features] that reference removed graphix-package-* deps
+        if let Some(features) = doc.get_mut("features").and_then(|f| f.as_table_mut()) {
+            let mut empty_features = Vec::new();
+            for (feat, val) in features.iter_mut() {
+                if let Some(arr) = val.as_array_mut() {
+                    arr.retain(|v| match v.as_str() {
+                        Some(s) if s.starts_with("dep:graphix-package-") => {
+                            dep_names.contains(&s["dep:".len()..])
+                        }
+                        Some(s) if s.starts_with("graphix-package-") => {
+                            dep_names.contains(s)
+                        }
+                        _ => true,
+                    });
+                    if arr.is_empty() {
+                        empty_features.push(feat.to_string());
+                    }
+                }
+            }
+            for feat in &empty_features {
+                features.remove(feat);
+            }
+            // Clean up default to remove references to deleted features
+            if let Some(default) =
+                features.get_mut("default").and_then(|v| v.as_array_mut())
+            {
+                default.retain(|v| match v.as_str() {
+                    Some(s) => !empty_features.contains(&s.to_string()),
+                    _ => true,
+                });
             }
         }
         Ok(doc.to_string())

@@ -1,0 +1,19 @@
+type Checkbox = {
+  disabled: &bool,
+  is_checked: &bool,
+  label: &string,
+  on_toggle: &fn(bool) -> Any,
+  width: &Length,
+  size: &[f64, null],
+  spacing: &[f64, null]
+};
+
+val checkbox: fn(
+  ?#label: &string,
+  ?#on_toggle: fn(bool) -> Any,
+  ?#width: &Length,
+  ?#size: &[f64, null],
+  ?#spacing: &[f64, null],
+  ?#disabled: &bool,
+  &bool
+) -> Widget

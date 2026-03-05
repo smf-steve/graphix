@@ -1,0 +1,137 @@
+let chart = |
+  #title: &[string, null] = &null,
+  #title_color: &[Color, null] = &null,
+  #x_label: &[string, null] = &null,
+  #y_label: &[string, null] = &null,
+  #x_range: &[{min: f64, max: f64}, {min: datetime, max: datetime}, null] = &null,
+  #y_range: &[{min: f64, max: f64}, null] = &null,
+  #z_label: &[string, null] = &null,
+  #z_range: &[{min: f64, max: f64}, null] = &null,
+  #projection: &[Projection3D, null] = &null,
+  #width: &Length = &`Fill,
+  #height: &Length = &`Fill,
+  #background: &[Color, null] = &null,
+  #margin: &[f64, null] = &null,
+  #title_size: &[f64, null] = &null,
+  #legend_position: &[LegendPosition, null] = &null,
+  #legend_style: &[LegendStyle, null] = &null,
+  #mesh: &[MeshStyle, null] = &null,
+  datasets: &Array<Dataset>
+| -> Widget `Chart({
+  datasets, title, title_color, x_label, y_label, x_range, y_range,
+  z_label, z_range, projection,
+  width, height, background, margin, title_size, legend_position, legend_style, mesh
+});
+
+let line = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #stroke_width: [f64, null] = null,
+  #point_size: [f64, null] = null,
+  data: &[Array<(f64, f64)>, Array<(datetime, f64)>]
+| -> Dataset `Line({data, style: {color, label, stroke_width, point_size}});
+
+let scatter = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #stroke_width: [f64, null] = null,
+  #point_size: [f64, null] = null,
+  data: &[Array<(f64, f64)>, Array<(datetime, f64)>]
+| -> Dataset `Scatter({data, style: {color, label, stroke_width, point_size}});
+
+let bar = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #margin: [f64, null] = null,
+  data: &Array<(string, f64)>
+| -> Dataset `Bar({data, style: {color, label, margin}});
+
+let area = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #stroke_width: [f64, null] = null,
+  #point_size: [f64, null] = null,
+  data: &[Array<(f64, f64)>, Array<(datetime, f64)>]
+| -> Dataset `Area({data, style: {color, label, stroke_width, point_size}});
+
+let dashed_line = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #stroke_width: [f64, null] = null,
+  #point_size: [f64, null] = null,
+  #dash: f64 = 5.0,
+  #gap: f64 = 5.0,
+  data: &[Array<(f64, f64)>, Array<(datetime, f64)>]
+| -> Dataset `DashedLine({data, dash, gap, style: {color, label, stroke_width, point_size}});
+
+let candlestick = |
+  #gain_color: [Color, null] = null,
+  #loss_color: [Color, null] = null,
+  #bar_width: [f64, null] = null,
+  #label: [string, null] = null,
+  data: &[Array<OhlcPoint<f64>>, Array<OhlcPoint<datetime>>]
+| -> Dataset `Candlestick({data, style: {gain_color, loss_color, bar_width, label}});
+
+let error_bar = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #stroke_width: [f64, null] = null,
+  #point_size: [f64, null] = null,
+  data: &[Array<ErrorBarPoint<f64>>, Array<ErrorBarPoint<datetime>>]
+| -> Dataset `ErrorBar({data, style: {color, label, stroke_width, point_size}});
+
+let pie = |
+  #colors: [Array<Color>, null] = null,
+  #donut: [f64, null] = null,
+  #start_angle: [f64, null] = null,
+  #show_percentages: [bool, null] = null,
+  #label_offset: [f64, null] = null,
+  data: &Array<(string, f64)>
+| -> Dataset `Pie({data, style: {colors, donut, label_offset, show_percentages, start_angle}});
+
+let scatter3d = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #stroke_width: [f64, null] = null,
+  #point_size: [f64, null] = null,
+  data: &Array<(f64, f64, f64)>
+| -> Dataset `Scatter3D({data, style: {color, label, stroke_width, point_size}});
+
+let line3d = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #stroke_width: [f64, null] = null,
+  #point_size: [f64, null] = null,
+  data: &Array<(f64, f64, f64)>
+| -> Dataset `Line3D({data, style: {color, label, stroke_width, point_size}});
+
+let surface = |
+  #color: [Color, null] = null,
+  #label: [string, null] = null,
+  #color_by_z: [bool, null] = null,
+  data: &Array<Array<(f64, f64, f64)>>
+| -> Dataset `Surface({data, style: {color, color_by_z, label}});
+
+let mesh_style = |
+  #show_x_grid: [bool, null] = null,
+  #show_y_grid: [bool, null] = null,
+  #grid_color: [Color, null] = null,
+  #axis_color: [Color, null] = null,
+  #label_color: [Color, null] = null,
+  #label_size: [f64, null] = null,
+  #x_label_area_size: [f64, null] = null,
+  #x_labels: [i64, null] = null,
+  #y_label_area_size: [f64, null] = null,
+  #y_labels: [i64, null] = null
+| -> MeshStyle {
+  show_x_grid, show_y_grid, grid_color, axis_color,
+  label_color, label_size, x_label_area_size, x_labels,
+  y_label_area_size, y_labels
+};
+
+let legend_style = |
+  #background: [Color, null] = null,
+  #border: [Color, null] = null,
+  #label_color: [Color, null] = null,
+  #label_size: [f64, null] = null
+| -> LegendStyle {background, border, label_color, label_size}

@@ -1,0 +1,17 @@
+type Row = {
+  children: &Array<Widget>,
+  spacing: &f64,
+  padding: &Padding,
+  width: &Length,
+  height: &Length,
+  valign: &VAlign
+};
+
+val row: fn(
+  ?#spacing: &f64,
+  ?#padding: &Padding,
+  ?#width: &Length,
+  ?#height: &Length,
+  ?#valign: &VAlign,
+  &Array<Widget>
+) -> Widget

@@ -1,0 +1,17 @@
+type ComboBox = {
+  disabled: &bool,
+  on_select: &fn(string) -> Any,
+  options: &Array<string>,
+  selected: &[string, null],
+  placeholder: &string,
+  width: &Length
+};
+
+val combo_box: fn(
+  ?#selected: &[string, null],
+  ?#on_select: fn(string) -> Any,
+  ?#placeholder: &string,
+  ?#width: &Length,
+  ?#disabled: &bool,
+  &Array<string>
+) -> Widget

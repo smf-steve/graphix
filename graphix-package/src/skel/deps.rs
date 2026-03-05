@@ -4,7 +4,7 @@ use anyhow::Result;
 use arcstr::ArcStr;
 use fxhash::FxHashMap;
 use graphix_compiler::{env::Env, ExecCtx};
-use graphix_package::{CustomDisplay, IndexSet, Package};
+use graphix_package::{CustomDisplay, IndexSet, MainThreadHandle, Package};
 use graphix_rt::{CompExp, GXExt, GXHandle, GXRt};
 use netidx_core::path::Path;
 use tokio::sync::oneshot;
@@ -52,15 +52,16 @@ pub(crate) enum CustomResult<X: GXExt> {
     NotCustom(CompExp<X>),
 }
 
-pub(crate) fn maybe_init_custom<X: GXExt>(
+pub(crate) async fn maybe_init_custom<X: GXExt>(
     gx: &GXHandle<X>,
     env: &Env,
     e: CompExp<X>,
+    run_on_main: &MainThreadHandle,
 ) -> Result<CustomResult<X>> {
     {{#each deps}}
     if {{this.crate_name}}::P::is_custom(gx, env, &e) {
         let (tx, rx) = oneshot::channel();
-        return {{this.crate_name}}::P::init_custom(gx, env, tx, e)
+        return {{this.crate_name}}::P::init_custom(gx, env, tx, e, run_on_main.clone()).await
             .map(|custom| CustomResult::Custom(Cdc { stop: rx, custom }));
     }
     {{/each}}

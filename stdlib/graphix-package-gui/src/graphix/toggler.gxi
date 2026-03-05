@@ -1,0 +1,19 @@
+type Toggler = {
+  disabled: &bool,
+  is_toggled: &bool,
+  label: &string,
+  on_toggle: &fn(bool) -> Any,
+  width: &Length,
+  size: &[f64, null],
+  spacing: &[f64, null]
+};
+
+val toggler: fn(
+  ?#label: &string,
+  ?#on_toggle: fn(bool) -> Any,
+  ?#width: &Length,
+  ?#size: &[f64, null],
+  ?#spacing: &[f64, null],
+  ?#disabled: &bool,
+  &bool
+) -> Widget

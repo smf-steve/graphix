@@ -1,0 +1,21 @@
+type Radio = {
+  disabled: &bool,
+  value: &'a,
+  label: &string,
+  on_select: &fn('a) -> Any,
+  selected: &'a,
+  width: &Length,
+  size: &[f64, null],
+  spacing: &[f64, null]
+};
+
+val radio: fn(
+  #label: &string,
+  ?#selected: &'a,
+  ?#on_select: fn('a) -> Any,
+  ?#width: &Length,
+  ?#size: &[f64, null],
+  ?#spacing: &[f64, null],
+  ?#disabled: &bool,
+  &'a
+) -> Widget

@@ -1,0 +1,25 @@
+type TextInput = {
+  disabled: &bool,
+  value: &string,
+  placeholder: &string,
+  on_input: &fn(string) -> Any,
+  on_submit: &fn(null) -> Any,
+  is_secure: &bool,
+  width: &Length,
+  padding: &Padding,
+  size: &[f64, null],
+  font: &[Font, null]
+};
+
+val text_input: fn(
+  ?#placeholder: &string,
+  ?#on_input: fn(string) -> Any,
+  ?#on_submit: fn(null) -> Any,
+  ?#is_secure: &bool,
+  ?#width: &Length,
+  ?#padding: &Padding,
+  ?#size: &[f64, null],
+  ?#font: &[Font, null],
+  ?#disabled: &bool,
+  &string
+) -> Widget

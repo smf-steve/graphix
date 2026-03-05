@@ -47,9 +47,9 @@ defpackage! {
     is_custom => |gx, env, e| {
         todo!()
     },
-    init_custom => |gx, env, stop, e| {
+    init_custom => |gx, env, stop, e, run_on_main| {
         todo!()
-    }
+    },
 }
 */
 
@@ -310,7 +310,9 @@ fn check_args(name: &str, mut req: Vec<&'static str>, args: &Punctuated<Pat, Com
         }
         match pat {
             Pat::Ident(i) => {
-                if &i.ident.to_string() == &req[0] {
+                let s = i.ident.to_string();
+                let s = s.strip_prefix('_').unwrap_or(&s);
+                if s == req[0] {
                     req.remove(0);
                 } else {
                     panic!("{name} expected arguments {req:?}")
@@ -345,11 +347,15 @@ fn is_custom(is_custom: &Option<syn::ExprClosure>) -> TokenStream {
     }
 }
 
-fn init_custom(is_custom: &Option<syn::ExprClosure>) -> TokenStream {
-    match is_custom {
+fn init_custom(init_custom: &Option<syn::ExprClosure>) -> TokenStream {
+    match init_custom {
         None => quote! { unreachable!() },
         Some(cl) => {
-            check_args("init_custom", vec!["gx", "env", "stop", "e"], &cl.inputs);
+            check_args(
+                "init_custom",
+                vec!["gx", "env", "stop", "e", "run_on_main"],
+                &cl.inputs,
+            );
             let body = &cl.body;
             quote! { #body }
         }
@@ -411,11 +417,12 @@ pub fn defpackage(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             }
 
             #[allow(unused)]
-            fn init_custom(
+            async fn init_custom(
                 gx: &::graphix_rt::GXHandle<X>,
                 env: &::graphix_compiler::env::Env,
                 stop: ::tokio::sync::oneshot::Sender<()>,
                 e: ::graphix_rt::CompExp<X>,
+                run_on_main: ::graphix_package::MainThreadHandle,
             ) -> ::anyhow::Result<Box<dyn ::graphix_package::CustomDisplay<X>>> {
                 #init_custom
             }
@@ -427,4 +434,3 @@ pub fn defpackage(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
     .into()
 }
-

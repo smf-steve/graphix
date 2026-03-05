@@ -14,6 +14,7 @@ use graphix_compiler::{
     typ::TVal,
     CFlag, ExecCtx, PrintFlag,
 };
+use graphix_package::MainThreadHandle;
 use graphix_rt::{CompExp, GXConfig, GXEvent, GXExt, GXHandle, GXRt};
 use input::InputReader;
 use netidx::{
@@ -37,8 +38,13 @@ enum Output<X: GXExt> {
 }
 
 impl<X: GXExt> Output<X> {
-    fn from_expr(gx: &GXHandle<X>, env: &Env, e: CompExp<X>) -> Self {
-        match deps::maybe_init_custom(gx, env, e) {
+    async fn from_expr(
+        gx: &GXHandle<X>,
+        env: &Env,
+        e: CompExp<X>,
+        run_on_main: &MainThreadHandle,
+    ) -> Self {
+        match deps::maybe_init_custom(gx, env, e, run_on_main).await {
             Err(e) => {
                 eprintln!("error initializing custom display: {e:?}");
                 Self::None
@@ -49,11 +55,10 @@ impl<X: GXExt> Output<X> {
     }
 
     async fn clear(&mut self) {
-        match self {
-            Self::None | Self::Text(_) | Self::EmptyScript => (),
-            Self::Custom(cdc) => cdc.custom.clear().await,
+        if let Self::Custom(cdc) = self {
+            cdc.custom.clear().await;
         }
-        *self = Self::None
+        *self = Self::None;
     }
 
     async fn process_update(&mut self, env: &Env, id: ExprId, v: Value) {
@@ -167,14 +172,15 @@ impl<X: GXExt> Shell<X> {
         if let Some(s) = self.resolve_timeout {
             gx = gx.resolve_timeout(s);
         }
-        Ok(gx
+        let handle = gx
             .root(result.root)
             .resolvers(mods)
             .build()
             .context("building rt config")?
             .start()
             .await
-            .context("loading initial modules")?)
+            .context("loading initial modules")?;
+        Ok(handle)
     }
 
     async fn load_env(
@@ -183,6 +189,7 @@ impl<X: GXExt> Shell<X> {
         newenv: &mut Option<Env>,
         output: &mut Output<X>,
         exprs: &mut Vec<CompExp<X>>,
+        run_on_main: &MainThreadHandle,
     ) -> Result<Env> {
         let env;
         match &self.mode {
@@ -195,7 +202,7 @@ impl<X: GXExt> Shell<X> {
                 exprs.extend(r.exprs);
                 env = gx.get_env().await?;
                 if let Some(e) = exprs.pop() {
-                    *output = Output::from_expr(&gx, &env, e);
+                    *output = Output::from_expr(&gx, &env, e, run_on_main).await;
                 }
                 *newenv = None
             }
@@ -223,7 +230,7 @@ impl<X: GXExt> Shell<X> {
         Ok(env)
     }
 
-    pub async fn run(mut self) -> Result<()> {
+    pub async fn run(mut self, run_on_main: MainThreadHandle) -> Result<()> {
         let (tx, mut from_gx) = mpsc::channel(100);
         let gx = self.init(tx).await?;
         let script = self.mode.file_mode();
@@ -231,7 +238,9 @@ impl<X: GXExt> Shell<X> {
         let mut output = if script { Output::EmptyScript } else { Output::None };
         let mut newenv = None;
         let mut exprs = vec![];
-        let mut env = self.load_env(&gx, &mut newenv, &mut output, &mut exprs).await?;
+        let mut env = self
+            .load_env(&gx, &mut newenv, &mut output, &mut exprs, &run_on_main)
+            .await?;
         if !script {
             println!("Welcome to the graphix shell");
             println!("Press ctrl-c to cancel, ctrl-d to exit, and tab for help")
@@ -258,7 +267,9 @@ impl<X: GXExt> Shell<X> {
                     match input {
                         Err(e) => eprintln!("error reading line {e:?}"),
                         Ok(Signal::CtrlC) if script => break Ok(()),
-                        Ok(Signal::CtrlC) => output.clear().await,
+                        Ok(Signal::CtrlC) => {
+                            output.clear().await;
+                        }
                         Ok(Signal::CtrlD) => break Ok(()),
                         Ok(Signal::Success(line)) => {
                             match gx.compile(ArcStr::from(line)).await {
@@ -276,9 +287,12 @@ impl<X: GXExt> Shell<X> {
                                             PrintFlag::DerefTVars | PrintFlag::ReplacePrims,
                                             || println!("-: {}", typ)
                                         );
-                                        output = Output::from_expr(&gx, &env, e);
+                                        output.clear().await;
+                                        output = Output::from_expr(
+                                            &gx, &env, e, &run_on_main,
+                                        ).await;
                                     } else {
-                                        output.clear().await
+                                        output.clear().await;
                                     }
                                 }
                             }

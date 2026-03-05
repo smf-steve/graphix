@@ -582,7 +582,7 @@ graphix_derive::defpackage! {
             false
         }
     },
-    init_custom => |gx, env, stop, e| {
+    init_custom => |gx, env, stop, e, _run_on_main| {
         Ok(Box::new(Tui::<X>::start(gx, env.clone(), e, stop)))
     },
 }
