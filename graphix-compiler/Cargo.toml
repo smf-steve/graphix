@@ -10,6 +10,7 @@ documentation = "https://docs.rs/graphix-compiler"
 readme = "../README.md"
 license = "MIT"
 categories = ["network-programming", "compilers", "gui"]
+exclude = ["book", "../book"]
 
 [features]
 default = []
