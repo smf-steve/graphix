@@ -4,6 +4,7 @@
 - Add universally quantified type variables to type aliases
 - Add graphix-package-gui using iced
 - Gate gui behind a feature so it can be disabled in tui only projects
+- Changes to graphix-package to allow packages to run a closure on the main thread (Thanks Apple)
 
 # 0.4.0
 
