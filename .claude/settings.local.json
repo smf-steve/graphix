@@ -79,7 +79,8 @@
       "Bash(RUST_MIN_STACK=67108864 cargo test:*)",
       "Bash(xargs basename:*)",
       "Bash(git ls-tree:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(sort:*)"
     ],
     "deny": [],
     "ask": []

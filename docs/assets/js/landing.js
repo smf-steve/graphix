@@ -1,18 +1,23 @@
 // Tab switching functionality
 document.addEventListener('DOMContentLoaded', () => {
-    // Tab buttons
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabPanes = document.querySelectorAll('.tab-pane');
-
-    tabButtons.forEach(button => {
+    // Tab buttons — scoped by data-tab-group
+    document.querySelectorAll('.tab-button').forEach(button => {
         button.addEventListener('click', () => {
             const tabId = button.getAttribute('data-tab');
+            const group = button.closest('[data-tab-group]');
+            const groupName = group ? group.getAttribute('data-tab-group') : null;
 
-            // Remove active class from all buttons and panes
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabPanes.forEach(pane => pane.classList.remove('active'));
+            // Find sibling buttons and panes within the same group
+            const siblingButtons = group
+                ? group.querySelectorAll('.tab-button')
+                : document.querySelectorAll('.tab-button');
+            const siblingPanes = groupName
+                ? document.querySelectorAll(`.tab-pane[data-tab-group="${groupName}"]`)
+                : document.querySelectorAll('.tab-pane');
 
-            // Add active class to clicked button and corresponding pane
+            siblingButtons.forEach(btn => btn.classList.remove('active'));
+            siblingPanes.forEach(pane => pane.classList.remove('active'));
+
             button.classList.add('active');
             document.getElementById(tabId).classList.add('active');
         });
@@ -63,23 +68,26 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Keyboard navigation for tabs
-    tabButtons.forEach((button, index) => {
-        button.addEventListener('keydown', (e) => {
-            let targetButton = null;
+    // Keyboard navigation for tabs — scoped per group
+    document.querySelectorAll('[data-tab-group]').forEach(group => {
+        const buttons = Array.from(group.querySelectorAll('.tab-button'));
+        buttons.forEach((button, index) => {
+            button.addEventListener('keydown', (e) => {
+                let targetButton = null;
 
-            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                e.preventDefault();
-                targetButton = tabButtons[index + 1] || tabButtons[0];
-            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                targetButton = tabButtons[index - 1] || tabButtons[tabButtons.length - 1];
-            }
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    targetButton = buttons[index + 1] || buttons[0];
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    targetButton = buttons[index - 1] || buttons[buttons.length - 1];
+                }
 
-            if (targetButton) {
-                targetButton.focus();
-                targetButton.click();
-            }
+                if (targetButton) {
+                    targetButton.focus();
+                    targetButton.click();
+                }
+            });
         });
     });
 });

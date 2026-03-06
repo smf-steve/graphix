@@ -9,7 +9,7 @@
         />
         <meta
             name="keywords"
-            content="graphix, dataflow, reactive programming, functional programming, static typing, TUI, terminal UI"
+            content="graphix, dataflow, reactive programming, functional programming, static typing, TUI, terminal UI, GUI, graphical UI"
         />
 
         <!-- Open Graph / Social Media -->
@@ -102,7 +102,7 @@
                                     >Read the Docs</a
                                 >
                                 <a
-                                    href="book/ui/tui/overview.html"
+                                    href="book/ui/overview.html"
                                     class="btn btn-secondary"
                                     >View Examples</a
                                 >
@@ -172,11 +172,11 @@ block(
                         </div>
                         <div class="feature-card">
                             <div class="feature-icon">📊</div>
-                            <h3 class="feature-title">Rich TUI Framework</h3>
+                            <h3 class="feature-title">Rich UI Frameworks</h3>
                             <p class="feature-description">
-                                Built-in widgets for charts, tables, gauges, and
-                                more. Create beautiful terminal interfaces with
-                                reactive updates.
+                                Terminal UIs with ratatui and graphical UIs with
+                                iced. Charts, tables, widgets, theming, and more
+                                — all with reactive updates.
                             </p>
                         </div>
                         <div class="feature-card">
@@ -197,8 +197,25 @@ block(
                 <div class="container">
                     <h2 class="section-title">See It In Action</h2>
                     <p class="section-subtitle">
-                        Interactive terminal UIs built with Graphix
+                        Terminal and graphical UIs built with Graphix
                     </p>
+                    <div class="tabs showcase-tabs" data-tab-group="showcase">
+                        <div class="tab-buttons">
+                            <button
+                                class="tab-button active"
+                                data-tab="showcase-tui"
+                            >
+                                Terminal UI
+                            </button>
+                            <button
+                                class="tab-button"
+                                data-tab="showcase-gui"
+                            >
+                                Graphical UI
+                            </button>
+                        </div>
+                    </div>
+                    <div class="tab-pane active" id="showcase-tui" data-tab-group="showcase">
                     <div class="showcase-grid">
                         <a
                             class="showcase-item"
@@ -267,6 +284,77 @@ block(
                             />
                         </a>
                     </div>
+                    </div>
+                    <div class="tab-pane" id="showcase-gui" data-tab-group="showcase">
+                    <div class="showcase-grid">
+                        <a
+                            class="showcase-item"
+                            href="book/ui/gui/chart.html"
+                            data-caption="Reactive data visualization"
+                        >
+                            <img
+                                src="book/ui/gui/media/chart.png"
+                                alt="GUI chart"
+                                loading="lazy"
+                            />
+                        </a>
+                        <a
+                            class="showcase-item"
+                            href="book/ui/gui/slider.html"
+                            data-caption="Interactive sliders"
+                        >
+                            <img
+                                src="book/ui/gui/media/slider.gif"
+                                alt="GUI sliders"
+                                loading="lazy"
+                            />
+                        </a>
+                        <a
+                            class="showcase-item"
+                            href="book/ui/gui/text_editor.html"
+                            data-caption="Text editor"
+                        >
+                            <img
+                                src="book/ui/gui/media/text_editor.gif"
+                                alt="GUI text editor"
+                                loading="lazy"
+                            />
+                        </a>
+                        <a
+                            class="showcase-item"
+                            href="book/ui/gui/markdown.html"
+                            data-caption="Markdown rendering"
+                        >
+                            <img
+                                src="book/ui/gui/media/markdown.gif"
+                                alt="GUI markdown"
+                                loading="lazy"
+                            />
+                        </a>
+                        <a
+                            class="showcase-item"
+                            href="book/ui/gui/mouse_area.html"
+                            data-caption="Mouse interaction"
+                        >
+                            <img
+                                src="book/ui/gui/media/mouse_area.gif"
+                                alt="GUI mouse area"
+                                loading="lazy"
+                            />
+                        </a>
+                        <a
+                            class="showcase-item"
+                            href="book/ui/gui/theming.html"
+                            data-caption="Built-in themes"
+                        >
+                            <img
+                                src="book/ui/gui/media/themes.png"
+                                alt="GUI themes"
+                                loading="lazy"
+                            />
+                        </a>
+                    </div>
+                    </div>
                 </div>
             </section>
 
@@ -274,7 +362,7 @@ block(
             <section class="examples">
                 <div class="container">
                     <h2 class="section-title">Code Examples</h2>
-                    <div class="tabs">
+                    <div class="tabs" data-tab-group="examples">
                         <div class="tab-buttons">
                             <button
                                 class="tab-button active"
@@ -290,7 +378,7 @@ block(
                             </button>
                         </div>
                         <div class="tab-content">
-                            <div class="tab-pane active" id="reactive">
+                            <div class="tab-pane active" id="reactive" data-tab-group="examples">
                                 <div class="code-window">
                                     <pre><code><span class="keyword">use</span> tui;
 <span class="keyword">use</span> tui::block;
@@ -317,7 +405,7 @@ block(
                                     with borders, a title, and styling.
                                 </p>
                             </div>
-                            <div class="tab-pane" id="pattern">
+                            <div class="tab-pane" id="pattern" data-tab-group="examples">
                                 <div class="code-window">
                                     <pre><code><span class="keyword">let</span> status: [i64, string, null] = <span class="number">42</span>;
 
@@ -335,7 +423,7 @@ block(
                                     type system ensures all cases are covered.
                                 </p>
                             </div>
-                            <div class="tab-pane" id="network">
+                            <div class="tab-pane" id="network" data-tab-group="examples">
                                 <div class="code-window">
                                     <pre><code><span class="keyword">let</span> value = cast<span class="operator">&lt;</span>i64<span class="operator">&gt;</span>(net::subscribe(<span class="string">"/sensor/temperature"</span>)<span class="operator">?</span>)<span class="operator">?</span>;
 <span class="keyword">let</span> fahrenheit = value <span class="operator">*</span> ((<span class="number">9</span> <span class="operator">/</span> <span class="number">5</span>) + <span class="number">32</span>);
@@ -418,7 +506,7 @@ text(<span class="operator">&amp;</span><span class="string">"Temperature: [fahr
                     </div>
                     <nav class="footer-links">
                         <a href="book/">Documentation</a>
-                        <a href="book/ui/tui/overview.html">Examples</a>
+                        <a href="book/ui/overview.html">Examples</a>
                         <a
                             href="https://github.com/graphix-lang/graphix"
                             target="_blank"

@@ -384,6 +384,15 @@ body {
     background: linear-gradient(180deg, transparent, var(--bg-secondary), transparent);
 }
 
+.showcase-tabs {
+    max-width: none;
+    margin-bottom: 2rem;
+}
+
+.showcase-tabs .tab-buttons {
+    justify-content: center;
+}
+
 .showcase-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
