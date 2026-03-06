@@ -74,8 +74,8 @@ cargo run --bin graphix --help          # See all options
 Build documentation:
 from the graphix/book directory
 ```bash
-mdbook build -d ../docs              # Build language docs to docs/
-mdbook serve ../docs                    # Serve docs locally
+mdbook build -d ../docs/book         # Build language docs to docs/book/
+mdbook serve ../docs/book            # Serve docs locally
 ```
 
 ## Architecture

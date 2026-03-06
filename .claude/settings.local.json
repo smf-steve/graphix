@@ -77,7 +77,9 @@
       "WebFetch(domain:plotters-rs.github.io)",
       "Bash(cargo fmt:*)",
       "Bash(RUST_MIN_STACK=67108864 cargo test:*)",
-      "Bash(xargs basename:*)"
+      "Bash(xargs basename:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
