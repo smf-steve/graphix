@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9638e4ff.js";
+            window.path_to_searchindex_js = "searchindex-04e3bbc7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-963d53c3.js"></script>
@@ -1883,31 +1883,37 @@ write a recursive function to add up pairs of numbers in an array,</p>
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="detailed-semantics"><a class="header" href="#detailed-semantics">Detailed Semantics</a></h1>
-<p>Considering the underlying execution model functions might be better described
-as “polymorphic graph templates”, in that they allow you to specify a part of
-the graph once, and then use it multiple times with different types each time.
-Most of the time this difference in semantics doesn’t matter. Most of the time.
-Consider,</p>
+<p>In the chapter on connect (&lt;-) we introduced the idea that Graphix
+executes code in cycles. In this chapter we will really dive into this
+concept in order to understand all the implications. By the time we
+finish we will be able to write code that does exactly what we want it
+to do, and we’ll understand when connect is appropriate and where it
+should not be used.</p>
+<h2 id="the-function-execution-model"><a class="header" href="#the-function-execution-model">The Function Execution Model</a></h2>
+<p>A function call site becomes a graph at compile time, the function’s
+arguments are connected to the arguments passed in at the call site,
+and it’s output is connected to the call site itself. All the local
+variables are unique and invisible to the outside, and the types are
+resolved at compile time for each call site. Consider,</p>
 <pre><code class="language-graphix">let f = |x, y| x + y + y;
-let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")$)$;
 f(n, 1)
 </code></pre>
-<p>What happens here? Does <code>f</code> get “called” every time <code>n</code> updates? Does it only
-work for the first <code>n</code>? Does it explode? Lets transform it like the compiler
-would in order to understand it better,</p>
-<pre><code class="language-graphix">let f = |x, y| x + y + y;
-let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
+<p>Here there is one call site for <code>f</code>, this builds a graph at the call
+site that connects <code>n</code> to argument <code>x</code>, <code>1</code> to argument <code>y</code>, and the
+output of <code>f</code> to the output of the program. Whenever
+<code>"/hev/stats/power"</code> updates, <code>n</code> updates which causes <code>x</code> to update
+which causes <code>x + y + y</code> to update which causes the call site to
+return <code>x + y + y</code>, which causes the program to print <code>x + y + y</code></p>
+<p>Lets transform this program into something closer to the actual graph
+that is executed,</p>
+<pre><code class="language-graphix">let n = cast&lt;i64&gt;(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 </code></pre>
-<p>The “arguments” to the function call were plugged into the holes in the graph
-template and then the whole template is copied to the call site, and from then
-on the graph runs as normal.</p>
-<p>So when <code>n</code> updates, the call site will return <code>n</code> + 2, since <code>1</code>
-never updates we don’t have to worry about it, however this same flow
-applies when multiple arguments could update. In this case we’re just
-having a philosophical discussion about how call sites are
-implemented, however it DOES actually matter sometimes.</p>
-<h2 id="where-function-semantics-matter"><a class="header" href="#where-function-semantics-matter">Where Function Semantics Matter</a></h2>
+<p>Here we’ve essentially inlined out <code>f</code> so that we can see the
+execution flow of the graph, these two programs output will be
+identical.</p>
+<h2 id="functions-cycles-and-connect"><a class="header" href="#functions-cycles-and-connect">Functions, Cycles, and Connect</a></h2>
 <p>Lets revisit an earlier example where we used select and connect to find the
 length of an array. Suppose we want to generalize that into a function,</p>
 <pre><code class="language-graphix">let len = |a: Array&lt;'a&gt;| {
@@ -1921,8 +1927,10 @@ length of an array. Suppose we want to generalize that into a function,</p>
   }
 }
 </code></pre>
-<p>Here we have a function that takes an array with any element type and
-returns it’s length. Brilliant, lets call it,</p>
+<p>Now this is a very contrived example, meant to illustrate the
+semantics of connect when combined with functions, normaly you’d use a
+sequential iterator like <code>array::fold</code> for a job like this. Never the
+less, lets carry on</p>
 <pre><code class="language-graphix">let a = [1, 2, 3, 4, 5];
 len(a)
 </code></pre>
@@ -1930,8 +1938,7 @@ len(a)
 <pre><code>$ graphix test.gx
 5
 </code></pre>
-<p>That’s the right answer. Are we done? Noooooooo. No we are not done. Lets see
-what happens if we do,</p>
+<p>However if we do,</p>
 <pre><code class="language-graphix">let a = [1, 2, 3, 4, 5];
 a &lt;- [1, 2, 3];
 a &lt;- [1, 2];
@@ -1941,15 +1948,13 @@ len(a)
 <pre><code>$ graphix test.gx
 4
 </code></pre>
-<p>What!? That’s not even wrong. That’s just nonsense, what happened? The key to
-understanding this problem is that there is just one call site, which means we
-instantiated this little reusable bit of graph one time, just one time. That
-means there is just one <code>sum</code>, one <code>a</code>, basically just one graph. When we use
-connect to iterate we are using graph traversal cycles to do a new element of
-the array every cycle until we are done. It will take 5 cycles for the first
-array to be done, and that’s the problem, because we update <code>a</code> with a whole new
-array in cycle 1 and again in cycle 2. That’s why we get 4, it’s deterministic,
-we will get 4 every time.</p>
+<p>This happens because connect (&lt;-) operates across multiple cycles,
+each connect schedules an update for the next cycle, and because we’ve
+used it to iterate, we’ve created an iteration that takes multiple
+cycles to complete. However since the argument to len is also updated
+for the next two cycles, this results in an iteration that is
+interrupted with a new <code>a</code> argument before it can complete. A detailed
+breakdown of what happens is as follows,</p>
 <ul>
 <li>the first cycle we add 1 to <code>sum</code> and set the inner <code>a</code> to <code>tl</code> (it’s not the
 same variable as the outer <code>a</code>, which is why the chaos isn’t even greater). But
@@ -1961,11 +1966,87 @@ outer <code>a</code> to <code>[1, 2]</code></li>
 <li>the 4th cycle we add 1 to <code>sum</code> and set <code>a</code> to <code>[]</code></li>
 <li>the 5th cycle we update our return value with <code>sum</code>, which is now 4</li>
 </ul>
-<p>We can only fix this be understanding that we’re programming a graph. I tried to
-make Graphix as much like a normal language as possible, but this is where we
-depart from that possibility. The general idea is, we need to queue updates to
-the outer <code>a</code> until we’re done processing the current one. For that we have a
-builtin called <code>queue</code>, here is the correct implementation</p>
+<h2 id="synchronous-iterators-the-right-way"><a class="header" href="#synchronous-iterators-the-right-way">Synchronous Iterators, the Right Way</a></h2>
+<p>As mentioned above <code>len</code> is a contrived example, the right way to get
+the length of an array is to call <code>array::len</code>, and the right way to
+compute something like the length, or sum, etc over an array is to use
+a synchronous iterator such as <code>array::fold</code> (or write a built-in in
+rust if you require high performance). Synchronous iterators compute
+the entire result in one cycle.</p>
+<pre><code class="language-graphix">let len = |a: Array&lt;'a&gt;| array::fold(a, 0, |acc, x| x ~ acc + 1);
+let a = [1, 2, 3, 4, 5];
+a &lt;- [1, 2, 3, 4, 5];
+a &lt;- [1, 2];
+len(a)
+</code></pre>
+<p>This will output</p>
+<pre><code>$ graphix test.gx
+5
+3
+2
+</code></pre>
+<h2 id="advanced-cycle-programming"><a class="header" href="#advanced-cycle-programming">Advanced Cycle Programming</a></h2>
+<p>Synchronous iterators aside, sometimes, such as when controlling IO
+devices, you want to use the cycle semantics to achieve a particular
+semantics. For these cases there is the <code>queue</code> function (and
+friends), which allows you to control how updates to a variable are
+processed.</p>
+<pre><code class="language-graphix">val queue: fn(#clock: Any, 'a) -&gt; 'a
+</code></pre>
+<p>Every time clock updates queue allows a ’a through. If no ’a is
+queued, it still remembers to allow that many through when they
+arrive.</p>
+<p>Lets use it to write two different subscription functions with
+different but equally valid and useful semantics.</p>
+<pre><code class="language-graphix">let f = |path| net::subscribe(path)$;
+let path = "/local/baz0";
+path &lt;- "/local/baz1";
+path &lt;- "/local/baz2";
+f(path)
+</code></pre>
+<p>Now suppose we have published</p>
+<p>| path        | value |
++———––+—––+
+| /local/baz0 | “baz0 |
+| /local/baz1 | “baz1 |
+| /local/baz2 | “baz2 |</p>
+<p>This program will always return “baz2”</p>
+<pre><code>$ graphix text.gx
+"baz2"
+</code></pre>
+<p>This is because every time the argument to <code>net::subscribe</code> updates it
+drops the previous subscription and starts a new one. This is useful,
+for example, if the user is typing this path into a UI element, they
+probably only care about the most recent one.</p>
+<p>Moreover, if one of these paths doesn’t exist, or the publisher is
+dead, we may not want to wait for that dead path before moving on to
+the next one.</p>
+<p>Now suppose you want to subscribe to all the paths one at a time in
+order, and you want to wait for each one to return a value before
+moving on to the next one. We can use queue to achieve this.</p>
+<pre><code class="language-graphix">let f = |path| {
+  let clock = "";
+  let path = queue(#clock, path);
+  let res = net::subscribe(path)$;
+  clock &lt;- uniq(res ~ path);
+  res
+};
+let path = "/local/baz0";
+path &lt;- "/local/baz1";
+path &lt;- "/local/baz2";
+f(path)
+</code></pre>
+<p>This will sequence the subscriptions and result in,</p>
+<pre><code>$ test.gx
+"baz0"
+"baz1"
+"baz2"
+</code></pre>
+<h3 id="fixing-our-contrived-len"><a class="header" href="#fixing-our-contrived-len">Fixing Our Contrived Len</a></h3>
+<p>Advice about not using &lt;- in iteration aside, if you understand cycles
+then you can do it if you wish, and maybe in advanced examples there
+is even a reason to. Lets fix our <code>len</code> function to be cycle aware and
+work in any situation using <code>queue</code>.</p>
 <pre><code class="language-graphix">let len = |a: Array&lt;'a&gt;| {
   let clock = once(null);
   let q = queue(#clock, a);
@@ -1983,27 +2064,12 @@ builtin called <code>queue</code>, here is the correct implementation</p>
   }
 }
 </code></pre>
-<p>Every time <code>clock</code> updates <code>queue</code> will output something it has queued, or if it
-has nothing queued it will store that the next thing that arrives can go out
-immediatly. So the first <code>a</code> will immediatly pass through the queue, but
-anything after that will be held. Then the normal select loop will run, except
-it will look at <code>q</code> instead of <code>a</code> now, so that <code>a</code> can update without
-disturbing it. When we get to the terminating case, we update for next cycle
-<code>clock</code> with <code>null</code> and <code>sum</code> with 0 and we return <code>once(sum)</code>. We return
-<code>once(sum)</code> instead of just <code>sum</code> because removing something from the queue
-takes one cycle, so it will be two cycles before we start on the next array, and
-in the mean time the existing array will still be empty, meaning the second
-select arm will still be selected, and <code>sum</code> is updating to 0 which we do not
-want to return. If we run this with the same set of examples we will get the
-correct answer,</p>
+<p>Now we can see our very verbose and inefficient <code>len</code> is now correct</p>
 <pre><code>$ graphix cycle_iter.gx
 5
 3
 2
 </code></pre>
-<p>This comes up other places as well, for example whenever we have to
-deal with something that does IO, like calling an RPC, subscribing to
-values in netidx, etc.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="user-defined-types"><a class="header" href="#user-defined-types">User Defined Types</a></h1>
 <p>You can define your own data types in Graphix. This is useful for many tasks,

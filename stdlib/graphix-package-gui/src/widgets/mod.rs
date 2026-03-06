@@ -56,48 +56,48 @@ macro_rules! update_child {
     };
 }
 
-pub(crate) mod button;
-pub(crate) mod canvas;
-pub(crate) mod chart;
-pub(crate) mod combo_box;
-pub(crate) mod container;
-pub(crate) mod context_menu;
-pub(crate) mod context_menu_widget;
-pub(crate) mod grid;
-pub(crate) mod iced_keyboard_area;
-pub(crate) mod image;
-pub(crate) mod keyboard_area;
-pub(crate) mod markdown;
-pub(crate) mod menu_bar;
-pub(crate) mod menu_bar_widget;
-pub(crate) mod mouse_area;
-pub(crate) mod pick_list;
-pub(crate) mod progress_bar;
-pub(crate) mod qr_code;
-pub(crate) mod radio;
-pub(crate) mod rule;
-pub(crate) mod scrollable;
-pub(crate) mod slider;
-pub(crate) mod space;
-pub(crate) mod stack;
-pub(crate) mod table;
-pub(crate) mod text;
-pub(crate) mod text_editor;
-pub(crate) mod text_input;
-pub(crate) mod toggle;
-pub(crate) mod tooltip;
+pub mod button;
+pub mod canvas;
+pub mod chart;
+pub mod combo_box;
+pub mod container;
+pub mod context_menu;
+pub mod context_menu_widget;
+pub mod grid;
+pub mod iced_keyboard_area;
+pub mod image;
+pub mod keyboard_area;
+pub mod markdown;
+pub mod menu_bar;
+pub mod menu_bar_widget;
+pub mod mouse_area;
+pub mod pick_list;
+pub mod progress_bar;
+pub mod qr_code;
+pub mod radio;
+pub mod rule;
+pub mod scrollable;
+pub mod slider;
+pub mod space;
+pub mod stack;
+pub mod table;
+pub mod text;
+pub mod text_editor;
+pub mod text_input;
+pub mod toggle;
+pub mod tooltip;
 
 /// Concrete iced renderer type used throughout the GUI package.
 /// Must match iced_widget's default Renderer parameter.
-pub(crate) type Renderer = iced_renderer::Renderer;
+pub type Renderer = iced_renderer::Renderer;
 
 /// Concrete iced Element type with our Message/Theme/Renderer.
-pub(crate) type IcedElement<'a> =
+pub type IcedElement<'a> =
     iced_core::Element<'a, Message, crate::theme::GraphixTheme, Renderer>;
 
 /// Message type for iced widget interactions.
 #[derive(Debug, Clone)]
-pub(crate) enum Message {
+pub enum Message {
     Nop,
     Call(CallableId, ValArray),
     EditorAction(ExprId, iced_widget::text_editor::Action),
@@ -106,7 +106,7 @@ pub(crate) enum Message {
 /// Trait for GUI widgets. Unlike TUI widgets, GUI widgets are not
 /// async — handle_update is synchronous, and the view method builds
 /// an iced Element tree.
-pub(crate) trait GuiWidget<X: GXExt>: Send + 'static {
+pub trait GuiWidget<X: GXExt>: Send + 'static {
     /// Process a value update from graphix. Widgets that own child
     /// refs use `rt` to `block_on` recompilation of their subtree.
     /// Returns `true` if the widget changed and the window should redraw.
@@ -133,14 +133,14 @@ pub(crate) trait GuiWidget<X: GXExt>: Send + 'static {
     }
 }
 
-pub(crate) type GuiW<X> = Box<dyn GuiWidget<X>>;
+pub type GuiW<X> = Box<dyn GuiWidget<X>>;
 
 /// Future type for widget compilation (avoids infinite-size async fn).
-pub(crate) type CompileFut<X> =
+pub type CompileFut<X> =
     Pin<Box<dyn Future<Output = Result<GuiW<X>>> + Send + 'static>>;
 
 /// Empty widget placeholder.
-pub(crate) struct EmptyW;
+pub struct EmptyW;
 
 impl<X: GXExt> GuiWidget<X> for EmptyW {
     fn handle_update(
@@ -307,7 +307,7 @@ flex_widget!(
 
 /// Compile a widget value into a GuiW. Returns a boxed future to
 /// avoid infinite-size futures from recursive async calls.
-pub(crate) fn compile<X: GXExt>(gx: GXHandle<X>, source: Value) -> CompileFut<X> {
+pub fn compile<X: GXExt>(gx: GXHandle<X>, source: Value) -> CompileFut<X> {
     Box::pin(async move {
         let (s, v) = source.cast_to::<(ArcStr, Value)>()?;
         match s.as_str() {
@@ -349,7 +349,7 @@ pub(crate) fn compile<X: GXExt>(gx: GXHandle<X>, source: Value) -> CompileFut<X>
 }
 
 /// Compile an array of widget values into a Vec of GuiW.
-pub(crate) async fn compile_children<X: GXExt>(
+pub async fn compile_children<X: GXExt>(
     gx: GXHandle<X>,
     v: Value,
 ) -> Result<Vec<GuiW<X>>> {

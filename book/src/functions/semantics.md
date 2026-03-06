@@ -1,38 +1,47 @@
 # Detailed Semantics
 
-Considering the underlying execution model functions might be better described
-as "polymorphic graph templates", in that they allow you to specify a part of
-the graph once, and then use it multiple times with different types each time.
-Most of the time this difference in semantics doesn't matter. Most of the time.
-Consider,
+In the chapter on connect (<-) we introduced the idea that Graphix
+executes code in cycles. In this chapter we will really dive into this
+concept in order to understand all the implications. By the time we
+finish we will be able to write code that does exactly what we want it
+to do, and we'll understand when connect is appropriate and where it
+should not be used.
+
+## The Function Execution Model
+
+A function call site becomes a graph at compile time, the function's
+arguments are connected to the arguments passed in at the call site,
+and it's output is connected to the call site itself. All the local
+variables are unique and invisible to the outside, and the types are
+resolved at compile time for each call site. Consider,
+
 
 ```graphix
 let f = |x, y| x + y + y;
-let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
+let n = cast<i64>(net::subscribe("/hev/stats/power")$)$;
 f(n, 1)
 ```
 
-What happens here? Does `f` get "called" every time `n` updates? Does it only
-work for the first `n`? Does it explode? Lets transform it like the compiler
-would in order to understand it better,
+Here there is one call site for `f`, this builds a graph at the call
+site that connects `n` to argument `x`, `1` to argument `y`, and the
+output of `f` to the output of the program. Whenever
+`"/hev/stats/power"` updates, `n` updates which causes `x` to update
+which causes `x + y + y` to update which causes the call site to
+return `x + y + y`, which causes the program to print `x + y + y`
+
+Lets transform this program into something closer to the actual graph
+that is executed,
 
 ```graphix
-let f = |x, y| x + y + y;
 let n = cast<i64>(net::subscribe("/hev/stats/power")?)?;
 n + 1 + 1
 ```
 
-The "arguments" to the function call were plugged into the holes in the graph
-template and then the whole template is copied to the call site, and from then
-on the graph runs as normal.
+Here we've essentially inlined out `f` so that we can see the
+execution flow of the graph, these two programs output will be
+identical.
 
-So when `n` updates, the call site will return `n` + 2, since `1`
-never updates we don't have to worry about it, however this same flow
-applies when multiple arguments could update. In this case we're just
-having a philosophical discussion about how call sites are
-implemented, however it DOES actually matter sometimes.
-
-## Where Function Semantics Matter
+## Functions, Cycles, and Connect
 
 Lets revisit an earlier example where we used select and connect to find the
 length of an array. Suppose we want to generalize that into a function,
@@ -50,8 +59,10 @@ let len = |a: Array<'a>| {
 }
 ```
 
-Here we have a function that takes an array with any element type and
-returns it's length. Brilliant, lets call it,
+Now this is a very contrived example, meant to illustrate the
+semantics of connect when combined with functions, normally you'd use
+a sequential iterator like `array::fold` for a job like
+this. Nevertheless, lets carry on
 
 ```graphix
 let a = [1, 2, 3, 4, 5];
@@ -65,8 +76,7 @@ $ graphix test.gx
 5
 ```
 
-That's the right answer. Are we done? Noooooooo. No we are not done. Lets see
-what happens if we do,
+However if we do,
 
 ```graphix
 let a = [1, 2, 3, 4, 5];
@@ -82,15 +92,13 @@ $ graphix test.gx
 4
 ```
 
-What!? That's not even wrong. That's just nonsense, what happened? The key to
-understanding this problem is that there is just one call site, which means we
-instantiated this little reusable bit of graph one time, just one time. That
-means there is just one `sum`, one `a`, basically just one graph. When we use
-connect to iterate we are using graph traversal cycles to do a new element of
-the array every cycle until we are done. It will take 5 cycles for the first
-array to be done, and that's the problem, because we update `a` with a whole new
-array in cycle 1 and again in cycle 2. That's why we get 4, it's deterministic,
-we will get 4 every time.
+This happens because connect (<-) operates across multiple cycles,
+each connect schedules an update for the next cycle, and because we've
+used it to iterate, we've created an iteration that takes multiple
+cycles to complete. However since the argument to len is also updated
+for the next two cycles, this results in an iteration that is
+interrupted with a new `a` argument before it can complete. A detailed
+breakdown of what happens is as follows,
 
 - the first cycle we add 1 to `sum` and set the inner `a` to `tl` (it's not the
   same variable as the outer `a`, which is why the chaos isn't even greater). But
@@ -102,11 +110,116 @@ we will get 4 every time.
 - the 4th cycle we add 1 to `sum` and set `a` to `[]`
 - the 5th cycle we update our return value with `sum`, which is now 4
 
-We can only fix this be understanding that we're programming a graph. I tried to
-make Graphix as much like a normal language as possible, but this is where we
-depart from that possibility. The general idea is, we need to queue updates to
-the outer `a` until we're done processing the current one. For that we have a
-builtin called `queue`, here is the correct implementation
+## Synchronous Iterators, the Right Way
+
+As mentioned above `len` is a contrived example, the right way to get
+the length of an array is to call `array::len`, and the right way to
+compute something like the length, or sum, etc over an array is to use
+a synchronous iterator such as `array::fold` (or write a built-in in
+rust if you require high performance). Synchronous iterators compute
+the entire result in one cycle.
+
+```graphix
+let len = |a: Array<'a>| array::fold(a, 0, |acc, x| x ~ acc + 1);
+let a = [1, 2, 3, 4, 5];
+a <- [1, 2, 3, 4, 5];
+a <- [1, 2];
+len(a)
+```
+
+This will output
+
+```
+$ graphix test.gx
+5
+3
+2
+```
+
+## Advanced Cycle Programming
+
+Synchronous iterators aside, sometimes, such as when controlling IO
+devices, you want to use the cycle semantics to achieve a particular
+semantics. For these cases there is the `queue` function (and
+friends), which allows you to control how updates to a variable are
+processed.
+
+```graphix
+val queue: fn(#clock: Any, 'a) -> 'a
+```
+
+Every time clock updates queue allows a 'a through. If no 'a is
+queued, it still remembers to allow that many through when they
+arrive. 
+
+Lets use it to write two different subscription functions with
+different but equally valid and useful semantics.
+
+```graphix
+let f = |path| net::subscribe(path)$;
+let path = "/local/baz0";
+path <- "/local/baz1";
+path <- "/local/baz2";
+f(path)
+```
+
+Now suppose we have published
+
+| path        | value |
++-------------+-------+
+| /local/baz0 | "baz0 |
+| /local/baz1 | "baz1 |
+| /local/baz2 | "baz2 |
+
+This program will always return "baz2"
+
+```
+$ graphix text.gx
+"baz2"
+```
+
+This is because every time the argument to `net::subscribe` updates it
+drops the previous subscription and starts a new one. This is useful,
+for example, if the user is typing this path into a UI element, they
+probably only care about the most recent one. 
+
+Moreover, if one of these paths doesn't exist, or the publisher is
+dead, we may not want to wait for that dead path before moving on to
+the next one. 
+
+Now suppose you want to subscribe to all the paths one at a time in
+order, and you want to wait for each one to return a value before
+moving on to the next one. We can use queue to achieve this.
+
+```graphix
+let f = |path| {
+  let clock = "";
+  let path = queue(#clock, path);
+  let res = net::subscribe(path)$;
+  clock <- uniq(res ~ path);
+  res
+};
+let path = "/local/baz0";
+path <- "/local/baz1";
+path <- "/local/baz2";
+f(path)
+```
+
+This will sequence the subscriptions and result in,
+
+```
+$ test.gx
+"baz0"
+"baz1"
+"baz2"
+```
+
+### Fixing Our Contrived Len
+
+Advice about not using <- in iteration aside, if you understand cycles
+then you can do it if you wish, and maybe in advanced examples there
+is even a reason to. Lets fix our `len` function to be cycle aware and
+work in any situation using `queue`.
 
 ```graphix
 let len = |a: Array<'a>| {
@@ -127,19 +240,7 @@ let len = |a: Array<'a>| {
 }
 ```
 
-Every time `clock` updates `queue` will output something it has queued, or if it
-has nothing queued it will store that the next thing that arrives can go out
-immediatly. So the first `a` will immediatly pass through the queue, but
-anything after that will be held. Then the normal select loop will run, except
-it will look at `q` instead of `a` now, so that `a` can update without
-disturbing it. When we get to the terminating case, we update for next cycle
-`clock` with `null` and `sum` with 0 and we return `once(sum)`. We return
-`once(sum)` instead of just `sum` because removing something from the queue
-takes one cycle, so it will be two cycles before we start on the next array, and
-in the mean time the existing array will still be empty, meaning the second
-select arm will still be selected, and `sum` is updating to 0 which we do not
-want to return. If we run this with the same set of examples we will get the
-correct answer,
+Now we can see our very verbose and inefficient `len` is now correct
 
 ```
 $ graphix cycle_iter.gx
@@ -147,8 +248,3 @@ $ graphix cycle_iter.gx
 3
 2
 ```
-
-This comes up other places as well, for example whenever we have to
-deal with something that does IO, like calling an RPC, subscribing to
-values in netidx, etc. 
-

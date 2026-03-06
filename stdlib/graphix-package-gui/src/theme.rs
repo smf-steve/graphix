@@ -13,7 +13,7 @@ use triomphe::Arc;
 /// When `overrides` is `Some`, each widget checks for a user-specified style
 /// before falling back to the inner theme's built-in Catalog.
 #[derive(Clone, Debug)]
-pub(crate) struct GraphixTheme {
+pub struct GraphixTheme {
     pub inner: iced_core::Theme,
     pub overrides: Option<Arc<StyleOverrides>>,
 }
@@ -25,7 +25,7 @@ impl GraphixTheme {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct StyleOverrides {
+pub struct StyleOverrides {
     pub button: Option<ButtonSpec>,
     pub checkbox: Option<CheckboxSpec>,
     pub container: Option<ContainerSpec>,
@@ -44,7 +44,7 @@ pub(crate) struct StyleOverrides {
 // --- Spec structs ---
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ButtonSpec {
+pub struct ButtonSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_radius: Option<f32>,
@@ -53,7 +53,7 @@ pub(crate) struct ButtonSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct CheckboxSpec {
+pub struct CheckboxSpec {
     pub accent: Option<Color>,
     pub background: Option<Color>,
     pub border_color: Option<Color>,
@@ -64,7 +64,7 @@ pub(crate) struct CheckboxSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct TextInputSpec {
+pub struct TextInputSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_radius: Option<f32>,
@@ -76,7 +76,7 @@ pub(crate) struct TextInputSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct TogglerSpec {
+pub struct TogglerSpec {
     pub background: Option<Color>,
     pub background_border_color: Option<Color>,
     pub border_radius: Option<f32>,
@@ -86,7 +86,7 @@ pub(crate) struct TogglerSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct SliderSpec {
+pub struct SliderSpec {
     pub handle_border_color: Option<Color>,
     pub handle_border_width: Option<f32>,
     pub handle_color: Option<Color>,
@@ -97,7 +97,7 @@ pub(crate) struct SliderSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct RadioSpec {
+pub struct RadioSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_width: Option<f32>,
@@ -106,7 +106,7 @@ pub(crate) struct RadioSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PickListSpec {
+pub struct PickListSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_radius: Option<f32>,
@@ -117,7 +117,7 @@ pub(crate) struct PickListSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct TextEditorSpec {
+pub struct TextEditorSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_radius: Option<f32>,
@@ -128,7 +128,7 @@ pub(crate) struct TextEditorSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ContainerSpec {
+pub struct ContainerSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_radius: Option<f32>,
@@ -137,7 +137,7 @@ pub(crate) struct ContainerSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ScrollableSpec {
+pub struct ScrollableSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_radius: Option<f32>,
@@ -146,21 +146,21 @@ pub(crate) struct ScrollableSpec {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ProgressBarSpec {
+pub struct ProgressBarSpec {
     pub background: Option<Color>,
     pub bar_color: Option<Color>,
     pub border_radius: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct RuleSpec {
+pub struct RuleSpec {
     pub color: Option<Color>,
     pub radius: Option<f32>,
     pub width: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct MenuSpec {
+pub struct MenuSpec {
     pub background: Option<Color>,
     pub border_color: Option<Color>,
     pub border_radius: Option<f32>,

@@ -23,7 +23,7 @@ static FONT_NAMES: LazyLock<Mutex<HashSet<&'static str>>> =
     LazyLock::new(Default::default);
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct LengthV(pub Length);
+pub struct LengthV(pub Length);
 
 impl FromValue for LengthV {
     fn from_value(v: Value) -> Result<Self> {
@@ -49,7 +49,7 @@ impl FromValue for LengthV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PaddingV(pub Padding);
+pub struct PaddingV(pub Padding);
 
 impl FromValue for PaddingV {
     fn from_value(v: Value) -> Result<Self> {
@@ -78,7 +78,7 @@ impl FromValue for PaddingV {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct SizeV(pub Size);
+pub struct SizeV(pub Size);
 
 impl FromValue for SizeV {
     fn from_value(v: Value) -> Result<Self> {
@@ -96,7 +96,7 @@ impl From<SizeV> for Value {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ColorV(pub Color);
+pub struct ColorV(pub Color);
 
 impl FromValue for ColorV {
     fn from_value(v: Value) -> Result<Self> {
@@ -114,7 +114,7 @@ impl FromValue for ColorV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct HAlignV(pub Horizontal);
+pub struct HAlignV(pub Horizontal);
 
 impl FromValue for HAlignV {
     fn from_value(v: Value) -> Result<Self> {
@@ -128,7 +128,7 @@ impl FromValue for HAlignV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct VAlignV(pub Vertical);
+pub struct VAlignV(pub Vertical);
 
 impl FromValue for VAlignV {
     fn from_value(v: Value) -> Result<Self> {
@@ -142,7 +142,7 @@ impl FromValue for VAlignV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct FontV(pub Font);
+pub struct FontV(pub Font);
 
 impl FromValue for FontV {
     fn from_value(v: Value) -> Result<Self> {
@@ -196,7 +196,7 @@ impl FromValue for FontV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PaletteV(pub iced_core::theme::palette::Palette);
+pub struct PaletteV(pub iced_core::theme::palette::Palette);
 
 impl FromValue for PaletteV {
     fn from_value(v: Value) -> Result<Self> {
@@ -220,9 +220,9 @@ impl FromValue for PaletteV {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ThemeV(pub GraphixTheme);
+pub struct ThemeV(pub GraphixTheme);
 
-pub(crate) fn parse_opt_color(v: Value) -> Result<Option<Color>> {
+pub fn parse_opt_color(v: Value) -> Result<Option<Color>> {
     if v == Value::Null {
         Ok(None)
     } else {
@@ -490,7 +490,7 @@ impl FromValue for ThemeV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ScrollDirectionV(pub scrollable::Direction);
+pub struct ScrollDirectionV(pub scrollable::Direction);
 
 impl FromValue for ScrollDirectionV {
     fn from_value(v: Value) -> Result<Self> {
@@ -511,7 +511,7 @@ impl FromValue for ScrollDirectionV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct TooltipPositionV(pub tooltip::Position);
+pub struct TooltipPositionV(pub tooltip::Position);
 
 impl FromValue for TooltipPositionV {
     fn from_value(v: Value) -> Result<Self> {
@@ -527,7 +527,7 @@ impl FromValue for TooltipPositionV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct ContentFitV(pub ContentFit);
+pub struct ContentFitV(pub ContentFit);
 
 impl FromValue for ContentFitV {
     fn from_value(v: Value) -> Result<Self> {
@@ -544,7 +544,7 @@ impl FromValue for ContentFitV {
 
 /// Image source: file path, raw encoded bytes, inline SVG, or decoded RGBA pixels.
 #[derive(Clone, Debug)]
-pub(crate) enum ImageSourceV {
+pub enum ImageSourceV {
     Path(String),
     Bytes(iced_core::Bytes),
     Svg(String),
@@ -552,7 +552,7 @@ pub(crate) enum ImageSourceV {
 }
 
 impl ImageSourceV {
-    pub(crate) fn is_svg(&self) -> bool {
+    pub fn is_svg(&self) -> bool {
         match self {
             Self::Path(p) => p.ends_with(".svg") || p.ends_with(".svgz"),
             Self::Svg(_) => true,
@@ -560,7 +560,7 @@ impl ImageSourceV {
         }
     }
 
-    pub(crate) fn to_handle(&self) -> iced_core::image::Handle {
+    pub fn to_handle(&self) -> iced_core::image::Handle {
         match self {
             Self::Path(p) => iced_core::image::Handle::from_path(p),
             Self::Bytes(b) => iced_core::image::Handle::from_bytes(b.clone()),
@@ -571,7 +571,7 @@ impl ImageSourceV {
         }
     }
 
-    pub(crate) fn to_svg_handle(&self) -> iced_core::svg::Handle {
+    pub fn to_svg_handle(&self) -> iced_core::svg::Handle {
         match self {
             Self::Path(p) => iced_core::svg::Handle::from_path(p),
             Self::Bytes(b) => iced_core::svg::Handle::from_memory(b.to_vec()),
@@ -580,7 +580,7 @@ impl ImageSourceV {
         }
     }
 
-    pub(crate) fn decode_icon(&self) -> Result<Option<winit::window::Icon>> {
+    pub fn decode_icon(&self) -> Result<Option<winit::window::Icon>> {
         match self {
             Self::Path(p) if p.is_empty() => Ok(None),
             Self::Path(p) if self.is_svg() => {
@@ -667,7 +667,7 @@ impl FromValue for ImageSourceV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum GridColumnsV {
+pub enum GridColumnsV {
     Fixed(usize),
     Fluid(f32),
 }
@@ -691,7 +691,7 @@ impl FromValue for GridColumnsV {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct GridSizingV(pub iced_widget::grid::Sizing);
+pub struct GridSizingV(pub iced_widget::grid::Sizing);
 
 impl FromValue for GridSizingV {
     fn from_value(v: Value) -> Result<Self> {
@@ -711,7 +711,7 @@ impl FromValue for GridSizingV {
 
 /// Parsed shortcut from the Graphix `Shortcut` struct.
 #[derive(Clone, Debug)]
-pub(crate) struct ShortcutV {
+pub struct ShortcutV {
     pub display: String,
     pub key: iced_core::keyboard::Key,
     pub modifiers: iced_core::keyboard::Modifiers,
@@ -761,7 +761,7 @@ impl FromValue for ShortcutV {
 
 /// Newtype for `Vec<String>` to satisfy orphan rules.
 #[derive(Clone, Debug)]
-pub(crate) struct StringVec(pub Vec<String>);
+pub struct StringVec(pub Vec<String>);
 
 impl FromValue for StringVec {
     fn from_value(v: Value) -> Result<Self> {

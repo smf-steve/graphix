@@ -14,7 +14,7 @@ use iced_wgpu::wgpu;
 use std::sync::Arc;
 use winit::window::Window;
 
-pub(crate) struct GpuState {
+pub struct GpuState {
     pub instance: wgpu::Instance,
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
@@ -70,7 +70,7 @@ impl GpuState {
     }
 }
 
-pub(crate) struct WindowSurface {
+pub struct WindowSurface {
     pub surface: wgpu::Surface<'static>,
     pub config: wgpu::SurfaceConfiguration,
     pub renderer: iced_wgpu::Renderer,

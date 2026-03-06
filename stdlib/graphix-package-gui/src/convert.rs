@@ -10,7 +10,7 @@ use winit::keyboard::{Key, NamedKey, NativeKeyCode};
 use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 
 /// Convert a winit WindowEvent to zero or more iced Events.
-pub(crate) fn window_event(
+pub fn window_event(
     event: &WindowEvent,
     scale_factor: f64,
     modifiers: winit::keyboard::ModifiersState,

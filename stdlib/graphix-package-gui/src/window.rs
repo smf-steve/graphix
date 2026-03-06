@@ -15,7 +15,7 @@ use tokio::try_join;
 use winit::window::{Window, WindowAttributes, WindowId};
 
 /// Resolved window state — all refs compiled but no OS window yet.
-pub(crate) struct ResolvedWindow<X: GXExt> {
+pub struct ResolvedWindow<X: GXExt> {
     pub gx: GXHandle<X>,
     pub title: TRef<X, String>,
     pub size: TRef<X, SizeV>,
@@ -109,7 +109,7 @@ impl<X: GXExt> ResolvedWindow<X> {
 }
 
 /// Per-window state tracking.
-pub(crate) struct TrackedWindow<X: GXExt> {
+pub struct TrackedWindow<X: GXExt> {
     pub window_ref: Ref<X>,
     pub gx: GXHandle<X>,
     pub window: Arc<Window>,

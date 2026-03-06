@@ -19,13 +19,13 @@ use types::SizeV;
 use winit::{event_loop::EventLoopProxy, window::WindowId};
 
 mod clipboard;
-mod convert;
 mod event_loop;
-mod render;
-pub(crate) mod theme;
-mod types;
-pub(crate) mod widgets;
-mod window;
+pub mod render;
+pub mod theme;
+pub mod types;
+pub mod widgets;
+pub mod convert;
+pub mod window;
 
 #[cfg(test)]
 mod test;
@@ -68,7 +68,7 @@ impl<X: GXExt> Gui<X> {
     }
 }
 
-static GUITYP: LazyLock<Type> = LazyLock::new(|| {
+pub static GUITYP: LazyLock<Type> = LazyLock::new(|| {
     Type::Array(Arc::new(Type::ByRef(Arc::new(Type::Ref {
         scope: ModPath::root(),
         name: ModPath::from(["gui", "Window"]),
