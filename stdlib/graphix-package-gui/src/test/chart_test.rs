@@ -126,7 +126,7 @@ async fn dataset_meta_renders() -> Result<()> {
 async fn dataset_meta_with_color() -> Result<()> {
     let h = chart_harness(
         "#width: &`Fill, #height: &`Fixed(200.0), \
-         &[chart::scatter(#color: {r: 0.0, g: 1.0, b: 0.0, a: 1.0}, &[])]",
+         &[chart::scatter(#color: color(#r: 0.0, #g: 1.0, #b: 0.0, #a: 1.0)$, &[])]",
     )
     .await?;
     let _ = h.view();
@@ -187,7 +187,7 @@ async fn series_style_stroke_width() -> Result<()> {
 async fn background_color() -> Result<()> {
     let h = chart_harness(
         "#width: &`Fill, #height: &`Fixed(200.0), \
-         #background: &{r: 0.1, g: 0.1, b: 0.1, a: 1.0}, \
+         #background: &color(#r: 0.1, #g: 0.1, #b: 0.1, #a: 1.0)$, \
          &[chart::line(&[(0.0, 0.0), (5.0, 5.0)])]",
     )
     .await?;
@@ -216,13 +216,13 @@ async fn dark_background_label_colors() -> Result<()> {
     let h = chart_harness(
         "#width: &`Fill, #height: &`Fixed(200.0), \
          #title: &\"Dark Chart\", \
-         #title_color: &{r: 0.9, g: 0.9, b: 0.9, a: 1.0}, \
+         #title_color: &color(#r: 0.9, #g: 0.9, #b: 0.9, #a: 1.0)$, \
          #x_label: &\"X\", #y_label: &\"Y\", \
-         #background: &{r: 0.1, g: 0.1, b: 0.15, a: 1.0}, \
+         #background: &color(#r: 0.1, #g: 0.1, #b: 0.15, #a: 1.0)$, \
          #mesh: &{show_x_grid: true, show_y_grid: true, \
-                   grid_color: {r: 0.3, g: 0.3, b: 0.35, a: 1.0}, \
-                   axis_color: {r: 0.5, g: 0.5, b: 0.55, a: 1.0}, \
-                   label_color: {r: 0.8, g: 0.8, b: 0.8, a: 1.0}, \
+                   grid_color: color(#r: 0.3, #g: 0.3, #b: 0.35, #a: 1.0)$, \
+                   axis_color: color(#r: 0.5, #g: 0.5, #b: 0.55, #a: 1.0)$, \
+                   label_color: color(#r: 0.8, #g: 0.8, #b: 0.8, #a: 1.0)$, \
                    label_size: 14.0, x_label_area_size: null, x_labels: null, \
                    y_label_area_size: null, y_labels: null}, \
          &[chart::line(#label: \"Series\", &[(0.0, 0.0), (5.0, 5.0)])]",
@@ -237,9 +237,9 @@ async fn legend_style() -> Result<()> {
     let h = chart_harness(
         "#width: &`Fill, #height: &`Fixed(200.0), \
          #legend_style: &{ \
-           background: {r: 0.2, g: 0.2, b: 0.25, a: 1.0}, \
-           border: {r: 0.5, g: 0.5, b: 0.5, a: 1.0}, \
-           label_color: {r: 0.9, g: 0.9, b: 0.9, a: 1.0}, \
+           background: color(#r: 0.2, #g: 0.2, #b: 0.25, #a: 1.0)$, \
+           border: color(#r: 0.5, #g: 0.5, #b: 0.5, #a: 1.0)$, \
+           label_color: color(#r: 0.9, #g: 0.9, #b: 0.9, #a: 1.0)$, \
            label_size: null}, \
          &[chart::line(#label: \"Test\", &[(0.0, 0.0), (5.0, 5.0)])]",
     )

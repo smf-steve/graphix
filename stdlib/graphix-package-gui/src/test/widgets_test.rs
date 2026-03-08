@@ -451,7 +451,7 @@ async fn image_renders() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn svg_renders() -> Result<()> {
-    let h = harness(r#"svg(&"/dev/null")"#).await?;
+    let h = harness(r#"image(&`Svg("<svg></svg>"))"#).await?;
     view!(h);
     Ok(())
 }

@@ -100,6 +100,35 @@ fn stdlib_package_versions_match_graphix_package() {
     );
 }
 
+#[tokio::test]
+async fn download_source_extracts_package_at_expected_root() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cratesio = crates_io_api::AsyncClient::new(
+        "Graphix Package Tests <eestokes@pm.me>",
+        Duration::from_secs(1),
+    )
+    .unwrap();
+    let source_dir =
+        super::download_source(&cratesio, tmp.path(), "0.5.0").await.unwrap();
+    let nested = source_dir.join("graphix-shell-0.5.0");
+    assert_eq!(source_dir, tmp.path().join("build").join("graphix-shell-0.5.0"));
+    assert!(
+        source_dir.join("Cargo.toml").is_file(),
+        "missing Cargo.toml at extracted root: {}",
+        source_dir.display()
+    );
+    assert!(
+        source_dir.join("src").join("deps.rs").is_file(),
+        "missing src/deps.rs at extracted root: {}",
+        source_dir.display()
+    );
+    assert!(
+        !nested.join("Cargo.toml").exists(),
+        "crate archive was unpacked one level too deep: {}",
+        nested.display()
+    );
+}
+
 fn vendor(ws: &Path) {
     VENDOR_ONCE.call_once(|| {
         let status = std::process::Command::new("python3")

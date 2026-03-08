@@ -18,7 +18,7 @@ async fn canvas_harness(shapes_expr: &str) -> Result<GuiTestHarness> {
 async fn line_renders() -> Result<()> {
     let h = canvas_harness(concat!(
         "`Line({from: {x: 0.0, y: 0.0}, to: {x: 100.0, y: 50.0}, ",
-        "color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}, width: 2.5})",
+        "color: color(#r: 1.0, #g: 0.0, #b: 0.0, #a: 1.0)$, width: 2.5})",
     ))
     .await?;
     let _ = h.view();
@@ -31,7 +31,7 @@ async fn line_renders() -> Result<()> {
 async fn circle_with_fill_only() -> Result<()> {
     let h = canvas_harness(concat!(
         "`Circle({center: {x: 10.0, y: 20.0}, radius: 25.0, ",
-        "fill: {r: 0.0, g: 1.0, b: 0.0, a: 1.0}, stroke: null})",
+        "fill: color(#r: 0.0, #g: 1.0, #b: 0.0, #a: 1.0)$, stroke: null})",
     ))
     .await?;
     let _ = h.view();
@@ -42,7 +42,7 @@ async fn circle_with_fill_only() -> Result<()> {
 async fn circle_with_stroke_only() -> Result<()> {
     let h = canvas_harness(concat!(
         "`Circle({center: {x: 0.0, y: 0.0}, radius: 10.0, ",
-        "fill: null, stroke: {color: {r: 0.0, g: 0.0, b: 1.0, a: 1.0}, width: 3.0}})",
+        "fill: null, stroke: {color: color(#r: 0.0, #g: 0.0, #b: 1.0, #a: 1.0)$, width: 3.0}})",
     ))
     .await?;
     let _ = h.view();
@@ -53,8 +53,8 @@ async fn circle_with_stroke_only() -> Result<()> {
 async fn circle_with_both() -> Result<()> {
     let h = canvas_harness(concat!(
         "`Circle({center: {x: 0.0, y: 0.0}, radius: 5.0, ",
-        "fill: {r: 1.0, g: 1.0, b: 1.0, a: 1.0}, ",
-        "stroke: {color: {r: 0.0, g: 0.0, b: 0.0, a: 1.0}, width: 1.0}})",
+        "fill: color(#r: 1.0, #g: 1.0, #b: 1.0, #a: 1.0)$, ",
+        "stroke: {color: color(#r: 0.0, #g: 0.0, #b: 0.0, #a: 1.0)$, width: 1.0}})",
     ))
     .await?;
     let _ = h.view();
@@ -78,7 +78,7 @@ async fn rect_with_fill() -> Result<()> {
     let h = canvas_harness(concat!(
         "`Rect({top_left: {x: 10.0, y: 20.0}, ",
         "size: {width: 40.0, height: 30.0}, ",
-        "fill: {r: 0.5, g: 0.5, b: 0.5, a: 1.0}, stroke: null})",
+        "fill: color(#r: 0.5, #g: 0.5, #b: 0.5, #a: 1.0)$, stroke: null})",
     ))
     .await?;
     let _ = h.view();
@@ -90,7 +90,7 @@ async fn rect_with_stroke() -> Result<()> {
     let h = canvas_harness(concat!(
         "`Rect({top_left: {x: 0.0, y: 0.0}, ",
         "size: {width: 10.0, height: 10.0}, ",
-        "fill: null, stroke: {color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}, width: 2.0}})",
+        "fill: null, stroke: {color: color(#r: 1.0, #g: 0.0, #b: 0.0, #a: 1.0)$, width: 2.0}})",
     ))
     .await?;
     let _ = h.view();
@@ -103,7 +103,7 @@ async fn rect_with_stroke() -> Result<()> {
 async fn text_renders() -> Result<()> {
     let h = canvas_harness(concat!(
         r#"`Text({content: "hello", position: {x: 5.0, y: 10.0}, "#,
-        "color: {r: 0.0, g: 0.0, b: 0.0, a: 1.0}, size: 16.0})",
+        "color: color(#r: 0.0, #g: 0.0, #b: 0.0, #a: 1.0)$, size: 16.0})",
     ))
     .await?;
     let _ = h.view();

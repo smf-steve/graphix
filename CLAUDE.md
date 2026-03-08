@@ -239,6 +239,10 @@ Some examples are code snippets that reference undefined variables and are meant
 
 Added `graphix-package-gui` — an iced 0.14 based GUI backend. Uses iced sub-crates directly (`iced_core`, `iced_wgpu`, `iced_widget`, etc.) rather than the umbrella `iced` crate for low-level control over the rendering pipeline. Note: `iced_renderer` requires both `wgpu` and `wgpu-bare` features (the cfg checks use the `wgpu-bare` flag which `wgpu` alone doesn't set).
 
+### Package Manager Testing (Mar 2026)
+
+`graphix-package::download_source` may be tested directly by injecting a temporary graphix data dir path and downloading a fixed released `graphix-shell` version from crates.io (for example `0.5.0`). This avoids mutating the user's real `~/.local/share/graphix` tree and provides a regression test for archive extraction layout bugs.
+
 ## Writing Graphix Code — Language Reference
 
 Graphix is NOT in the training set. This section is the authoritative

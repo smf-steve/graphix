@@ -15,6 +15,7 @@ use graphix_rt::{CompExp, GXExt, GXHandle, GXRt};
 use handlebars::Handlebars;
 pub use indexmap::IndexSet;
 use netidx_value::Value;
+use reqwest::Url;
 use serde_json::json;
 use std::{
     any::Any,
@@ -355,9 +356,13 @@ async fn extract_local_source(cargo: &Path, version: &str) -> Result<PathBuf> {
 }
 
 // download our src from crates.io (backup method)
-async fn download_source(crates_io: &AsyncClient, version: &str) -> Result<PathBuf> {
+async fn download_source(
+    crates_io: &AsyncClient,
+    graphix_data_dir: &Path,
+    version: &str,
+) -> Result<PathBuf> {
     let package = format!("graphix-shell-{version}");
-    let graphix_build_dir = graphix_data_dir()?.join("build");
+    let graphix_build_dir = graphix_data_dir.join("build");
     let graphix_dir = graphix_build_dir.join(&package);
     match fs::metadata(&graphix_build_dir).await {
         Err(_) => fs::create_dir_all(&graphix_build_dir).await?,
@@ -375,16 +380,23 @@ async fn download_source(crates_io: &AsyncClient, version: &str) -> Result<PathB
         .into_iter()
         .find(|v| v.num == version)
         .ok_or_else(|| anyhow!("can't find version {version} on crates.io"))?;
-    let crate_data_tar_gz = reqwest::get(&cr_version.dl_path).await?.bytes().await?;
+    let crate_data_tar_gz =
+        reqwest::get(Url::parse("https://crates.io")?.join(&cr_version.dl_path)?)
+            .await?
+            .bytes()
+            .await?;
     let r = task::spawn_blocking({
-        let graphix_dir = graphix_dir.clone();
+        let graphix_build_dir = graphix_build_dir.clone();
+        let cargo_toml = graphix_dir.join("Cargo.toml");
         move || -> Result<()> {
             use std::io::Read;
             let mut crate_data_tar = vec![];
             MultiGzDecoder::new(&crate_data_tar_gz[..])
                 .read_to_end(&mut crate_data_tar)?;
-            std::fs::create_dir_all(&graphix_dir)?;
-            tar::Archive::new(&mut &crate_data_tar[..]).unpack(&graphix_dir)?;
+            tar::Archive::new(&mut &crate_data_tar[..]).unpack(&graphix_build_dir)?;
+            if !std::fs::exists(&cargo_toml)? {
+                bail!("package missing Cargo.toml")
+            }
             Ok(())
         }
     })
@@ -482,12 +494,17 @@ impl GraphixPM {
     /// local cargo registry cache first, falls back to downloading
     /// from crates.io.
     async fn unpack_source(&self, version: &str) -> Result<PathBuf> {
+        let graphix_data_dir = graphix_data_dir()?;
         match extract_local_source(&self.cargo, version).await {
             Ok(p) => Ok(p),
-            Err(local) => match download_source(&self.cratesio, version).await {
-                Ok(p) => Ok(p),
-                Err(dl) => bail!("could not find our source local: {local}, dl: {dl}"),
-            },
+            Err(local) => {
+                match download_source(&self.cratesio, &graphix_data_dir, version).await {
+                    Ok(p) => Ok(p),
+                    Err(dl) => {
+                        bail!("could not find our source local: {local}, dl: {dl}")
+                    }
+                }
+            }
         }
     }
 
