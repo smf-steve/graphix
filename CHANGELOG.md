@@ -1,3 +1,8 @@
+# 0.5.1
+
+- Fix graphix-package templates
+- Fix gui tests
+
 # 0.5.0
 
 - Fix type checker bug with multiple parameterized type refs in a set
