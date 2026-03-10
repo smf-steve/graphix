@@ -346,6 +346,70 @@ run!(array_group2, ARRAY_GROUP2, |v: Result<&Value>| {
     }
 });
 
+const ARRAY_INIT0: &str = r#"
+  array::init(5, |i| i * 2)
+"#;
+
+run!(array_init0, ARRAY_INIT0, |v: Result<&Value>| {
+    match v {
+        Ok(v) => match v.clone().cast_to::<[i64; 5]>() {
+            Ok([0, 2, 4, 6, 8]) => true,
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+const ARRAY_INIT1: &str = r#"
+  array::init(0, |i| i)
+"#;
+
+run!(array_init1, ARRAY_INIT1, |v: Result<&Value>| {
+    match v {
+        Ok(Value::Array(a)) => a.is_empty(),
+        _ => false,
+    }
+});
+
+const ARRAY_INIT2: &str = r#"
+{
+  let a = array::init(3, |i| i + 1);
+  array::fold(a, 0, |acc, x| acc + x)
+}
+"#;
+
+run!(array_init2, ARRAY_INIT2, |v: Result<&Value>| {
+    match v {
+        Ok(Value::I64(6)) => true,
+        _ => false,
+    }
+});
+
+const ARRAY_INIT3: &str = r#"
+  array::init(4, |i| (i, i * i))
+"#;
+
+run!(array_init3, ARRAY_INIT3, |v: Result<&Value>| {
+    match v {
+        Ok(v) => match v.clone().cast_to::<[(i64, i64); 4]>() {
+            Ok([(0, 0), (1, 1), (2, 4), (3, 9)]) => true,
+            _ => false,
+        },
+        _ => false,
+    }
+});
+
+const ARRAY_INIT4: &str = r#"
+  array::init(3, |i| str::len(i))
+"#;
+
+run!(array_init4, ARRAY_INIT4, |v: Result<&Value>| {
+    match v {
+        Err(_) => true,
+        Ok(_) => false,
+    }
+});
+
 const ARRAY_SORT0: &str = r#"
 {
    let a = [5, 4, 3, 2, 1];

@@ -458,9 +458,6 @@ graphix -W unhandled ./myprogram
 # Disable warning about unhandled errors
 graphix -W no-unhandled myapp.gx
 
-# Warn about unhandled arithmetic overflow
-graphix -W unhandled-arith netidx:/apps/calculator
-
 # Warn about unused variables - default in script mode
 graphix -W unused ./myproject
 

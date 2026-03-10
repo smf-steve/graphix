@@ -328,14 +328,17 @@ duration:1.0s  duration:500.ms  duration:100.ns
 ### Operators (by precedence, highest first)
 
 ```
-*  /  %                           // multiply, divide, modulo
-+  -                              // add, subtract
+*  *?  /  /?  %  %?              // multiply, divide, modulo
++  +?  -  -?                     // add, subtract
 <  >  <=  >=                      // comparison
 ==  !=                            // equality
 &&                                // logical and
 ||                                // logical or
 ~                                 // sample (lowest binary)
 ```
+
+Unchecked operators (`+`, `-`, `*`, `/`, `%`) log errors and return bottom on failure (e.g. overflow, div-by-zero).
+Checked operators (`+?`, `-?`, `*?`, `/?`, `%?`) return a `[T, Error<\`ArithError(string)>]` union, allowing errors to be handled with `?`, `$`, or `select`.
 
 Unary: `!x` (not), `&x` (reference), `*x` (dereference)
 Postfix: `x?` (propagate error), `x$` (error→never, logs warning)

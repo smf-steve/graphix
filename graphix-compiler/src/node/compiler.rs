@@ -19,6 +19,7 @@ use crate::{
     node::{
         error::OrNever,
         map::{Map, MapRef},
+        op::{CheckedAdd, CheckedDiv, CheckedMod, CheckedMul, CheckedSub},
         ExplicitParens, Nop,
     },
     typ::Type,
@@ -200,17 +201,32 @@ pub(crate) fn compile<R: Rt, E: UserEvent>(
         ExprKind::Add { lhs, rhs } => {
             Add::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
         }
+        ExprKind::CheckedAdd { lhs, rhs } => {
+            CheckedAdd::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
+        }
         ExprKind::Sub { lhs, rhs } => {
             Sub::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
+        }
+        ExprKind::CheckedSub { lhs, rhs } => {
+            CheckedSub::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
         }
         ExprKind::Mul { lhs, rhs } => {
             Mul::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
         }
+        ExprKind::CheckedMul { lhs, rhs } => {
+            CheckedMul::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
+        }
         ExprKind::Div { lhs, rhs } => {
             Div::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
         }
+        ExprKind::CheckedDiv { lhs, rhs } => {
+            CheckedDiv::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
+        }
         ExprKind::Mod { lhs, rhs } => {
             Mod::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
+        }
+        ExprKind::CheckedMod { lhs, rhs } => {
+            CheckedMod::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)
         }
         ExprKind::Sample { lhs, rhs } => {
             Sample::compile(ctx, flags, spec.clone(), scope, top_id, lhs, rhs)

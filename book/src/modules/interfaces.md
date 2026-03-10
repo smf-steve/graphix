@@ -82,10 +82,10 @@ Let's create a simple math utilities module with an interface.
 **math.gxi** (interface):
 ```graphix
 /// Add two numbers
-val add: fn(i64, i64) -> i64 throws Error<ErrChain<`ArithError(string)>>;
+val add: fn(i64, i64) -> i64;
 
 /// Subtract the second number from the first
-val sub: fn(i64, i64) -> i64 throws Error<ErrChain<`ArithError(string)>>;
+val sub: fn(i64, i64) -> i64;
 
 /// Common mathematical constants
 type Constants = {
@@ -299,7 +299,7 @@ val make: fn(i64) -> Counter;
 val get: fn(Counter) -> i64;
 
 /// Increment the counter every time trig updates
-val increment: fn(#trig: Any, &Counter) -> null throws Error<ErrChain<`ArithError(string)>>;
+val increment: fn(#trig: Any, &Counter) -> null;
 ```
 
 **counter.gx**:
@@ -349,7 +349,7 @@ implementation must have matching constraints:
 // interface - constraint required
 type NumericWrapper<'a: Number>;
 val wrap: fn('a) -> NumericWrapper<'a>;
-val double: fn(NumericWrapper<'a>) -> 'a throws Error<ErrChain<`ArithError(string)>>;
+val double: fn(NumericWrapper<'a>) -> 'a;
 ```
 
 ```graphix

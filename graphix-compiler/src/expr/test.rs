@@ -788,10 +788,15 @@ fn binop_precedence(e: &ExprKind) -> Option<u8> {
         ExprKind::Lte { .. } => "<=",
         ExprKind::Gte { .. } => ">=",
         ExprKind::Add { .. } => "+",
+        ExprKind::CheckedAdd { .. } => "+?",
         ExprKind::Sub { .. } => "-",
+        ExprKind::CheckedSub { .. } => "-?",
         ExprKind::Mul { .. } => "*",
+        ExprKind::CheckedMul { .. } => "*?",
         ExprKind::Div { .. } => "/",
+        ExprKind::CheckedDiv { .. } => "/?",
         ExprKind::Mod { .. } => "%",
+        ExprKind::CheckedMod { .. } => "%?",
         ExprKind::Sample { .. } => "~",
         _ => return None,
     };
@@ -845,10 +850,15 @@ fn add_parens(e: Expr) -> Expr {
         ExprKind::Lte { lhs, rhs } => fix_binop!("<=", Lte, lhs, rhs),
         ExprKind::Gte { lhs, rhs } => fix_binop!(">=", Gte, lhs, rhs),
         ExprKind::Add { lhs, rhs } => fix_binop!("+", Add, lhs, rhs),
+        ExprKind::CheckedAdd { lhs, rhs } => fix_binop!("+?", CheckedAdd, lhs, rhs),
         ExprKind::Sub { lhs, rhs } => fix_binop!("-", Sub, lhs, rhs),
+        ExprKind::CheckedSub { lhs, rhs } => fix_binop!("-?", CheckedSub, lhs, rhs),
         ExprKind::Mul { lhs, rhs } => fix_binop!("*", Mul, lhs, rhs),
+        ExprKind::CheckedMul { lhs, rhs } => fix_binop!("*?", CheckedMul, lhs, rhs),
         ExprKind::Div { lhs, rhs } => fix_binop!("/", Div, lhs, rhs),
+        ExprKind::CheckedDiv { lhs, rhs } => fix_binop!("/?", CheckedDiv, lhs, rhs),
         ExprKind::Mod { lhs, rhs } => fix_binop!("%", Mod, lhs, rhs),
+        ExprKind::CheckedMod { lhs, rhs } => fix_binop!("%?", CheckedMod, lhs, rhs),
         ExprKind::Sample { lhs, rhs } => fix_binop!("~", Sample, lhs, rhs),
         ExprKind::Not { expr } => ExprKind::Not {
             expr: Arc::new(maybe_paren_lhs(Arc::unwrap_or_clone(expr), 255)),
@@ -898,10 +908,15 @@ fn arithexpr() -> impl Strategy<Value = Expr> {
                 .prop_map(add_parens)
                 .prop_map(|e0| ExprKind::Not { expr: Arc::new(e0) }.to_expr_nopos()),
             binop!(inner.clone().prop_map(add_parens), Add),
+            binop!(inner.clone().prop_map(add_parens), CheckedAdd),
             binop!(inner.clone().prop_map(add_parens), Sub),
+            binop!(inner.clone().prop_map(add_parens), CheckedSub),
             binop!(inner.clone().prop_map(add_parens), Mul),
+            binop!(inner.clone().prop_map(add_parens), CheckedMul),
             binop!(inner.clone().prop_map(add_parens), Div),
+            binop!(inner.clone().prop_map(add_parens), CheckedDiv),
             binop!(inner.clone().prop_map(add_parens), Mod),
+            binop!(inner.clone().prop_map(add_parens), CheckedMod),
             binop!(inner.clone().prop_map(add_parens), Sample)
         ]
     })
@@ -1250,20 +1265,40 @@ fn check(s0: &Expr, s1: &Expr) -> bool {
             ExprKind::Add { lhs: lhs1, rhs: rhs1 },
         ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
         (
+            ExprKind::CheckedAdd { lhs: lhs0, rhs: rhs0 },
+            ExprKind::CheckedAdd { lhs: lhs1, rhs: rhs1 },
+        ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
+        (
             ExprKind::Sub { lhs: lhs0, rhs: rhs0 },
             ExprKind::Sub { lhs: lhs1, rhs: rhs1 },
+        ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
+        (
+            ExprKind::CheckedSub { lhs: lhs0, rhs: rhs0 },
+            ExprKind::CheckedSub { lhs: lhs1, rhs: rhs1 },
         ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
         (
             ExprKind::Mul { lhs: lhs0, rhs: rhs0 },
             ExprKind::Mul { lhs: lhs1, rhs: rhs1 },
         ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
         (
+            ExprKind::CheckedMul { lhs: lhs0, rhs: rhs0 },
+            ExprKind::CheckedMul { lhs: lhs1, rhs: rhs1 },
+        ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
+        (
             ExprKind::Div { lhs: lhs0, rhs: rhs0 },
             ExprKind::Div { lhs: lhs1, rhs: rhs1 },
         ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
         (
+            ExprKind::CheckedDiv { lhs: lhs0, rhs: rhs0 },
+            ExprKind::CheckedDiv { lhs: lhs1, rhs: rhs1 },
+        ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
+        (
             ExprKind::Mod { lhs: lhs0, rhs: rhs0 },
             ExprKind::Mod { lhs: lhs1, rhs: rhs1 },
+        ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
+        (
+            ExprKind::CheckedMod { lhs: lhs0, rhs: rhs0 },
+            ExprKind::CheckedMod { lhs: lhs1, rhs: rhs1 },
         ) => dbg!(dbg!(check(lhs0, lhs1)) && dbg!(check(rhs0, rhs1))),
         (
             ExprKind::Eq { lhs: lhs0, rhs: rhs0 },

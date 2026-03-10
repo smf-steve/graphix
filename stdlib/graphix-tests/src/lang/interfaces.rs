@@ -62,8 +62,7 @@ run!(
     "#,
     "/test/inner.gxi" => r#"
         type Point = { x: i64, y: i64 };
-        val add: fn(i64, i64) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val add: fn(i64, i64) -> i64     "#,
     "/test/inner.gx" => r#"
         let add = |a: i64, b: i64| -> i64 a + b
     "#
@@ -88,8 +87,7 @@ run!(
         type B;
         val make_a: fn(i64) -> A;
         val make_b: fn(i64) -> B;
-        val combine: fn(A, B) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val combine: fn(A, B) -> i64     "#,
     "/test/inner.gx" => r#"
         type A = { x: i64 };
         type B = { y: i64 };
@@ -113,8 +111,7 @@ run!(
     "/test/mod_a.gxi" => r#"
         type T;
         val make: fn(i64) -> T;
-        val get: fn(T) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val get: fn(T) -> i64     "#,
     "/test/mod_a.gx" => r#"
         type T = { value: i64 };
         let make = |x: i64| -> T { value: x };
@@ -123,8 +120,7 @@ run!(
     "/test/mod_b.gxi" => r#"
         type T;
         val make: fn(i64) -> T;
-        val get: fn(T) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val get: fn(T) -> i64     "#,
     "/test/mod_b.gx" => r#"
         type T = i64;
         let make = |x: i64| -> T x;
@@ -196,8 +192,7 @@ run!(
         type Elem;
         type Pair = (Elem, Elem);
         val make_pair: fn(i64, i64) -> Pair;
-        val sum_pair: fn(Pair) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val sum_pair: fn(Pair) -> i64     "#,
     "/test/inner.gx" => r#"
         type Elem = i64;
         let make_pair = |a: i64, b: i64| -> Pair (a, b);
@@ -217,8 +212,7 @@ run!(
     "/test/inner.gxi" => r#"
         type Elem;
         val make_array: fn(Array<i64>) -> Array<Elem>;
-        val sum_array: fn(Array<Elem>) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val sum_array: fn(Array<Elem>) -> i64     "#,
     "/test/inner.gx" => r#"
         type Elem = i64;
         let make_array = |arr: Array<i64>| -> Array<Elem> arr;
@@ -244,8 +238,7 @@ run!(
         type List = [`Cons(Elem, List), `Nil];
         val cons: fn(i64, List) -> List;
         val nil: fn() -> List;
-        val sum: fn(List) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val sum: fn(List) -> i64     "#,
     "/test/inner.gx" => r#"
         type Elem = i64;
         let cons = |x: i64, rest: List| -> List `Cons(x, rest);
@@ -281,8 +274,7 @@ run!(
         type Counter;
         val make: fn(i64) -> Counter;
         val get: fn(Counter) -> i64;
-        val increment: fn(&Counter) -> null throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val increment: fn(&Counter) -> null     "#,
     "/test/inner.gx" => r#"
         type Counter = i64;
         let make = |x: i64| -> Counter x;
@@ -341,8 +333,7 @@ run!(
             sig {
                 type T;
                 val make: fn(i64) -> T;
-                val double: fn(T) -> i64 throws Error<ErrChain<`ArithError(string)>>
-            };
+                val double: fn(T) -> i64             };
             source cast<string>(net::subscribe("/local/dyn_test")$)$
         };
         let result = select status {
@@ -571,8 +562,7 @@ run!(
         type NumWrapper<'a: Number>;
         type IntWrapper = NumWrapper<i64>;
         val wrap: fn(i64) -> IntWrapper;
-        val double: fn(IntWrapper) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val double: fn(IntWrapper) -> i64     "#,
     "/test/inner.gx" => r#"
         type NumWrapper<'a: Number> = 'a;
         let wrap = |x: i64| -> IntWrapper x;
@@ -593,8 +583,7 @@ run!(
         type Box<'a>;
         type IntBoxArray = Array<Box<i64>>;
         val wrap: fn('a) -> Box<'a>;
-        val sum_boxes: fn(IntBoxArray) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val sum_boxes: fn(IntBoxArray) -> i64     "#,
     "/test/inner.gx" => r#"
         type Box<'a> = { value: 'a };
         let wrap = |x: 'a| -> Box<'a> { value: x };
@@ -749,19 +738,22 @@ run!(
             catch(e) => {
                 let chain = e.0;
                 select chain.error {
-                    `ArithError(_) => -1
+                    `ArrayIndexError(_) => -1
                 }
             }
     "#,
     "/test/inner.gxi" => r#"
         type T;
         val make: fn(i64) -> T;
-        val get_value: fn(T) -> i64 throws Error<ErrChain<`ArithError(string)>>
+        val get_value: fn(T) -> i64 throws Error<ErrChain<`ArrayIndexError(string)>>
     "#,
     "/test/inner.gx" => r#"
         type T = { value: i64 };
         let make = |x: i64| -> T { value: x };
-        let get_value = |t: T| -> i64 t.value + 41
+        let get_value = |t: T| -> i64 {
+            let a = [t.value + 41];
+            a[0]?
+        }
     "#
 );
 
@@ -787,8 +779,7 @@ run!(
     "/test/mod_a.gxi" => r#"
         type T;
         val make: fn(i64) -> T;
-        val get: fn(T) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val get: fn(T) -> i64     "#,
     "/test/mod_a.gx" => r#"
         type T = { value: i64 };
         let make = |x: i64| -> T { value: x };
@@ -797,8 +788,7 @@ run!(
     "/test/mod_b.gxi" => r#"
         type T;
         val make: fn(i64) -> T;
-        val get: fn(T) -> i64 throws Error<ErrChain<`ArithError(string)>>
-    "#,
+        val get: fn(T) -> i64     "#,
     "/test/mod_b.gx" => r#"
         type T = i64;
         let make = |x: i64| -> T x;

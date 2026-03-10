@@ -24,8 +24,6 @@ use std::{path::PathBuf, str::FromStr, sync::OnceLock, time::Duration};
 enum RawFlag {
     Unhandled,
     NoUnhandled,
-    UnhandledArith,
-    NoUnhandledArith,
     Unused,
     NoUnused,
     Error,
@@ -39,8 +37,6 @@ impl FromStr for RawFlag {
         match s {
             "unhandled" => Ok(Self::Unhandled),
             "no-unhandled" => Ok(Self::NoUnhandled),
-            "unhandled-arith" => Ok(Self::UnhandledArith),
-            "no-unhandled-arith" => Ok(Self::NoUnhandledArith),
             "unused" => Ok(Self::Unused),
             "no-unused" => Ok(Self::NoUnused),
             "error" => Ok(Self::Error),
@@ -58,8 +54,6 @@ impl RawFlag {
             match fl {
                 Self::Unhandled => enable.insert(CFlag::WarnUnhandled),
                 Self::NoUnhandled => disable.insert(CFlag::WarnUnhandled),
-                Self::UnhandledArith => enable.insert(CFlag::WarnUnhandledArith),
-                Self::NoUnhandledArith => disable.insert(CFlag::WarnUnhandledArith),
                 Self::Unused => enable.insert(CFlag::WarnUnused),
                 Self::NoUnused => disable.insert(CFlag::WarnUnused),
                 Self::Error => enable.insert(CFlag::WarningsAreErrors),
@@ -176,7 +170,6 @@ struct Params {
     file: Option<ArcStr>,
     /// enable or disable compiler flags. Currently supported flags are,
     /// - unhandled, no-unhandled: warn about unhandled ? operators (default)
-    /// - unhandled-arith, no-unhandled-arith: warn about unhandled arith exceptions
     /// - unused, no-unused: warn about unused variables (default)
     /// - error, no-error makes warnings errors
     ///

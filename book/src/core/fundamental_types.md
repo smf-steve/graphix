@@ -17,13 +17,21 @@ calculations without rounding or floating point approximation errors.
 The basic arithmetic operations are implemented on all the number types with all
 the other number types.
 
-| Operation | Operator |
-|-----------|----------|
-| Add       |     +    |
-| Subtract  |     -    |
-| Multiply  |     *    |
-| Divide    |     /    |
-| Mod       |     %    |
+| Operation | Unchecked | Checked |
+|-----------|-----------|---------|
+| Add       |     +     |   +?    |
+| Subtract  |     -     |   -?    |
+| Multiply  |     *     |   *?    |
+| Divide    |     /     |   /?    |
+| Mod       |     %     |   %?    |
+
+Unchecked operators log an error and return bottom (no value) on
+overflow, underflow, or division by zero. The expression simply stops
+updating until the inputs change to values that produce a valid result.
+
+Checked operators return a union type `[T, Error<`ArithError(string)>]`,
+allowing you to handle arithmetic errors explicitly using `?`, `$`, or
+`select`.
 
 The compiler will let you do arithmetic on different types of numbers directly
 without casting, however the return type of the operation will be the set of all
@@ -45,30 +53,37 @@ Caused by:
     2: type mismatch '_1046: i64 does not contain [i64, f64]
 ```
 
-Division by zero raises an error to the nearest error handler (see [Error Handling](error.md)). If unhandled, it will be printed to stderr by the shell.
+With unchecked operators, division by zero and overflow log an error and return bottom -- the expression produces no value until the inputs change. This means downstream expressions simply stop updating until the arithmetic becomes valid again.
 
 ```graphix
 〉0 / 0
 -: i64
-unhandled error: error:"in expr at line: 1, column: 1 attempt to divide by zero"
 ```
 
-The result type of the division is still `i64`, but the actual value is an error. You can handle division by zero using the `?` or `` ` `` operators:
+No value is printed because the division by zero produces bottom. If the divisor later changes to a non-zero value, the expression will resume producing values.
+
+With checked operators, you get an explicit error value you can handle:
 
 ```graphix
-〉(0 / 0)?
--: Result<i64, Error<`ArithError(string)>>
-error:["ArithError", "in expr at line: 1, column: 2 attempt to divide by zero"]
+〉0 /? 0
+-: [i64, Error<`ArithError(string)>]
+error:["ArithError", "attempt to divide by zero"]
 ```
 
-If division by zero occurs and is not handled, the expression will not update until the divisor changes to a non-zero value. This can cause issues if your program depends on continuous updates from that expression.
-
-Overflow and underflow are handled by wrapping:
+You can use `?` to propagate, `$` to swallow, or `select` to match on the result:
 
 ```graphix
-〉u32:0 - u32:1
--: u32
-4294967295
+〉(0 /? 0)?
+-: i64
+// throws ArithError to nearest try/catch
+
+〉(0 /? 0)$
+-: i64
+// logs warning, returns bottom
+
+〉u32:0 -? u32:1
+-: [u32, Error<`ArithError(string)>]
+error:["ArithError", "attempt to subtract with overflow"]
 ```
 
 #### v32, z32, v64, z64

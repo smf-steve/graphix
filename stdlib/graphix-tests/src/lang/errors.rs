@@ -4,61 +4,59 @@ use anyhow::Result;
 use graphix_package_core::run;
 use netidx::publisher::Value;
 
-const CATCH0: &str = r#"
-try 2 + 2
-catch(e) => select (e.0).error {
-    `ArithError(s) => println("arithmetic operation error [s]")
-}
+// unchecked arithmetic: 2 + 2 works normally
+const UNCHECKED0: &str = r#"
+2 + 2
 "#;
 
-run!(catch0, CATCH0, |v: Result<&Value>| match v {
+run!(unchecked0, UNCHECKED0, |v: Result<&Value>| match v {
     Ok(Value::I64(4)) => true,
     _ => false,
 });
 
+// checked arithmetic: 2 +? 2 returns a union value (still i64 when no error)
+const CHECKED0: &str = r#"
+2 +? 2
+"#;
+
+run!(checked0, CHECKED0, |v: Result<&Value>| match v {
+    Ok(Value::I64(4)) => true,
+    _ => false,
+});
+
+// checked div by zero returns an error value that can be caught
+const CHECKED_DIV0: &str = r#"
+{
+    let res = never();
+    try (0 /? 0)?
+    catch(e) => select (e.0).error {
+        `ArithError(s) => res <- s
+    };
+    res
+}
+"#;
+
+run!(checked_div0, CHECKED_DIV0, |v: Result<&Value>| match v {
+    Ok(Value::String(_)) => true,
+    _ => false,
+});
+
+// try/catch with array index errors still works
 const CATCH1: &str = r#"
 try
     let a = [1, 2, 3];
     a[0]? + a[1]?
 catch(e) => select (e.0).error {
-    `ArithError(s) => println("arithmetic operation error [s]")
+    `ArrayIndexError(s) => { println("array index error [s]"); -1 }
 }
 "#;
 
 run!(catch1, CATCH1, |v: Result<&Value>| match v {
-    Err(_) => true,
+    Ok(Value::I64(3)) => true,
     _ => false,
 });
 
-const CATCH2: &str = r#"
-try 2 + 2
-catch(e) => select (e.0).error {
-    `ArithError(s) => println("arithmetic operation error [s]"),
-    `ArrayIndexError(s) => println("array index error [s]")
-}
-"#;
-
-run!(catch2, CATCH2, |v: Result<&Value>| match v {
-    Err(_) => true,
-    _ => false,
-});
-
-const CATCH3: &str = r#"
-{
-    let f = |x| x / x;
-    let res = never();
-    try any(f(0), res)
-    catch(e) => select (e.0).error {
-        `ArithError(s) => res <- s
-    }
-}
-"#;
-
-run!(catch3, CATCH3, |v: Result<&Value>| match v {
-    Ok(Value::String(_)) => true,
-    _ => false,
-});
-
+// nested try/catch with checked arith and array index errors
 const CATCH4: &str = r#"
 {
     let a = [0, 1, 2, 3, 4, 5];
@@ -66,7 +64,7 @@ const CATCH4: &str = r#"
     let err1: Error<ErrChain<[`ArithError(string), `ArrayIndexError(string)]>> = never();
     try
        try
-           a[5]? / a[0]?;
+           (a[5]? /? a[0]?)?;
            a[6]?
        catch(e) => select (e.0).error {
           `ArithError(_) => err1 <- e,
@@ -84,19 +82,15 @@ run!(catch4, CATCH4, |v: Result<&Value>| match v
     _ => false,
 });
 
-const CATCH5: &str = r#"
+// checked arithmetic with $ (swallow error)
+const CHECKED_DOLLAR: &str = r#"
 {
-    let f = |x| x / x;
-    let res = never();
-    try any(f(0), res)
-    catch(e) => select (e.0).error {
-        `ArithError(s) => res <- s,
-        `ArrayIndexError(s) => res <- s
-    }
+    let x = (0 /? 0)$;
+    any(x, 2 + 2)
 }
 "#;
 
-run!(catch5, CATCH5, |v: Result<&Value>| match v {
-    Err(_) => true,
+run!(checked_dollar, CHECKED_DOLLAR, |v: Result<&Value>| match v {
+    Ok(Value::I64(4)) => true,
     _ => false,
 });

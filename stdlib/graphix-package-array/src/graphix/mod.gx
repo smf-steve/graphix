@@ -4,6 +4,7 @@ let map = |a, f| 'array_map;
 let flat_map = |a, f| 'array_flat_map;
 let fold = |a, init, f| 'array_fold;
 let group = |v, f| 'array_group;
+let init = |n, f| 'array_init;
 let iter = |a| 'array_iter;
 let iterq = |#clock, a| 'array_iterq;
 let len = |a| 'array_len;

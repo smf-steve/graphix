@@ -1,4 +1,4 @@
-use super::{compiler::compile, error::ECHAIN, Nop};
+use super::{compiler::compile, Nop};
 use crate::{
     deref_typ,
     expr::{Expr, ExprId},
@@ -12,7 +12,6 @@ use arcstr::ArcStr;
 use enumflags2::BitFlags;
 use fxhash::{FxHashMap, FxHashSet};
 use netidx::subscriber::Value;
-use netidx_value::Typ;
 use poolshark::local::LPooled;
 use std::{collections::hash_map::Entry, mem};
 use triomphe::Arc as TArc;
@@ -39,27 +38,6 @@ fn compile_apply_args<R: Rt, E: UserEvent>(
         }
     }
     Ok((nodes, named))
-}
-
-fn is_arith_error(t: &Type) -> bool {
-    t.with_deref(|t| {
-        t.map(|t| match t {
-            Type::Variant(name, param) => {
-                &**name == "ArithError"
-                    && param.len() == 1
-                    && param[0] == Type::Primitive(Typ::String.into())
-            }
-            Type::Error(e) => match &**e {
-                t @ Type::Variant(_, _) => is_arith_error(t),
-                Type::Ref { scope: _, name, params } => {
-                    *name == *ECHAIN && params.len() == 1 && is_arith_error(&params[0])
-                }
-                _ => false,
-            },
-            _ => false,
-        })
-        .unwrap_or(false)
-    })
 }
 
 #[derive(Debug)]
@@ -389,23 +367,6 @@ impl<R: Rt, E: UserEvent> Update<R, E> for CallSite<R, E> {
                     }
                 }
                 Err(_) if t == Type::Bottom => (), // it doesn't throw any errors
-                Err(_) if is_arith_error(&t) => {
-                    if self
-                        .flags
-                        .contains(CFlag::WarnUnhandledArith | CFlag::WarningsAreErrors)
-                    {
-                        bail!(
-                            "ERROR: {} at {} error {} raised from function call {} will not be caught",
-                            self.spec.ori, self.spec.pos, t, self.fnode.spec()
-                        )
-                    }
-                    if self.flags.contains(CFlag::WarnUnhandledArith) {
-                        eprintln!(
-                            "WARNING: {} at {} error {} raised from function call {} will not be caught",
-                            self.spec.ori, self.spec.pos, t, self.fnode.spec()
-                        )
-                    }
-                }
                 Err(_) => {
                     if self
                         .flags

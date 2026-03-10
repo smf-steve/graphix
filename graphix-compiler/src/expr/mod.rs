@@ -224,10 +224,15 @@ pub enum ExprKind {
     Or { lhs: Arc<Expr>, rhs: Arc<Expr> },
     Not { expr: Arc<Expr> },
     Add { lhs: Arc<Expr>, rhs: Arc<Expr> },
+    CheckedAdd { lhs: Arc<Expr>, rhs: Arc<Expr> },
     Sub { lhs: Arc<Expr>, rhs: Arc<Expr> },
+    CheckedSub { lhs: Arc<Expr>, rhs: Arc<Expr> },
     Mul { lhs: Arc<Expr>, rhs: Arc<Expr> },
+    CheckedMul { lhs: Arc<Expr>, rhs: Arc<Expr> },
     Div { lhs: Arc<Expr>, rhs: Arc<Expr> },
+    CheckedDiv { lhs: Arc<Expr>, rhs: Arc<Expr> },
     Mod { lhs: Arc<Expr>, rhs: Arc<Expr> },
+    CheckedMod { lhs: Arc<Expr>, rhs: Arc<Expr> },
     Sample { lhs: Arc<Expr>, rhs: Arc<Expr> },
 }
 
@@ -547,10 +552,15 @@ impl Expr {
             | ExprKind::Deref(e)
             | ExprKind::Not { expr: e } => e.fold(init, f),
             ExprKind::Add { lhs, rhs }
+            | ExprKind::CheckedAdd { lhs, rhs }
             | ExprKind::Sub { lhs, rhs }
+            | ExprKind::CheckedSub { lhs, rhs }
             | ExprKind::Mul { lhs, rhs }
+            | ExprKind::CheckedMul { lhs, rhs }
             | ExprKind::Div { lhs, rhs }
+            | ExprKind::CheckedDiv { lhs, rhs }
             | ExprKind::Mod { lhs, rhs }
+            | ExprKind::CheckedMod { lhs, rhs }
             | ExprKind::And { lhs, rhs }
             | ExprKind::Or { lhs, rhs }
             | ExprKind::Eq { lhs, rhs }

@@ -10,7 +10,7 @@ that using type variables and constraints in our annotations.
 ```graphix
 〉let f = 'a: Number |x: 'a, y: 'a| -> 'a x + y
 〉f
--: fn<'a: unbound: Number, '_2101: unbound: Error<ErrChain<`ArithError(string)>>>('a: unbound, 'a: unbound) -> 'a: unbound throws '_2101: unbound
+-: fn<'a: unbound: Number>('a: unbound, 'a: unbound) -> 'a: unbound
 160
 ```
 
@@ -33,21 +33,20 @@ of,
 - constraint type
 
 ```
-fn<'a: unbound: Number, 
-   '_2101: unbound: Error<ErrChain<`ArithError(string)>>>
-('a: unbound, 'a: unbound) -> 'a: unbound throws '_2101: unbound
+fn<'a: unbound: Number>
+('a: unbound, 'a: unbound) -> 'a: unbound
 ```
 
 We can remove the (unbound) current values and it becomes easier to read,
 
 ```
-fn<'a: Number,
-   '_2101: Error<ErrChain<`ArithError(string)>>>
-('a, 'a) -> 'a throws '_2101
+fn<'a: Number>
+('a, 'a) -> 'a
 ```
 
-We just have two variables now, `'a` representing both argument types
-and the return type, and `'_2101` representing the throws type. We can
+We just have one variable now, `'a` representing both argument types
+and the return type. Because unchecked `+` returns bottom on overflow
+rather than throwing, there is no `throws` clause. We can
 still call this `f` with any number type,
 
 ```graphix
@@ -118,28 +117,26 @@ and are enforced at each call site. For example consider,
 ```graphix
 〉let f = |x, y| x + y
 〉f
--: fn<'_2073: unbound: Error<ErrChain<`ArithError(string)>>, '_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number>('_2067: unbound, '_2069: unbound) -> '_2071: unbound throws '_2073: unbound
+-: fn<'_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number>('_2067: unbound, '_2069: unbound) -> '_2071: unbound
 159
 ```
 
 The type is a bit of a mouthful, lets format it a bit so it's easier to read.
 
 ```
-fn<'_2073: unbound: Error<ErrChain<`ArithError(string)>>,
-   '_2069: unbound: Number,
+fn<'_2069: unbound: Number,
    '_2067: unbound: Number,
    '_2071: unbound: Number>
-('_2067: unbound, '_2069: unbound) -> '_2071: unbound throws '_2073: unbound
+('_2067: unbound, '_2069: unbound) -> '_2071: unbound
 ```
 
 Removing the unbounds,
 
 ```
-fn<'_2073: Error<ErrChain<`ArithError(string)>>,
-   '_2069: Number,
+fn<'_2069: Number,
    '_2067: Number,
    '_2071: Number>
-('_2067, '_2069) -> '_2071 throws '_2073
+('_2067, '_2069) -> '_2071
 ```
 
 Here we can see that `'_2067`, `'_2069`, and `'_2071` represent the two
@@ -155,16 +152,10 @@ So in plain English this says that the arguments to the function can by any type
 as long as it is a number, and the function will return some type which is a
 number. None of the three numbers need to be the same type of number.
 
-Finally lets address `throws '_2073`. This states that the function may throw an
-error, and if it does it's type will be `'_2073`, which in this case is
-constrained to be
-
-```Error<ErrChain<`ArithError(string)>>```.
-
-This is what happens in the case of overflow, underflow, and other arithmetic
-errors. The `throws` clause of the type is used by the `try catch(e) => ...`
-expression to compute the type of `e`, which is just the union of all the throws
-types within the `try catch`.
+Because unchecked `+` returns bottom on overflow rather than throwing,
+there is no `throws` clause in the type. If you want arithmetic errors
+to be part of the type, use the checked operator `+?` instead, which
+returns `[T, Error<`ArithError(string)>]`.
 
 We can indeed call `f` with different number types, and it works just fine,
 

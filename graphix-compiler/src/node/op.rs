@@ -2,15 +2,15 @@ use super::{compiler::compile, CFlag, Cached};
 use crate::{
     defetyp,
     expr::{Expr, ExprId},
-    node::error::wrap_error,
     typ::Type,
-    wrap, BindId, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
+    wrap, Event, ExecCtx, Node, Refs, Rt, Scope, Update, UserEvent,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use arcstr::ArcStr;
+use compact_str::format_compact;
 use enumflags2::BitFlags;
-use netidx_value::{Typ, Value};
-use std::{collections::hash_map::Entry, fmt};
+use netidx_value::{Typ, ValArray, Value};
+use std::fmt;
 use triomphe::Arc;
 
 macro_rules! compare_op {
@@ -242,35 +242,57 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Not<R, E> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Op {
     Add,
+    CheckedAdd,
     Sub,
+    CheckedSub,
     Mul,
+    CheckedMul,
     Div,
+    CheckedDiv,
     Mod,
+    CheckedMod,
+}
+
+impl Op {
+    fn base_op(self) -> Op {
+        match self {
+            Op::CheckedAdd => Op::Add,
+            Op::CheckedSub => Op::Sub,
+            Op::CheckedMul => Op::Mul,
+            Op::CheckedDiv => Op::Div,
+            Op::CheckedMod => Op::Mod,
+            other => other,
+        }
+    }
 }
 
 impl fmt::Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Op::Add => write!(f, "+"),
+            Op::CheckedAdd => write!(f, "+?"),
             Op::Sub => write!(f, "-"),
+            Op::CheckedSub => write!(f, "-?"),
             Op::Mul => write!(f, "*"),
+            Op::CheckedMul => write!(f, "*?"),
             Op::Div => write!(f, "/"),
+            Op::CheckedDiv => write!(f, "/?"),
             Op::Mod => write!(f, "%"),
+            Op::CheckedMod => write!(f, "%?"),
         }
     }
 }
 
-defetyp!(ARITH_ERR, ARITH_ERR_TAG, "ArithError", "Error<ErrChain<`{}(string)>>");
+defetyp!(ARITH_ERR, ARITH_ERR_TAG, "ArithError", "Error<`{}(string)>");
 
 macro_rules! arith_op {
-    ($name:ident, $opn:expr, $op:tt) => {
+    ($name:ident, $opn:expr, $checked:literal, $op:tt) => {
         #[derive(Debug)]
         pub(crate) struct $name<R: Rt, E: UserEvent> {
             spec: Expr,
             typ: Type,
-            id: Option<BindId>,
             lhs: Cached<R, E>,
-            rhs: Cached<R, E>
+            rhs: Cached<R, E>,
         }
 
         impl<R: Rt, E: UserEvent> $name<R, E> {
@@ -286,25 +308,7 @@ macro_rules! arith_op {
                 let lhs = Cached::new(compile(ctx, flags, lhs.clone(), scope, top_id)?);
                 let rhs = Cached::new(compile(ctx, flags, rhs.clone(), scope, top_id)?);
                 let typ = Type::empty_tvar();
-                let id = match ctx.env.lookup_catch(&scope.dynamic).ok() {
-                    None => {
-                        if flags.contains(CFlag::WarnUnhandledArith | CFlag::WarningsAreErrors) {
-                            bail!(
-                                "ERROR: in {} at {} error raised by arith op will not be caught",
-                                spec.ori, spec.pos
-                            )
-                        }
-                        if flags.contains(CFlag::WarnUnhandledArith) {
-                            eprintln!(
-                                "WARNING: in {} at {} error raised by arith op will not be caught",
-                                spec.ori, spec.pos
-                            );
-                        }
-                        None
-                    }
-                    o => o,
-                };
-                Ok(Box::new(Self { spec, id, typ, lhs, rhs }))
+                Ok(Box::new(Self { spec, typ, lhs, rhs }))
             }
         }
 
@@ -315,25 +319,18 @@ macro_rules! arith_op {
                 let lhs = self.lhs.cached.as_ref()?;
                 let rhs = self.rhs.cached.as_ref()?;
                 if lhs_up || rhs_up {
-                    match lhs.clone() $op rhs.clone() {
-                        Value::Error(e) => match self.id {
-                            Some(id) => {
-                                let e: Value = (ARITH_ERR_TAG.clone(), (*e).clone()).into();
-                                let e = wrap_error(&ctx.env, &self.spec, e);
-                                let v = Value::Error(Arc::new(e));
-                                match event.variables.entry(id) {
-                                    Entry::Vacant(e) => {
-                                        e.insert(v);
-                                    }
-                                    Entry::Occupied(_) => ctx.set_var(id, v),
-                                }
-                                None
-                            }
-                            None => {
-                                log::error!("unhandled error in {} at {} {e}", self.spec.ori, self.spec.pos);
-                                eprintln!("unhandled error in {} at {} {e}", self.spec.ori, self.spec.pos);
-                                None
-                            }
+                    let result = lhs.clone() $op rhs.clone();
+                    match result {
+                        Value::Error(e) if $checked => {
+                            let tag = Value::String(ARITH_ERR_TAG.clone());
+                            let err = Value::from(format_compact!("{e}"));
+                            let var = Value::Array(ValArray::from_iter([tag, err]));
+                            Some(Value::Error(Arc::new(var)))
+                        }
+                        Value::Error(e) => {
+                            log::error!("arith error in {} at {} {e}", self.spec.ori, self.spec.pos);
+                            eprintln!("arith error in {} at {} {e}", self.spec.ori, self.spec.pos);
+                            None
                         }
                         v => Some(v)
                     }
@@ -383,31 +380,32 @@ macro_rules! arith_op {
                 let typ = Type::Primitive(Typ::number() | Typ::Duration | Typ::DateTime);
                 wrap!(self.lhs.node, typ.check_contains(&ctx.env, lhs))?;
                 wrap!(self.rhs.node, typ.check_contains(&ctx.env, rhs))?;
+                let base = $opn.base_op();
                 let ut = match (lhs.with_deref(|t| t.cloned()), rhs.with_deref(|t| t.cloned())) {
                     (None, _) | (_, None) => bail!("type must be known"),
                     (Some(lhs@ Type::Primitive(p0)), Some(rhs@ Type::Primitive(p1))) => {
                         if p0.contains(Typ::DateTime) {
-                            if p1 == Typ::Duration && ($opn == Op::Add || $opn == Op::Sub) {
+                            if p1 == Typ::Duration && (base == Op::Add || base == Op::Sub) {
                                 Type::Primitive(Typ::DateTime.into())
                             } else {
                                 bail!("can't perform {lhs} {} {rhs}", $opn)
                             }
                         } else if p1.contains(Typ::DateTime) {
-                            if p0 == Typ::Duration && $opn == Op::Add {
+                            if p0 == Typ::Duration && base == Op::Add {
                                 Type::Primitive(Typ::DateTime.into())
                             } else {
                                 bail!("can't perform {lhs} {} {rhs}", $opn)
                             }
                         } else if p0.contains(Typ::Duration) {
-                            if p1 == Typ::Duration && ($opn == Op::Add || $opn == Op::Sub) {
+                            if p1 == Typ::Duration && (base == Op::Add || base == Op::Sub) {
                                 Type::Primitive(Typ::Duration.into())
-                            } else if (Typ::integer() | Typ::F32 | Typ::F64).contains(p1) && ($opn == Op::Mul || $opn == Op::Div) {
+                            } else if (Typ::integer() | Typ::F32 | Typ::F64).contains(p1) && (base == Op::Mul || base == Op::Div) {
                                 Type::Primitive(Typ::Duration.into())
                             } else {
                                 bail!("can't perform {lhs} {} {rhs}", $opn)
                             }
                         } else if p1.contains(Typ::Duration) {
-                            if (Typ::integer() | Typ::F32 | Typ::F64).contains(p0) && $opn == Op::Mul {
+                            if (Typ::integer() | Typ::F32 | Typ::F64).contains(p0) && base == Op::Mul {
                                 Type::Primitive(Typ::Duration.into())
                             } else {
                                 bail!("can't perform {lhs} {} {rhs}", $opn)
@@ -418,29 +416,26 @@ macro_rules! arith_op {
                     }
                     (Some(_), Some(_)) => wrap!(self, lhs.union(&ctx.env, rhs))?
                 };
+                let ut = if $checked {
+                    Type::Set(Arc::from_iter([ut, ARITH_ERR.clone()]))
+                } else {
+                    ut
+                };
                 wrap!(self, self.typ.check_contains(&ctx.env, &ut))?;
-                if let Some(id) = self.id {
-                    let bind = ctx.env.by_id.get(&id).ok_or_else(|| anyhow!("BUG: arith"))?;
-                    match &bind.typ {
-                        Type::TVar(tv) => {
-                            let tv = tv.read();
-                            let mut typ = tv.typ.write();
-                            match &mut *typ {
-                                None => *typ = Some(ARITH_ERR.clone()),
-                                Some(t) => *typ = Some(t.union(&ctx.env, &ARITH_ERR)?),
-                            }
-                        }
-                        _ => unreachable!(),
-                    }
-                }
                 Ok(())
             }
         }
     }
 }
 
-arith_op!(Add, Op::Add, +);
-arith_op!(Sub, Op::Sub, -);
-arith_op!(Mul, Op::Mul, *);
-arith_op!(Div, Op::Div, /);
-arith_op!(Mod, Op::Mod, %);
+arith_op!(Add, Op::Add, false, +);
+arith_op!(Sub, Op::Sub, false, -);
+arith_op!(Mul, Op::Mul, false, *);
+arith_op!(Div, Op::Div, false, /);
+arith_op!(Mod, Op::Mod, false, %);
+
+arith_op!(CheckedAdd, Op::CheckedAdd, true, +);
+arith_op!(CheckedSub, Op::CheckedSub, true, -);
+arith_op!(CheckedMul, Op::CheckedMul, true, *);
+arith_op!(CheckedDiv, Op::CheckedDiv, true, /);
+arith_op!(CheckedMod, Op::CheckedMod, true, %);

@@ -730,9 +730,9 @@ parser! {
             attempt(arith()),
             byref(),
             qop(deref()),
-            (position(), between(token('('), sptoken(')'), expr())).map(|(pos, e)| {
+            qop((position(), between(token('('), sptoken(')'), expr())).map(|(pos, e)| {
                 ExprKind::ExplicitParens(Arc::new(e)).to_expr(pos)
-            }),
+            })),
             attempt(literal()),
             qop(reference())
         )))

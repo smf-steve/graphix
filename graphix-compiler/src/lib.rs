@@ -65,7 +65,6 @@ use uuid::Uuid;
 #[repr(u64)]
 pub enum CFlag {
     WarnUnhandled,
-    WarnUnhandledArith,
     WarnUnused,
     WarningsAreErrors,
 }

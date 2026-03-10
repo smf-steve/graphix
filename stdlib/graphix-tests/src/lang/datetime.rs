@@ -227,13 +227,7 @@ run!(datetime_arith17, DATETIME_ARITH17, |v: Result<&Value>| match v {
 });
 
 const DATETIME_ARITH18: &str = r#"
-{
-    let errors = never();
-    try
-        let you_have_been_in_suspention_for = duration:9999999999999.s * 99999999999999;
-        any(you_have_been_in_suspention_for, errors)
-    catch(e: `ArithError(string)) => errors <- e
-}
+    duration:9999999999999.s *? 99999999999999
 "#;
 
 run!(datetime_arith18, DATETIME_ARITH18, |v: Result<&Value>| match v {

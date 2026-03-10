@@ -65,9 +65,9 @@ parser! {
                 attempt(qop(tupleref())),
                 attempt(qop(structref())),
                 attempt(qop(apply())),
-                (position(), between(token('('), sptoken(')'), spaces().with(arith()))).map(|(pos, e)| {
+                qop((position(), between(token('('), sptoken(')'), spaces().with(arith()))).map(|(pos, e)| {
                     ExprKind::ExplicitParens(Arc::new(e)).to_expr(pos)
-                }),
+                })),
                 attempt(literal()),
                 qop(reference()),
             )))
@@ -84,10 +84,15 @@ fn mke(lhs: Expr, op: &'static str, rhs: Expr) -> Expr {
     }
     match op {
         "+" => mk!(Add),
+        "+?" => mk!(CheckedAdd),
         "-" => mk!(Sub),
+        "-?" => mk!(CheckedSub),
         "*" => mk!(Mul),
+        "*?" => mk!(CheckedMul),
         "/" => mk!(Div),
+        "/?" => mk!(CheckedDiv),
         "%" => mk!(Mod),
+        "%?" => mk!(CheckedMod),
         "==" => mk!(Eq),
         "!=" => mk!(Ne),
         ">" => mk!(Gt),
@@ -110,9 +115,9 @@ pub(crate) fn precedence(op: &str) -> (u8, bool) {
         "&&" => (2, true),
         "==" | "!=" => (3, true),
         "<" | ">" | "<=" | ">=" => (4, true),
-        "+" | "-" => (5, true),
-        "/" | "%" => (6, true),
-        "*" => (7, true),
+        "+" | "+?" | "-" | "-?" => (5, true),
+        "/" | "/?" | "%" | "%?" => (6, true),
+        "*" | "*?" => (7, true),
         _ => unreachable!(),
     }
 }
@@ -162,11 +167,16 @@ parser! {
                     attempt(string("||")),
                     string(">"),
                     string("<"),
-                    string("+"),
-                    string("-"),
-                    string("*"),
-                    string("/"),
-                    string("%"),
+                    attempt(string("+?")),
+                    attempt(string("+")),
+                    attempt(string("-?")),
+                    attempt(string("-")),
+                    attempt(string("*?")),
+                    attempt(string("*")),
+                    attempt(string("/?")),
+                    attempt(string("/")),
+                    attempt(string("%?")),
+                    attempt(string("%")),
                     string("~"),
                 )))),
                 arith_term(),

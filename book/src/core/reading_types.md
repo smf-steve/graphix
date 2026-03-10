@@ -271,11 +271,10 @@ It's type will be something like:
 
 ```graphix
 val f: fn<
-  '_2073: Error<ErrChain<`ArithError(string)>>, 
-  '_2069: Number, 
-  '_2067: Number, 
+  '_2069: Number,
+  '_2067: Number,
   '_2071: Number
->('_2067, '_2069) -> '_2071 throws '_2073
+>('_2067, '_2069) -> '_2071
 ```
 
 The compiler has inferred a bunch of properties here,
@@ -285,16 +284,18 @@ on `'_2067: Number` and `_2069: Number` mean.
 - both arguments need not be the same type, hence they are different type variables
 - the return type will also be a number, hence `'_2071: Number`, but
   it may not be the same type of number as either of the arguments.
-- the function may throw an arithmetic exception, hence the constraint
-  on `'_2073`
 
-In the shell this rather imposing type signature is made even more
-complex by the shell also telling you what type variables are
-currently bound to, or `unbound` if they aren't bound. So in the shell this pops out as,
+Because unchecked arithmetic operators like `+` log errors and return
+bottom on overflow rather than throwing, there is no `throws` clause
+in the type signature.
+
+In the shell this type signature is made a bit more complex by the
+shell also telling you what type variables are currently bound to, or
+`unbound` if they aren't bound. So in the shell this pops out as,
 
 ```graphix
 〉f
--: fn<'_2073: unbound: Error<ErrChain<`ArithError(string)>>, '_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number>('_2067: unbound, '_2069: unbound) -> '_2071: unbound throws '_2073: unbound
+-: fn<'_2069: unbound: Number, '_2067: unbound: Number, '_2071: unbound: Number>('_2067: unbound, '_2069: unbound) -> '_2071: unbound
 ```
 
 The constraint `'_2069: unbound: Number` is read as. _2069 is not

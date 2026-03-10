@@ -324,7 +324,8 @@ impl<X: GXExt> GX<X> {
     }
 
     fn cycle_ready(&self) -> bool {
-        self.ctx.rt.var_updates.len() > 0
+        !self.ctx.rt.updated.is_empty()
+            || self.ctx.rt.var_updates.len() > 0
             || self.ctx.rt.custom_updates.len() > 0
             || self.ctx.rt.net_updates.len() > 0
             || self.ctx.rt.net_writes.len() > 0

@@ -1281,10 +1281,107 @@ fn parse_prop0(s: &str) -> anyhow::Result<Type> {
 
 #[test]
 fn prop0() {
-    let s = r#"
-        let invalid_color = |name: string, v: f64|
-          -> Error<`InvalidColor(string)>
-          error(`InvalidColor("[name] must be in \[0, 1\], got [v]"))
-    "#;
+    let s = r#"println(click ~ (target_power - 50)?)"#;
     dbg!(parse_one(s).unwrap());
+}
+
+#[test]
+fn checked_add() {
+    let e = ExprKind::CheckedAdd {
+        lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+        rhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 +? 2").unwrap());
+}
+
+#[test]
+fn checked_sub() {
+    let e = ExprKind::CheckedSub {
+        lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+        rhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 -? 2").unwrap());
+}
+
+#[test]
+fn checked_mul() {
+    let e = ExprKind::CheckedMul {
+        lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+        rhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 *? 2").unwrap());
+}
+
+#[test]
+fn checked_div() {
+    let e = ExprKind::CheckedDiv {
+        lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+        rhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 /? 2").unwrap());
+}
+
+#[test]
+fn checked_mod() {
+    let e = ExprKind::CheckedMod {
+        lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+        rhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 %? 2").unwrap());
+}
+
+#[test]
+fn checked_precedence() {
+    // *? has higher precedence than +?, so 1 +? 2 *? 3 => CheckedAdd(1, CheckedMul(2, 3))
+    let e = ExprKind::CheckedAdd {
+        lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+        rhs: Arc::new(
+            ExprKind::CheckedMul {
+                lhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+                rhs: Arc::new(ExprKind::Constant(Value::I64(3)).to_expr_nopos()),
+            }
+            .to_expr_nopos(),
+        ),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 +? 2 *? 3").unwrap());
+}
+
+#[test]
+fn checked_mixed_precedence() {
+    // * has higher precedence than +?, so 1 +? 2 * 3 => CheckedAdd(1, Mul(2, 3))
+    let e = ExprKind::CheckedAdd {
+        lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+        rhs: Arc::new(
+            ExprKind::Mul {
+                lhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+                rhs: Arc::new(ExprKind::Constant(Value::I64(3)).to_expr_nopos()),
+            }
+            .to_expr_nopos(),
+        ),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 +? 2 * 3").unwrap());
+}
+
+#[test]
+fn checked_associativity() {
+    // left-associative: 1 -? 2 -? 3 => CheckedSub(CheckedSub(1, 2), 3)
+    let e = ExprKind::CheckedSub {
+        lhs: Arc::new(
+            ExprKind::CheckedSub {
+                lhs: Arc::new(ExprKind::Constant(Value::I64(1)).to_expr_nopos()),
+                rhs: Arc::new(ExprKind::Constant(Value::I64(2)).to_expr_nopos()),
+            }
+            .to_expr_nopos(),
+        ),
+        rhs: Arc::new(ExprKind::Constant(Value::I64(3)).to_expr_nopos()),
+    }
+    .to_expr_nopos();
+    assert_eq!(e, parse_one("1 -? 2 -? 3").unwrap());
 }

@@ -357,13 +357,13 @@ pub trait MapFn<R: Rt, E: UserEvent>: Debug + Default + Send + Sync + 'static {
 
 #[derive(Debug)]
 pub struct Slot<R: Rt, E: UserEvent> {
-    id: BindId,
-    pred: Node<R, E>,
+    pub id: BindId,
+    pub pred: Node<R, E>,
     pub cur: Option<Value>,
 }
 
 impl<R: Rt, E: UserEvent> Slot<R, E> {
-    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+    pub fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
         self.pred.delete(ctx);
         ctx.cached.remove(&self.id);
         ctx.env.unbind_variable(self.id);

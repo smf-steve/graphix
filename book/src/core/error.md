@@ -62,14 +62,16 @@ The scope is dynamic, not lexical, mirroring exception systems that unwind the
 stack,
 
 ```graphix
-〉let div0 = try |x| x / 0 catch(e) => println(e ~ "never triggered")
+〉let div0 = try |x| (x /? 0)? catch(e) => println(e ~ "never triggered")
 〉try div0(0) catch(e) => println(e)
 -: i64
-error:[["cause", null], ["error", ["ArithError", "attempt to divide by zero"]], ["ori", [["parent", null], ["source", "Unspecified"], ["text", "let div0 = try |x| x / 0 catch(e) => println(e ~ \"never triggered\")"]]], ["pos", [["column", i32:20], ["line", i32:1]]]]
+error:[["cause", null], ["error", ["ArithError", "attempt to divide by zero"]], ["ori", [["parent", null], ["source", "Unspecified"], ["text", "let div0 = try |x| (x /? 0)? catch(e) => println(e ~ \"never triggered\")"]]], ["pos", [["column", i32:20], ["line", i32:1]]]]
 ```
 
 The catch surrounding the function call site, not the definition site, is the
-one triggered.
+one triggered. Note the use of the checked division operator `/?` combined with
+`?` to propagate the error -- unchecked `/` would simply return bottom on
+division by zero rather than throwing.
 
 ### Try Catch Block Value
 
@@ -89,15 +91,17 @@ able to statically check the type of thrown errors, for example,
 
 ```graphix
 let a = [0, 1, 2, 3];
-try a[0]? + a[1]?
+try (a[0]? +? a[1]?)?
 catch(e) => select (e.0).error {
     `ArithError(s) => println("arithmetic operation error [s]"),
     `ArrayIndexError(s) => println("array index error [s]")
 }
 ```
 
-There are two types of errors that can happen in this example, and the compiler
-knows that. If you were to omit one of them, then the example would not compile.
+There are two types of errors that can happen in this example: the array
+indexing can produce an `ArrayIndexError`, and the checked addition `+?` can
+produce an `ArithError`. The compiler knows both, and if you were to omit one of
+them, then the example would not compile.
 Suppose we remove the pattern for ArrayIndexError, we would get,
 
 ```
@@ -115,8 +119,7 @@ knows the type of every error at compile time, everything else flows from there.
 ## Unhandled Errors
 
 By default when evaluating a file, the compiler will print a warning whenever an
-error raised by `?` is not handled explicitly by a try catch block. Arithmetic
-errors such as overflow do not generate this warning by default. Using `-W`
+error raised by `?` is not handled explicitly by a try catch block. Using `-W`
 flags you can change the compilers behavior in this respect.
 
 ## The $ Operator, aka Or Never

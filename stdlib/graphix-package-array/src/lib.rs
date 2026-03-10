@@ -8,7 +8,7 @@ use graphix_compiler::{
     expr::ExprId,
     node::genn,
     typ::{FnType, Type},
-    Apply, BindId, BuiltIn, Event, ExecCtx, LambdaId, Node, Refs, Rt, UserEvent,
+    Apply, BindId, BuiltIn, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope, UserEvent,
 };
 use graphix_package_core::{
     deftype, CachedArgs, CachedVals, EvalCached, FoldFn, FoldQ, MapFn, MapQ, Slot,
@@ -17,7 +17,8 @@ use graphix_rt::GXRt;
 use netidx::{publisher::Typ, subscriber::Value, utils::Either};
 use netidx_value::ValArray;
 use smallvec::{smallvec, SmallVec};
-use std::{collections::VecDeque, fmt::Debug, iter};
+use std::{collections::hash_map::Entry, collections::VecDeque, fmt::Debug, iter};
+use triomphe::Arc as TArc;
 
 #[derive(Debug, Default)]
 struct MapImpl;
@@ -712,6 +713,171 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for IterQ {
     }
 }
 
+#[derive(Debug)]
+struct Init<R: Rt, E: UserEvent> {
+    scope: Scope,
+    fid: BindId,
+    top_id: ExprId,
+    mftyp: TArc<FnType>,
+    slots: Vec<Slot<R, E>>,
+}
+
+impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Init<R, E> {
+    const NAME: &str = "array_init";
+    deftype!("fn(i64, fn(i64) -> 'a throws 'e) -> Array<'a> throws 'e");
+
+    fn init<'a, 'b, 'c>(
+        _ctx: &'a mut ExecCtx<R, E>,
+        typ: &'a FnType,
+        scope: &'b Scope,
+        from: &'c [Node<R, E>],
+        top_id: ExprId,
+    ) -> Result<Box<dyn Apply<R, E>>> {
+        match from {
+            [_, _] => Ok(Box::new(Self {
+                scope: scope.append(&format_compact!("fn{}", LambdaId::new().inner())),
+                fid: BindId::new(),
+                top_id,
+                mftyp: match &typ.args[1].typ {
+                    Type::Fn(ft) => ft.clone(),
+                    t => bail!("expected a function not {t}"),
+                },
+                slots: vec![],
+            })),
+            _ => bail!("expected two arguments"),
+        }
+    }
+}
+
+impl<R: Rt, E: UserEvent> Apply<R, E> for Init<R, E> {
+    fn update(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        from: &mut [Node<R, E>],
+        event: &mut Event<E>,
+    ) -> Option<Value> {
+        let slen = self.slots.len();
+        if let Some(v) = from[1].update(ctx, event) {
+            ctx.cached.insert(self.fid, v.clone());
+            event.variables.insert(self.fid, v);
+        }
+        let (size_fired, resized) = match from[0].update(ctx, event) {
+            Some(Value::I64(n)) => {
+                let n = n.max(0) as usize;
+                if n == slen {
+                    (true, false)
+                } else if n < slen {
+                    while self.slots.len() > n {
+                        if let Some(mut s) = self.slots.pop() {
+                            s.delete(ctx)
+                        }
+                    }
+                    (true, true)
+                } else {
+                    let i_typ = Type::Primitive(Typ::I64.into());
+                    while self.slots.len() < n {
+                        let i = self.slots.len();
+                        let (id, node) = genn::bind(
+                            ctx,
+                            &self.scope.lexical,
+                            "i",
+                            i_typ.clone(),
+                            self.top_id,
+                        );
+                        ctx.cached.insert(id, Value::I64(i as i64));
+                        let fnode = genn::reference(
+                            ctx,
+                            self.fid,
+                            Type::Fn(self.mftyp.clone()),
+                            self.top_id,
+                        );
+                        let pred = genn::apply(
+                            fnode,
+                            self.scope.clone(),
+                            vec![node],
+                            &self.mftyp,
+                            self.top_id,
+                        );
+                        self.slots.push(Slot { id, pred, cur: None });
+                    }
+                    (true, true)
+                }
+            }
+            _ => (false, false),
+        };
+        // set index bindings for new slots
+        if resized && self.slots.len() > slen {
+            for i in slen..self.slots.len() {
+                let id = self.slots[i].id;
+                event.variables.insert(id, Value::I64(i as i64));
+            }
+        }
+        if size_fired && self.slots.is_empty() {
+            return Some(Value::Array(ValArray::default()));
+        }
+        let init = event.init;
+        let mut up = resized;
+        for (i, s) in self.slots.iter_mut().enumerate() {
+            if i == slen {
+                event.init = true;
+                if let Entry::Vacant(e) = event.variables.entry(self.fid)
+                    && let Some(v) = ctx.cached.get(&self.fid)
+                {
+                    e.insert(v.clone());
+                }
+            }
+            if let Some(v) = s.pred.update(ctx, event) {
+                s.cur = Some(v);
+                up = true;
+            }
+        }
+        event.init = init;
+        if up && self.slots.iter().all(|s| s.cur.is_some()) {
+            Some(Value::Array(ValArray::from_iter_exact(
+                self.slots.iter().map(|s| s.cur.clone().unwrap()),
+            )))
+        } else {
+            None
+        }
+    }
+
+    fn typecheck(
+        &mut self,
+        ctx: &mut ExecCtx<R, E>,
+        _from: &mut [Node<R, E>],
+    ) -> anyhow::Result<()> {
+        let i_typ = Type::Primitive(Typ::I64.into());
+        let (_, node) =
+            genn::bind(ctx, &self.scope.lexical, "i", i_typ, self.top_id);
+        let ft = self.mftyp.clone();
+        let fnode = genn::reference(ctx, self.fid, Type::Fn(ft.clone()), self.top_id);
+        let mut node = genn::apply(fnode, self.scope.clone(), vec![node], &ft, self.top_id);
+        let r = node.typecheck(ctx);
+        node.delete(ctx);
+        r
+    }
+
+    fn refs(&self, refs: &mut Refs) {
+        for s in &self.slots {
+            s.pred.refs(refs)
+        }
+    }
+
+    fn delete(&mut self, ctx: &mut ExecCtx<R, E>) {
+        ctx.cached.remove(&self.fid);
+        for sl in &mut self.slots {
+            sl.delete(ctx)
+        }
+    }
+
+    fn sleep(&mut self, ctx: &mut ExecCtx<R, E>) {
+        for sl in &mut self.slots {
+            sl.cur = None;
+            sl.pred.sleep(ctx);
+        }
+    }
+}
+
 graphix_derive::defpackage! {
     builtins => [
         Concat,
@@ -726,6 +892,7 @@ graphix_derive::defpackage! {
         Flatten,
         Fold as Fold<GXRt<X>, X::UserEvent>,
         Group as Group<GXRt<X>, X::UserEvent>,
+        Init as Init<GXRt<X>, X::UserEvent>,
         Iter,
         IterQ,
         Len,
