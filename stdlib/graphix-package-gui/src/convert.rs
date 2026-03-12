@@ -110,7 +110,7 @@ pub fn window_event(
     events
 }
 
-fn mouse_button(button: MouseButton) -> Option<mouse::Button> {
+pub fn mouse_button(button: MouseButton) -> Option<mouse::Button> {
     match button {
         MouseButton::Left => Some(mouse::Button::Left),
         MouseButton::Right => Some(mouse::Button::Right),
@@ -120,7 +120,7 @@ fn mouse_button(button: MouseButton) -> Option<mouse::Button> {
     }
 }
 
-fn convert_key(key: Key) -> keyboard::Key {
+pub fn convert_key(key: Key) -> keyboard::Key {
     match key {
         Key::Character(c) => keyboard::Key::Character(c.as_str().to_string().into()),
         Key::Named(named) => match convert_named_key(named) {
@@ -131,7 +131,7 @@ fn convert_key(key: Key) -> keyboard::Key {
     }
 }
 
-fn convert_named_key(key: NamedKey) -> Option<keyboard::key::Named> {
+pub fn convert_named_key(key: NamedKey) -> Option<keyboard::key::Named> {
     use keyboard::key::Named;
     Some(match key {
         NamedKey::Alt => Named::Alt,
@@ -444,7 +444,7 @@ fn convert_named_key(key: NamedKey) -> Option<keyboard::key::Named> {
     })
 }
 
-fn convert_modifiers(mods: winit::keyboard::ModifiersState) -> keyboard::Modifiers {
+pub fn convert_modifiers(mods: winit::keyboard::ModifiersState) -> keyboard::Modifiers {
     let mut result = keyboard::Modifiers::empty();
     if mods.shift_key() {
         result |= keyboard::Modifiers::SHIFT;
@@ -461,7 +461,7 @@ fn convert_modifiers(mods: winit::keyboard::ModifiersState) -> keyboard::Modifie
     result
 }
 
-fn convert_key_location(loc: winit::keyboard::KeyLocation) -> keyboard::Location {
+pub fn convert_key_location(loc: winit::keyboard::KeyLocation) -> keyboard::Location {
     match loc {
         winit::keyboard::KeyLocation::Standard => keyboard::Location::Standard,
         winit::keyboard::KeyLocation::Left => keyboard::Location::Left,
@@ -470,7 +470,7 @@ fn convert_key_location(loc: winit::keyboard::KeyLocation) -> keyboard::Location
     }
 }
 
-fn physical_key(key: winit::keyboard::PhysicalKey) -> keyboard::key::Physical {
+pub fn physical_key(key: winit::keyboard::PhysicalKey) -> keyboard::key::Physical {
     match key {
         winit::keyboard::PhysicalKey::Code(code) => match convert_key_code(code) {
             Some(c) => keyboard::key::Physical::Code(c),
@@ -488,7 +488,7 @@ fn physical_key(key: winit::keyboard::PhysicalKey) -> keyboard::key::Physical {
     }
 }
 
-fn convert_key_code(code: winit::keyboard::KeyCode) -> Option<keyboard::key::Code> {
+pub fn convert_key_code(code: winit::keyboard::KeyCode) -> Option<keyboard::key::Code> {
     use keyboard::key::Code;
     use winit::keyboard::KeyCode;
     Some(match code {

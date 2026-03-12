@@ -319,32 +319,28 @@ things with this hook however.
 
 `BindId` is a very fundamental type in compiler guts. The
 [`Event`](https://docs.rs/graphix-compiler/latest/graphix_compiler/struct.Event.html)
-struct contains two tables indexed by it. The most important is
-`variables`. Every bound variable has a `BindId`. If a variable has
-updated this cycle, then its updated value will be in the `variables`
-table indexed by its `BindId`. In order to call this predicate
-function we actually create three different variables and store their
-`BindIds` as `xid`, `nid`, and `pid`. `genn::reference` returns a reference
-`Node` and the `BindId` of the variable it is referencing. Since those
-ref nodes become the arguments to the predicate call site we create,
-`xid` and `nid` allow us to control the arguments passed into the
-function. We just have to set `xid` and `nid` in `Event::variables`
-before we update the predicate in order to `call` the function. This
-may cause it to update immediately, or, it may depend on something else
-that needs to update before it will update. Either way, once we've set
-`xid` and `nid` once and called update on the predicate we've done our
-duty (it may never update, and that's ok). That just leaves `pid`,
-what is it for? Well, earlier it was mentioned that functions are
-always late bound. This is how that works. The lambda argument we were
-passed `from[1]`, whatever kind of node it is, will ultimately update
-and return a `LambdaId`, which is an index into a table in the context
-where all compiled functions actually reside. So every cycle we need
-to call update on this node just like any other node, because the
-`LambdaId` of the function we are supposed to be calling might change,
-and if that happens the call site we created with `genn::apply` needs
-to know about it. Luckily we don't have to handle any of the wonderful
-details of late binding beyond this simple passing through of updates,
-the call site will take care of that.
+struct contains two tables indexed by it. The most important is `variables`.
+Every bound variable has a `BindId`. If a variable has updated this cycle, then
+its updated value will be in the `variables` table indexed by its `BindId`. In
+order to call this predicate function we actually create three different
+variables and store their `BindIds` as `xid`, `nid`, and `pid`.
+`genn::reference` returns a reference `Node` and the `BindId` of the variable it
+is referencing. Since those ref nodes become the arguments to the predicate call
+site we create, `xid` and `nid` allow us to control the arguments passed into
+the function. We just have to set `xid` and `nid` in `Event::variables` before
+we update the predicate in order to `call` the function. This may cause it to
+update immediately, or, it may depend on something else that needs to update
+before it will update. Either way, once we've set `xid` and `nid` once and
+called update on the predicate we've done our duty (it may never update, and
+that's ok). That just leaves `pid`, what is it for? Well, earlier it was
+mentioned that functions are always late bound. This is how that works. The
+lambda argument we were passed `from[1]`, whatever kind of node it is, will
+ultimately update and return a `Lambda`, which a compiled function. So every
+cycle we need to call update on this node just like any other node, because the
+`Lambda` we are calling might change, and if that happens the call site we
+created with `genn::apply` needs to know about it. Luckily we don't have to
+handle any of the wonderful details of late binding beyond this simple passing
+through of updates, the call site will take care of that.
 
 ### ExecCtx::cached, refs, delete
 
