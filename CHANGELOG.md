@@ -1,4 +1,4 @@
-# 0.6.0
+# 0.7.0
 
 ## Standard library reorganization
 
@@ -49,6 +49,15 @@ unified `sys` package with a shared `Stream` type for all I/O.
 - Fix watch tests on macOS
 - Fix json typecheck not rejecting missing concrete return types
 - Fix uuid collision in node IDs
+
+# 0.6.0
+
+- Add checked arithmetic operators (`+?`, `-?`, `*?`, `/?`, `%?`) that return `Result` instead of logging errors on overflow/div-by-zero
+- Unchecked operators (`+`, `-`, `*`, `/`, `%`) now log errors and return bottom on failure instead of propagating checked exceptions
+- Add `array::init(n, f)` — create an array of n elements where element i is `f(i)`
+- Fix `browser` widget type signature (no longer throws `ArithError`)
+- Simplify `Error` type — `ArithError` is now `Error<\`ArithError(string)>` instead of `Error<ErrChain<\`ArithError(string)>>`
+- Add mandelbrot example (GUI canvas)
 
 # 0.5.1
 
