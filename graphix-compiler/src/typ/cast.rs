@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result};
 use arcstr::ArcStr;
+use enumflags2::{bitflags, BitFlags};
 use fxhash::FxHashSet;
 use immutable_chunkmap::map::Map;
 use netidx::publisher::{Typ, Value};
@@ -13,6 +14,14 @@ use netidx_value::ValArray;
 use poolshark::local::LPooled;
 use std::iter;
 use triomphe::Arc;
+
+#[derive(Debug, Clone, Copy)]
+#[bitflags]
+#[repr(u8)]
+pub enum IsAFlags {
+    /// When set, Type::Abstract matches any Value::Abstract
+    MatchAbstract,
+}
 
 impl Type {
     fn check_cast_int(
@@ -70,7 +79,7 @@ impl Type {
         hist: &mut FxHashSet<(usize, usize)>,
         v: Value,
     ) -> Result<Value> {
-        if self.is_a_int(env, hist, &v) {
+        if self.is_a_int(env, hist, BitFlags::empty(), &v) {
             return Ok(v);
         }
         match self {
@@ -265,6 +274,7 @@ impl Type {
         &self,
         env: &Env,
         hist: &mut FxHashSet<(usize, usize)>,
+        flags: BitFlags<IsAFlags>,
         v: &Value,
     ) -> bool {
         match self {
@@ -275,25 +285,28 @@ impl Type {
                     let v_addr = (v as *const Value).addr();
                     !hist.contains(&(t_addr, v_addr)) && {
                         hist.insert((t_addr, v_addr));
-                        t.is_a_int(env, hist, v)
+                        t.is_a_int(env, hist, flags, v)
                     }
                 }
             },
             Type::Primitive(t) => t.contains(Typ::get(&v)),
-            Type::Abstract { .. } => false,
+            Type::Abstract { .. } => {
+                flags.contains(IsAFlags::MatchAbstract) && matches!(v, Value::Abstract(_))
+            }
             Type::Any => true,
             Type::Array(et) => match v {
-                Value::Array(a) => a.iter().all(|v| et.is_a_int(env, hist, v)),
+                Value::Array(a) => a.iter().all(|v| et.is_a_int(env, hist, flags, v)),
                 _ => false,
             },
             Type::Map { key, value } => match v {
                 Value::Map(m) => m.into_iter().all(|(k, v)| {
-                    key.is_a_int(env, hist, k) && value.is_a_int(env, hist, v)
+                    key.is_a_int(env, hist, flags, k)
+                        && value.is_a_int(env, hist, flags, v)
                 }),
                 _ => false,
             },
             Type::Error(e) => match v {
-                Value::Error(v) => e.is_a_int(env, hist, v),
+                Value::Error(v) => e.is_a_int(env, hist, flags, v),
                 _ => false,
             },
             Type::ByRef(_) => matches!(v, Value::U64(_) | Value::V64(_)),
@@ -303,7 +316,7 @@ impl Type {
                         && ts
                             .iter()
                             .zip(elts.iter())
-                            .all(|(t, v)| t.is_a_int(env, hist, v))
+                            .all(|(t, v)| t.is_a_int(env, hist, flags, v))
                 }
                 _ => false,
             },
@@ -313,7 +326,7 @@ impl Type {
                         && ts.iter().zip(elts.iter()).all(|((n, t), v)| match v {
                             Value::Array(a) if a.len() == 2 => match &a[..] {
                                 [Value::String(key), v] => {
-                                    n == key && t.is_a_int(env, hist, v)
+                                    n == key && t.is_a_int(env, hist, flags, v)
                                 }
                                 _ => false,
                             },
@@ -336,25 +349,30 @@ impl Type {
                         && ts
                             .iter()
                             .zip(elts[1..].iter())
-                            .all(|(t, v)| t.is_a_int(env, hist, v))
+                            .all(|(t, v)| t.is_a_int(env, hist, flags, v))
                 }
                 _ => false,
             },
             Type::TVar(tv) => match &*tv.read().typ.read() {
                 None => true,
-                Some(t) => t.is_a_int(env, hist, v),
+                Some(t) => t.is_a_int(env, hist, flags, v),
             },
             Type::Fn(_) => match v {
                 Value::Abstract(a) if AbstractTypeRegistry::is_a(a, "lambda") => true,
                 _ => false,
             },
             Type::Bottom => true,
-            Type::Set(ts) => ts.iter().any(|t| t.is_a_int(env, hist, v)),
+            Type::Set(ts) => ts.iter().any(|t| t.is_a_int(env, hist, flags, v)),
         }
     }
 
     /// return true if v is structurally compatible with the type
     pub fn is_a(&self, env: &Env, v: &Value) -> bool {
-        self.is_a_int(env, &mut LPooled::take(), v)
+        self.is_a_int(env, &mut LPooled::take(), BitFlags::empty(), v)
+    }
+
+    /// return true if v is structurally compatible with the type, with flags
+    pub fn is_a_with(&self, env: &Env, flags: BitFlags<IsAFlags>, v: &Value) -> bool {
+        self.is_a_int(env, &mut LPooled::take(), flags, v)
     }
 }

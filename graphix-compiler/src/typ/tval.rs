@@ -1,4 +1,5 @@
 use super::{PrintFlag, Type};
+use super::cast::IsAFlags;
 use crate::{env::Env, typ::format_with_flags};
 use fxhash::FxHashSet;
 use netidx::publisher::Value;
@@ -19,7 +20,7 @@ impl<'a> TVal<'a> {
         f: &mut fmt::Formatter<'_>,
         hist: &mut FxHashSet<(usize, usize)>,
     ) -> fmt::Result {
-        if !self.typ.is_a(&self.env, &self.v) {
+        if !self.typ.is_a_with(&self.env, IsAFlags::MatchAbstract.into(), &self.v) {
             return format_with_flags(PrintFlag::DerefTVars, || {
                 eprintln!("error, type {} does not match value {:?}", self.typ, self.v);
                 write!(f, "{}", NakedValue(self.v))
