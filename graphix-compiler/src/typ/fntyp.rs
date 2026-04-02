@@ -6,6 +6,7 @@ use crate::{
         ModPath,
     },
     typ::{contains::ContainsFlags, AbstractId, RefHist, TVar, Type},
+    LambdaId,
 };
 use anyhow::{bail, Context, Result};
 use arcstr::ArcStr;
@@ -34,6 +35,8 @@ pub struct FnType {
     pub constraints: Arc<RwLock<LPooled<Vec<(TVar, Type)>>>>,
     pub throws: Type,
     pub explicit_throws: bool,
+    /// accumulated set of all LambdaIds this type might represent (for late binding)
+    pub lambda_ids: Arc<RwLock<FxHashSet<LambdaId>>>,
 }
 
 impl PartialEq for FnType {
@@ -45,6 +48,7 @@ impl PartialEq for FnType {
             constraints: constraints0,
             throws: th0,
             explicit_throws: _,
+            lambda_ids: _,
         } = self;
         let Self {
             args: args1,
@@ -53,6 +57,7 @@ impl PartialEq for FnType {
             constraints: constraints1,
             throws: th1,
             explicit_throws: _,
+            lambda_ids: _,
         } = other;
         args0 == args1
             && vargs0 == vargs1
@@ -74,6 +79,7 @@ impl PartialOrd for FnType {
             constraints: constraints0,
             throws: th0,
             explicit_throws: _,
+            lambda_ids: _,
         } = self;
         let Self {
             args: args1,
@@ -82,6 +88,7 @@ impl PartialOrd for FnType {
             constraints: constraints1,
             throws: th1,
             explicit_throws: _,
+            lambda_ids: _,
         } = other;
         match args0.partial_cmp(&args1) {
             Some(Ordering::Equal) => match vargs0.partial_cmp(vargs1) {
@@ -116,13 +123,15 @@ impl Default for FnType {
             constraints: Arc::new(RwLock::new(LPooled::take())),
             throws: Default::default(),
             explicit_throws: false,
+            lambda_ids: Arc::new(RwLock::new(FxHashSet::default())),
         }
     }
 }
 
 impl FnType {
     pub(super) fn normalize(&self) -> Self {
-        let Self { args, vargs, rtype, constraints, throws, explicit_throws } = self;
+        let Self { args, vargs, rtype, constraints, throws, explicit_throws, lambda_ids } =
+            self;
         let args = Arc::from_iter(
             args.iter()
                 .map(|a| FnArgType { label: a.label.clone(), typ: a.typ.normalize() }),
@@ -138,11 +147,46 @@ impl FnType {
         ));
         let throws = throws.normalize();
         let explicit_throws = *explicit_throws;
-        FnType { args, vargs, rtype, constraints, throws, explicit_throws }
+        let lambda_ids = lambda_ids.clone();
+        FnType { args, vargs, rtype, constraints, throws, explicit_throws, lambda_ids }
+    }
+
+    /// Deep-clone with all bound TVars replaced by their concrete types.
+    /// Constraints are emptied since all TVars are resolved.
+    pub fn resolve_tvars(&self) -> Self {
+        let Self {
+            args,
+            vargs,
+            rtype,
+            constraints: _,
+            throws,
+            explicit_throws,
+            lambda_ids,
+        } = self;
+        let args =
+            Arc::from_iter(args.iter().map(|a| FnArgType {
+                label: a.label.clone(),
+                typ: a.typ.resolve_tvars(),
+            }));
+        let vargs = vargs.as_ref().map(|t| t.resolve_tvars());
+        let rtype = rtype.resolve_tvars();
+        let constraints = Arc::new(RwLock::new(LPooled::take()));
+        let throws = throws.resolve_tvars();
+        let explicit_throws = *explicit_throws;
+        let lambda_ids = lambda_ids.clone();
+        FnType { args, vargs, rtype, constraints, throws, explicit_throws, lambda_ids }
     }
 
     pub fn unbind_tvars(&self) {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws: _ } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws: _,
+            lambda_ids: _,
+        } = self;
         for arg in args.iter() {
             arg.typ.unbind_tvars()
         }
@@ -174,7 +218,15 @@ impl FnType {
     }
 
     pub fn reset_tvars(&self) -> Self {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws,
+            lambda_ids,
+        } = self;
         let args = Arc::from_iter(
             args.iter()
                 .map(|a| FnArgType { label: a.label.clone(), typ: a.typ.reset_tvars() }),
@@ -190,7 +242,8 @@ impl FnType {
         ));
         let throws = throws.reset_tvars();
         let explicit_throws = *explicit_throws;
-        FnType { args, vargs, rtype, constraints, throws, explicit_throws }
+        let lambda_ids = lambda_ids.clone();
+        FnType { args, vargs, rtype, constraints, throws, explicit_throws, lambda_ids }
     }
 
     pub fn replace_tvars(&self, known: &FxHashMap<ArcStr, Type>) -> Self {
@@ -202,7 +255,15 @@ impl FnType {
         known: &FxHashMap<ArcStr, Type>,
         renamed: &mut FxHashMap<ArcStr, TVar>,
     ) -> Self {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws,
+            lambda_ids,
+        } = self;
         let args = Arc::from_iter(args.iter().map(|a| FnArgType {
             label: a.label.clone(),
             typ: a.typ.replace_tvars_int(known, renamed),
@@ -212,7 +273,8 @@ impl FnType {
         let constraints = constraints.clone();
         let throws = throws.replace_tvars_int(known, renamed);
         let explicit_throws = *explicit_throws;
-        FnType { args, vargs, rtype, constraints, throws, explicit_throws }
+        let lambda_ids = lambda_ids.clone();
+        FnType { args, vargs, rtype, constraints, throws, explicit_throws, lambda_ids }
     }
 
     /// replace automatically constrained type variables with their
@@ -220,7 +282,8 @@ impl FnType {
     /// types in IDEs and shells.
     pub fn replace_auto_constrained(&self) -> Self {
         let mut known: LPooled<FxHashMap<ArcStr, Type>> = LPooled::take();
-        let Self { args, vargs, rtype, constraints, throws, explicit_throws } = self;
+        let Self { args, vargs, rtype, constraints, throws, explicit_throws, lambda_ids } =
+            self;
         let constraints: LPooled<Vec<(TVar, Type)>> = constraints
             .read()
             .iter()
@@ -241,11 +304,20 @@ impl FnType {
         let rtype = rtype.replace_tvars(&known);
         let throws = throws.replace_tvars(&known);
         let explicit_throws = *explicit_throws;
-        Self { args, vargs, rtype, constraints, throws, explicit_throws }
+        let lambda_ids = lambda_ids.clone();
+        Self { args, vargs, rtype, constraints, throws, explicit_throws, lambda_ids }
     }
 
     pub fn has_unbound(&self) -> bool {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws: _ } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws: _,
+            lambda_ids: _,
+        } = self;
         args.iter().any(|a| a.typ.has_unbound())
             || vargs.as_ref().map(|t| t.has_unbound()).unwrap_or(false)
             || rtype.has_unbound()
@@ -257,7 +329,15 @@ impl FnType {
     }
 
     pub fn bind_as(&self, t: &Type) {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws: _ } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws: _,
+            lambda_ids: _,
+        } = self;
         for a in args.iter() {
             a.typ.bind_as(t)
         }
@@ -277,7 +357,15 @@ impl FnType {
     }
 
     pub fn alias_tvars(&self, known: &mut FxHashMap<ArcStr, TVar>) {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws: _ } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws: _,
+            lambda_ids: _,
+        } = self;
         for arg in args.iter() {
             arg.typ.alias_tvars(known)
         }
@@ -293,7 +381,15 @@ impl FnType {
     }
 
     pub fn unfreeze_tvars(&self) {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws: _ } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws: _,
+            lambda_ids: _,
+        } = self;
         for arg in args.iter() {
             arg.typ.unfreeze_tvars()
         }
@@ -309,7 +405,15 @@ impl FnType {
     }
 
     pub fn collect_tvars(&self, known: &mut FxHashMap<ArcStr, TVar>) {
-        let FnType { args, vargs, rtype, constraints, throws, explicit_throws: _ } = self;
+        let FnType {
+            args,
+            vargs,
+            rtype,
+            constraints,
+            throws,
+            explicit_throws: _,
+            lambda_ids: _,
+        } = self;
         for arg in args.iter() {
             arg.typ.collect_tvars(known)
         }
@@ -417,6 +521,18 @@ impl FnType {
             && self.throws.contains_int(flags, env, hist, &t.throws)?)
     }
 
+    /// Merge lambda_ids between two FnTypes during unification.
+    /// Called after contains_int succeeds to track late-bound function identities.
+    pub fn merge_lambda_ids(&self, other: &Self) {
+        if Arc::ptr_eq(&self.lambda_ids, &other.lambda_ids) {
+            return;
+        }
+        let mut self_ids = self.lambda_ids.write();
+        let mut other_ids = other.lambda_ids.write();
+        self_ids.extend(other_ids.iter().copied());
+        other_ids.extend(self_ids.iter().copied());
+    }
+
     pub fn check_contains(&self, env: &Env, other: &Self) -> Result<()> {
         if !self.contains(env, other)? {
             bail!("Fn type mismatch {self} does not contain {other}")
@@ -434,6 +550,7 @@ impl FnType {
             constraints: constraints0,
             throws: tr0,
             explicit_throws: _,
+            lambda_ids: _,
         } = self;
         let Self {
             args: args1,
@@ -442,6 +559,7 @@ impl FnType {
             constraints: constraints1,
             throws: tr1,
             explicit_throws: _,
+            lambda_ids: _,
         } = other;
         Ok(args0.len() == args1.len()
             && args0
@@ -510,6 +628,7 @@ impl FnType {
             constraints: sig_constraints,
             throws: sig_throws,
             explicit_throws: _,
+            lambda_ids: _,
         } = self;
         let Self {
             args: impl_args,
@@ -518,6 +637,7 @@ impl FnType {
             constraints: impl_constraints,
             throws: impl_throws,
             explicit_throws: _,
+            lambda_ids: _,
         } = impl_fn;
         if sig_args.len() != impl_args.len() {
             bail!(
@@ -629,6 +749,7 @@ impl FnType {
             vargs,
             throws,
             explicit_throws: self.explicit_throws,
+            lambda_ids: self.lambda_ids.clone(),
         }
     }
 }

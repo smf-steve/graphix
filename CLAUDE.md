@@ -20,8 +20,12 @@ This is a Rust workspace with these main crates:
 
 The standard library is split into individual packages under `stdlib/`:
 - **graphix-package-core**: Core builtins and types
-- **graphix-package-array**, **-map**, **-str**, **-re**, **-rand**, **-time**: Data structure and utility packages
-- **graphix-package-fs**, **-net**: Filesystem and network packages
+- **graphix-package-array**, **-map**, **-str**, **-re**, **-rand**: Data structure and utility packages
+- **graphix-package-sys**: System-level I/O (unified streams, filesystem, TCP, TLS, netidx, timers)
+- **graphix-package-http**: HTTP client/server and REST helpers
+- **graphix-package-toml**: TOML serialization/deserialization
+- **graphix-package-xls**: Spreadsheet reading (xlsx, xls, ods, xlsb via calamine)
+- **graphix-package-pack**: Native binary serialization via netidx Pack format
 - **graphix-package-tui**: Terminal UI widgets (ratatui-based)
 - **graphix-package-gui**: Graphical UI widgets (iced-based)
 - **graphix-tests**: Language feature and stdlib integration tests (separate crate to avoid circular dev-deps)
@@ -41,6 +45,58 @@ The project uses workspace-level dependencies where possible.
 The project uses poolshark where possible to avoid allocations. If it isn't
 possible to avoid allocation using poolshark, then smallvec should be
 considered.
+
+### Poolshark Usage Guide
+
+Poolshark provides thread-local (`LPooled`) and global (`GPooled`) pooled
+collections. When a pooled collection is dropped, it is cleared and returned
+to the pool for reuse, avoiding heap allocation on the next `take()` or
+`collect()`.
+
+**`LPooled<Vec<T>>`** — thread-local pool. The collection is `Send`, but it
+returns to the pool of the thread that drops it, so it works best when
+created and dropped on the same thread.
+
+```rust
+use poolshark::local::LPooled;
+
+// Take an empty vec from the pool
+let mut v: LPooled<Vec<i64>> = LPooled::take();
+v.push(1);
+
+// Collect an iterator directly into a pooled vec
+let v: LPooled<Vec<i64>> = (0..10).collect();
+
+// Collect with turbofish when type inference needs help
+let v = items.iter().map(|x| x.val).collect::<LPooled<Vec<_>>>();
+
+// Fallible collect
+let v = items.iter().map(fallible_fn).collect::<Result<LPooled<Vec<_>>>>()?;
+
+// Drain into a final container, pooled vec returns to pool on drop
+let mut v: LPooled<Vec<Value>> = src.iter().map(convert).collect();
+let result = ValArray::from_iter_exact(v.drain(..));
+
+// Works with FxHashMap, FxHashSet too
+let mut seen: LPooled<FxHashSet<BindId>> = LPooled::take();
+```
+
+**`GPooled<Vec<T>>`** — global pool, `Send`. Use when the collection must
+cross thread/task boundaries (channels, spawn). Requires explicit pool sizing
+via `Pool::new(max_pool, max_elements)` or `GPooled::take()` with prior
+`set_size`.
+
+**When to use which:**
+- Temporary scratch collections (sort, dedup, intermediate results) → `LPooled`
+- Building a final `Arc<[T]>` or `ValArray` → `LPooled`, drain into `Arc::from_iter` / `ValArray::from_iter_exact`
+- Passing batches through channels → `GPooled`
+- Inside async functions across `.await` → `LPooled` works (it's Send), but
+  the vec returns to the pool of whichever thread drops it
+
+**When NOT to pool:**
+- The collection is consumed by a foreign API that needs an owned `Vec<T>`
+  (e.g. `serde_json::Value::Array(Vec<...>)`) — drain the LPooled into a
+  regular collect instead: `lpooled.drain(..).collect()`
 
 ## Building and Testing
 
@@ -128,8 +184,10 @@ Types are structural - compatibility is based on structure, not names. Type infe
 
 Built-ins implement the `BuiltIn<R, E>` trait:
 - `NAME`: Function name constant
-- `TYP`: Lazy-initialized function type
 - `init()`: Returns initialization function
+
+The function's type is declared in the `.gx` file where the builtin is
+bound — all arguments and the return type must have type annotations.
 
 Register built-ins with `ExecCtx::register_builtin::<T>()`.
 
@@ -232,6 +290,31 @@ Some examples are code snippets that reference undefined variables and are meant
 - Rust edition 2024 is used throughout
 - The project uses `triomphe::Arc` instead of `std::sync::Arc` for better performance
 - Pooling is used extensively (`poolshark`, `immutable-chunkmap`) to reduce allocations
+
+## Debugging the Compiler
+
+### Trace Facility
+
+The compiler has a built-in trace facility gated by a global `AtomicBool` (`TRACE` in `lib.rs`). Key tools:
+
+- `trace() -> bool`: check if tracing is active
+- `set_trace(bool)`: toggle tracing
+- `with_trace(enable, spec, f)`: enable tracing for the duration of `f`, prints the spec position and any errors
+- `tdbg!(expr)`: like `dbg!()` but only fires when `trace()` is true
+
+Usage in the compiler: `callsite.rs` has `if trace() { ... }` guards that print pre/post callsite FnTypes with deref'd TVars. Builtins like MapQ also print their resolved types via `format_with_flags(PrintFlag::DerefTVars, ...)`.
+
+The trace facility solves a critical problem: the compiler typechecks the entire stdlib on every compilation, which produces gigabytes of debug output if you just add `eprintln!`. To debug a specific expression, use `with_trace` to enable tracing only during that expression's compilation/typecheck, so only the relevant output appears.
+
+### Type Alias Expansion in Contains
+
+When `contains` encounters a `Type::Ref` (e.g. `Result<T, E>`), the Ref case at `contains.rs:56` expands both sides via `lookup_ref(env)` before recursing. This means TVar bindings established during `contains` store the **expanded** form (e.g. `[T, Error<E>]` instead of `Result<T, E>`). Code that inspects resolved types must handle both the `Type::Ref` form and the expanded `Type::Set` form — see `extract_cast_type` in `graphix-package-core/src/lib.rs` for an example.
+
+### Two-Phase Typecheck and Deferred Checks
+
+Builtins that need type information from their call site (e.g. `json::read` for type-directed deserialization) use a two-phase typecheck: return `NeedsCallSite` from `TypecheckPhase::Lambda`, then extract concrete types during `TypecheckPhase::CallSite(resolved)`. The compiler collects deferred check closures during `CallSite::typecheck` and processes them in a `while let Some(check) = ctx.deferred_checks.pop()` loop after primary typechecking. This loop processes cascaded checks automatically — a deferred check that pushes new deferred checks will have those processed in subsequent iterations.
+
+HOF builtins (e.g. `MapQ`, `FoldQ`) that take function-typed arguments must return `NeedsCallSite` and handle the `CallSite(resolved)` phase to update their stored predicate types (`mftyp`, `etyp`) from the resolved FnType. This enables the deferred check cascade to propagate concrete types to inner predicates like `json::read`.
 
 ## Recent Changes
 
@@ -462,7 +545,7 @@ text_input(#on_input: |v| name <- v, &name)
 ```
 
 ```graphix
-let clock = time::timer(duration:1.s, true)
+let clock = sys::time::timer(duration:1.s, true)
 let counter = 0
 counter <- clock ~ counter + 1 // increment on each tick
 
@@ -592,16 +675,29 @@ parameters and constraints.
 **map**: `map`, `filter`, `filter_map`, `fold`, `len`, `get`, `insert`,
 `remove`, `iter`, `iterq`
 
-**time**: `timer(timeout, repeat)`
-
 **re**: `is_match`, `find`, `captures`, `split`, `splitn`
 
 **rand**: `rand`, `pick`, `shuffle`
 
-**fs**: `read_all`, `read_all_bin`, `write_all`, `write_all_bin`,
-`watch`, `watch_full`, `readdir`, `metadata`, `is_file`, `is_dir`,
-`tempdir`, `join_path`, `create_dir`, `remove_dir`, `remove_file`,
-`set_global_watch_parameters`
+**sys::time**: `timer(timeout, repeat)`, `now()`
+
+**sys::io**: `read`, `write`, `read_exact`, `write_exact`, `flush`
+
+**sys::fs**: `read_all`, `read_all_bin`, `write_all`, `write_all_bin`,
+`readdir`, `metadata`, `is_file`, `is_dir`,
+`tempdir`, `join_path`, `create_dir`, `remove_dir`, `remove_file`
+
+**sys::fs::watch**: `create`, `watch`, `path`, `events`
+
+**sys::tcp**: TCP socket operations
+
+**sys::tls**: TLS socket operations
+
+**sys::net**: Netidx `subscribe`, `publish`
+
+**http**: HTTP client/server operations
+
+**http::rest**: REST API helpers
 
 ### GUI Patterns (iced-based)
 
@@ -705,7 +801,7 @@ input_handler(
 
 ```graphix
 // timer-driven update
-let clock = time::timer(duration:1.s, true)
+let clock = sys::time::timer(duration:1.s, true)
 let count = 0
 count <- clock ~ count + 1
 
@@ -741,3 +837,9 @@ select x {
 - `select` must be exhaustive (cover all cases) with no dead arms.
 - `never()` returns a value that never arrives — used to stop reactive loops.
 - you must escape square brackets in string literals "[name] must be between \[0, 1\]"
+- literal syntax for non i64, f64, string literals, is typ:value, e.g. u8:100, f32:3.14
+- `use` paths are always absolute, not relative to the current module.
+  Inside `sys::net`, write `use sys::time`, not `use time`.
+- A submodule can reference bindings from its parent, but only if the
+  `mod` declaration comes after those bindings in the parent's `.gxi`.
+- if you want to sequence the execution of a function, use ~ on it's arguments, not on the whole function. e.g. f(trigger ~ x) to prevent f from executing until trigger has happened.

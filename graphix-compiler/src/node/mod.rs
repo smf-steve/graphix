@@ -58,6 +58,7 @@ macro_rules! deref_typ {
             let mut typ = typ.cloned();
             let mut hist: poolshark::local::LPooled<fxhash::FxHashSet<usize>> = poolshark::local::LPooled::take();
             loop {
+                #[allow(unreachable_patterns)]
                 match &typ {
                     $($pat => break $body),+,
                     Some(rt @ Type::Ref { .. }) => {
@@ -73,14 +74,14 @@ macro_rules! deref_typ {
                     Some(t) => $crate::format_with_flags(PrintFlag::DerefTVars, || {
                         anyhow::bail!("expected {} not {t}", $name)
                     })?,
-                    None => anyhow::bail!("type must be known, annotations needed"),
+                    None => anyhow::bail!("type must be known, annotations needed")
                 }
             }
         })
     };
 }
 
-static NOP: LazyLock<Arc<Expr>> = LazyLock::new(|| {
+pub(crate) static NOP: LazyLock<Arc<Expr>> = LazyLock::new(|| {
     Arc::new(
         ExprKind::Constant(Value::String(literal!("nop"))).to_expr(Default::default()),
     )

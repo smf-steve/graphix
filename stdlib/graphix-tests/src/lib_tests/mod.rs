@@ -1,6 +1,24 @@
+mod args;
 mod array;
+mod bitwise;
+mod buffer;
 mod core;
+mod fs;
+mod http;
+mod json;
+mod toml;
 mod map;
 mod net;
 #[path = "str.rs"]
 mod str_tests;
+mod db;
+mod dirs;
+mod sys;
+mod tcp;
+mod tls;
+mod xls;
+mod pack;
+mod typecheck;
+mod list;
+mod sqlite;
+mod hbs;

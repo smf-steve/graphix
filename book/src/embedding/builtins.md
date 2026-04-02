@@ -31,13 +31,13 @@ it means that the argument to `once` updated, and `once` has not
 already seen an update. Consider the example program,
 
 ```graphix
-let clock = time::timer(1, true);
+let clock = sys::time::timer(1, true);
 println(once(clock))
 ```
 
 We expect this example to print the datetime exactly one time. Lets
-dig in to how that actually works. The clock created by `time::timer`
-will tick once per second forever. The `time::timer` built-in will
+dig in to how that actually works. The clock created by `sys::time::timer`
+will tick once per second forever. The `sys::time::timer` built-in will
 call `set_timer` in the
 [`Rt`](https://docs.rs/graphix-compiler/latest/graphix_compiler/trait.Rt.html),
 which is part of the
@@ -47,9 +47,9 @@ register that this toplevel node (`let clock = ...`) depends on the
 timer event. When the timer event happens the approximate sequence of
 events is,
 
-- let clock = time::timer(1, true), update called on toplevel node (Bind)
-    - time::timer(1, true), bind calls update on its rhs
-    - time::timer checks events to see if it should update, returns Some(DateTime(..))
+- let clock = sys::time::timer(1, true), update called on toplevel node (Bind)
+    - sys::time::timer(1, true), bind calls update on its rhs
+    - sys::time::timer checks events to see if it should update, returns Some(DateTime(..))
     - bind sets the id of clock in events to Value::DateTime(..)
     - Rt checks for nodes that depend on `clock` schedules println(..)
 - println(once(clock)), update called on toplevel node (CallSite)
@@ -67,7 +67,6 @@ use anyhow::Result;
 use graphix_compiler::{
     expr::ExprId, typ::FnType, Apply, BuiltIn, Event, ExecCtx, Node, Rt, Scope, UserEvent,
 };
-use graphix_package_core::deftype;
 use netidx_value::Value;
 
 #[derive(Debug)]
@@ -77,11 +76,11 @@ struct Once {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Once {
     const NAME: &str = "core_once";
-    deftype!("fn('a) -> 'a");
 
     fn init<'a, 'b, 'c>(
         _ctx: &'a mut ExecCtx<R, E>,
         _typ: &'a FnType,
+        _resolved_typ: Option<&'a FnType>,
         _scope: &'b Scope,
         _from: &'c [Node<R, E>],
         _top_id: ExprId,
@@ -117,11 +116,18 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Once {
 ```
 
 The `BuiltIn` trait is for construction. It declares the built-in's
-name and its type (which we get to write out in Graphix syntax via the
-`deftype!` macro). The `init` method is called when the built-in is
-instantiated at a call site. It receives the execution context, the
-concrete function type, the lexical scope, the argument nodes, and the
-top-level expression id. In this case we don't care about any of that
+name. The function's type is declared in the `.gx` file where the
+builtin is bound — all arguments and the return type must be
+annotated. For example, `once` would be bound as:
+
+```graphix
+let once = |v: 'a| -> 'a 'core_once
+```
+
+The `init` method is called when the built-in is instantiated at a
+call site. It receives the execution context, the concrete function
+type, the lexical scope, the argument nodes, and the top-level
+expression id. In this case we don't care about any of that
 information, but it will be useful later.
 
 The most important method of `Apply` is `update`. `sleep` is expected to
@@ -146,7 +152,6 @@ use graphix_compiler::{
     typ::{FnType, Typ, Type},
     Apply, BindId, BuiltIn, Event, ExecCtx, LambdaId, Refs, Rt, Scope, UserEvent,
 };
-use graphix_package_core::deftype;
 use netidx_value::Value;
 use smallvec::{smallvec, SmallVec};
 use std::collections::VecDeque;
@@ -164,11 +169,11 @@ pub(super) struct Group<R: Rt, E: UserEvent> {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
     const NAME: &str = "array_group";
-    deftype!("fn('a, fn(i64, 'a) -> bool throws 'e) -> Array<'a> throws 'e");
 
     fn init<'a, 'b, 'c>(
         ctx: &'a mut ExecCtx<R, E>,
         typ: &'a FnType,
+        _resolved_typ: Option<&'a FnType>,
         scope: &'b Scope,
         from: &'c [Node<R, E>],
         top_id: ExprId,
@@ -312,8 +317,60 @@ details of late binding, optional arguments, default args, etc. The
 Because we generated code, we have to hook into the `typecheck`
 compiler phase and make sure the type checker runs on it. This
 requires that we implement the `typecheck` method. In our case all we
-have to do is typecheck our generated call site. You can do powerful
-things with this hook however.
+have to do is typecheck our generated call site.
+
+#### Two-Phase Typecheck for Higher-Order Functions
+
+Higher-order builtins **must** return `TypecheckResult::NeedsCallSite`
+and handle the `TypecheckPhase::CallSite(resolved)` phase. This is
+required so that type information from the call site propagates
+through to the inner predicate function. Without this, if the user
+passes a builtin like `json::read` that requires a concrete return
+type, the type checker won't be able to verify or initialize it.
+
+The pattern is:
+
+```rust
+fn typecheck(
+    &mut self,
+    ctx: &mut ExecCtx<R, E>,
+    _from: &mut [Node<R, E>],
+    phase: TypecheckPhase<'_>,
+) -> anyhow::Result<TypecheckResult> {
+    // During CallSite phase, update stored types from the resolved FnType
+    if let TypecheckPhase::CallSite(resolved) = phase {
+        self.mftyp = match &resolved.args[PRED_INDEX].typ {
+            Type::Fn(ft) => ft.clone(),
+            t => bail!("expected a function not {t}"),
+        };
+        // Update any other stored types (element type, etc.)
+    }
+    // Create and typecheck the inner CallSite — this is critical
+    // because it pushes deferred checks that cascade type information
+    // to inner builtins (e.g. json::read getting its cast_typ set)
+    let (_, node) = genn::bind(ctx, &self.scope.lexical, "x", self.etyp.clone(), self.top_id);
+    let ft = self.mftyp.clone();
+    let fnode = genn::reference(ctx, self.predid, Type::Fn(ft.clone()), self.top_id);
+    let mut node = genn::apply(fnode, self.scope.clone(), vec![node], &ft, self.top_id);
+    node.typecheck(ctx)?;
+    node.delete(ctx);
+    Ok(TypecheckResult::NeedsCallSite)
+}
+```
+
+The `NeedsCallSite` return value tells the compiler to store this
+builtin for deferred type checking. When the outer call site's
+deferred check runs, it calls `typecheck(CallSite(resolved))` with
+the fully resolved function type. The builtin updates its stored
+predicate type (`mftyp`) from the resolved type, then creates and
+typechecks an inner `CallSite` node. This inner typecheck pushes its
+own deferred checks, cascading type information to any inner builtins
+that need it.
+
+For builtins that store a persistent predicate node (like `filter` or
+`group`), the CallSite phase should rebuild the predicate node with
+the resolved types, since the original was built with unresolved type
+variables.
 
 ### BindIds and Refs
 

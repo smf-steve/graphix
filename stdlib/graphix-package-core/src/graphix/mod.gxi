@@ -6,7 +6,7 @@ type Real = [ Float, decimal ];
 type Number = [ Int, Real ];
 type NotNull = [Number, string, error, array, datetime, duration, bytes, bool];
 type Primitive = [NotNull, null];
-type PrimNoErr = [Number, string, array, datetime, duration, bytes, null];
+type PrimNoErr = [Number, string, bool, array, datetime, duration, bytes, null];
 type Log = [`Trace, `Debug, `Info, `Warn, `Error, `Stdout, `Stderr];
 type Result<'r, 'e> = ['r, Error<'e>];
 type Option<'a> = ['a, null];
@@ -85,6 +85,24 @@ val seq: fn(i64, i64) -> Result<i64, `SeqError(string)>;
 /// return true if any argument is true
 val or: fn(@args: bool) -> bool;
 
+/// bitwise AND
+val bit_and: fn<'a: Int>('a, 'a) -> 'a;
+
+/// bitwise OR
+val bit_or: fn<'a: Int>('a, 'a) -> 'a;
+
+/// bitwise XOR
+val bit_xor: fn<'a: Int>('a, 'a) -> 'a;
+
+/// bitwise complement
+val bit_not: fn<'a: Int>('a) -> 'a;
+
+/// shift left (wrapping)
+val shl: fn<'a: Int>('a, 'a) -> 'a;
+
+/// shift right (wrapping)
+val shr: fn<'a: Int>('a, 'a) -> 'a;
+
 /// return the product of all arguments
 val product: fn(@args: [Number, Array<[Number, Array<Number>]>]) -> Number;
 
@@ -135,3 +153,6 @@ val println: fn(?#dest:Log, 'a) -> _;
 /// after a period of silence, first m0 will be delivered, then after the rate
 /// timer expires mN will be delivered, m1, ..., m(N-1) will be discarded.
 val throttle: fn(?#rate:duration, 'a) -> 'a;
+
+
+mod buffer;

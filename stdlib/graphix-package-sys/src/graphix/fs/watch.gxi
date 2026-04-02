@@ -1,0 +1,100 @@
+/// The type of file system events you are interested in.
+/// The short names, e.g. `Access mean ANY kind of access event.
+/// The longer names e.g. `AccessOpen mean a more specific subset
+/// of the short named class event. There are sometimes multiple
+/// levels of this. For example `Modify expresses interest in
+/// any modification, `ModifyRename expresses interest in any
+/// kind of rename operation, and `ModifyRenameTo expresses interest
+/// only on rename to.
+///
+/// `Established is a special event that happens when the watch is
+/// successfully established
+type Interest = [
+    `Established,
+    `Any,
+    `Access,
+    `AccessOpen,
+    `AccessClose,
+    `AccessRead,
+    `AccessOther,
+    `Create,
+    `CreateFile,
+    `CreateFolder,
+    `CreateOther,
+    `Modify,
+    `ModifyData,
+    `ModifyDataSize,
+    `ModifyDataContent,
+    `ModifyDataOther,
+    `ModifyMetadata,
+    `ModifyMetadataAccessTime,
+    `ModifyMetadataWriteTime,
+    `ModifyMetadataPermissions,
+    `ModifyMetadataOwnership,
+    `ModifyMetadataExtended,
+    `ModifyMetadataOther,
+    `ModifyRename,
+    `ModifyRenameTo,
+    `ModifyRenameFrom,
+    `ModifyRenameBoth,
+    `ModifyRenameOther,
+    `ModifyOther,
+    `Delete,
+    `DeleteFile,
+    `DeleteFolder,
+    `DeleteOther,
+    `Other
+];
+
+type WatchEvent = {
+    paths: Array<string>,
+    event: Interest
+};
+
+/// An opaque handle to a filesystem watcher. Cleaned up when
+/// no remaining references exist.
+type Watcher;
+
+/// An opaque handle to a single watch. Use path() and events()
+/// to extract values from watch events.
+type Watch;
+
+/// Create a filesystem watcher.
+///
+/// poll_interval: How often to poll a batch, must be >= 100ms. default 1s.
+/// poll_batch_size: How many files to poll per batch, must be >= 0. default 100.
+val create: fn(
+    ?#poll_interval:[duration, null],
+    ?#poll_batch_size:[i64, null],
+    Any
+) -> Result<Watcher, `WatchError(string)>;
+
+/// Watch path for events matching #interest using the given watcher.
+/// watch updates when,
+/// - an event occurs that matches interest
+/// - an error occurs when trying to establish the watch
+///
+/// If you wish to know when the watch is established, you must express interest
+/// in the `Established event (which is in the default set). If you do so, you will
+/// also get a new established event if you change the interest or the path.
+///
+/// If path is a directory the watch will report events about immediate children.
+/// If the watch could not be established establishement will be retried every
+/// time path updates
+///
+/// Filesystem watches are a limited operating system resource, like file
+/// descriptors, or handles.
+val watch: fn(?#interest: Array<Interest>, Watcher, string)
+    -> Result<Watch, `WatchError(string)>;
+
+/// The path of the filesystem object involved in the most recent
+/// watch event. Updates reactively when new events arrive.
+/// Accepts a single Watch, an Array of Watches, or a Map with Watch values.
+/// When given a collection, flattens to a single stream — fires when
+/// any watch in the collection fires.
+val path: fn(@args: [Watch, Array<Watch>, Map<'k, Watch>]) -> Result<string, `WatchError(string)>;
+
+/// The full watch event including all paths and the event type.
+/// Updates reactively when new events arrive.
+/// Same collection handling as path().
+val events: fn(@args: [Watch, Array<Watch>, Map<'k, Watch>]) -> Result<WatchEvent, `WatchError(string)>;

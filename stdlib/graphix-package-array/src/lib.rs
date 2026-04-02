@@ -8,10 +8,11 @@ use graphix_compiler::{
     expr::ExprId,
     node::genn,
     typ::{FnType, Type},
-    Apply, BindId, BuiltIn, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope, UserEvent,
+    Apply, BindId, BuiltIn, Event, ExecCtx, LambdaId, Node, Refs, Rt, Scope,
+    TypecheckPhase, UserEvent,
 };
 use graphix_package_core::{
-    deftype, CachedArgs, CachedVals, EvalCached, FoldFn, FoldQ, MapFn, MapQ, Slot,
+    CachedArgs, CachedVals, EvalCached, FoldFn, FoldQ, MapFn, MapQ, Slot,
 };
 use graphix_rt::GXRt;
 use netidx::{publisher::Typ, subscriber::Value, utils::Either};
@@ -27,7 +28,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for MapImpl {
     type Collection = ValArray;
 
     const NAME: &str = "array_map";
-    deftype!("fn(Array<'a>, fn('a) -> 'b throws 'e) -> Array<'b> throws 'e");
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter_exact(
@@ -45,7 +45,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterImpl {
     type Collection = ValArray;
 
     const NAME: &str = "array_filter";
-    deftype!("fn(Array<'a>, fn('a) -> bool throws 'e) -> Array<'a> throws 'e");
 
     fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().zip(a.iter()).filter_map(
@@ -66,7 +65,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FlatMapImpl {
     type Collection = ValArray;
 
     const NAME: &str = "array_flat_map";
-    deftype!("fn(Array<'a>, fn('a) -> ['b, Array<'b>] throws 'e) -> Array<'b> throws 'e");
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().flat_map(|s| {
@@ -87,7 +85,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterMapImpl {
     type Collection = ValArray;
 
     const NAME: &str = "array_filter_map";
-    deftype!("fn(Array<'a>, fn('a) -> Option<'b> throws 'e) -> Array<'b> throws 'e");
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         Some(Value::Array(ValArray::from_iter(slots.iter().filter_map(|s| {
@@ -108,7 +105,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FindImpl {
     type Collection = ValArray;
 
     const NAME: &str = "array_find";
-    deftype!("fn(Array<'a>, fn('a) -> bool throws 'e) -> Option<'a> throws 'e");
 
     fn finish(&mut self, slots: &[Slot<R, E>], a: &ValArray) -> Option<Value> {
         let r = slots
@@ -133,7 +129,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FindMapImpl {
     type Collection = ValArray;
 
     const NAME: &str = "array_find_map";
-    deftype!("fn(Array<'a>, fn('a) -> Option<'b> throws 'e) -> Option<'b> throws 'e");
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &ValArray) -> Option<Value> {
         let r = slots
@@ -156,7 +151,6 @@ impl<R: Rt, E: UserEvent> FoldFn<R, E> for FoldImpl {
     type Collection = ValArray;
 
     const NAME: &str = "array_fold";
-    deftype!("fn(Array<'a>, 'b, fn('b, 'a) -> 'b throws 'e) -> 'b throws 'e");
 }
 
 type Fold<R, E> = FoldQ<R, E, FoldImpl>;
@@ -164,11 +158,11 @@ type Fold<R, E> = FoldQ<R, E, FoldImpl>;
 #[derive(Debug, Default)]
 struct ConcatEv(SmallVec<[Value; 32]>);
 
-impl EvalCached for ConcatEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for ConcatEv {
     const NAME: &str = "array_concat";
-    deftype!("fn(Array<'a>, @args: Array<'a>) -> Array<'a>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         let mut present = true;
         for v in from.0.iter() {
             match v {
@@ -196,11 +190,11 @@ type Concat = CachedArgs<ConcatEv>;
 #[derive(Debug, Default)]
 struct PushBackEv(SmallVec<[Value; 32]>);
 
-impl EvalCached for PushBackEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for PushBackEv {
     const NAME: &str = "array_push_back";
-    deftype!("fn(Array<'a>, @args: 'a) -> Array<'a>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         let mut present = true;
         match &from.0[..] {
             [Some(Value::Array(a)), tl @ ..] => {
@@ -229,11 +223,11 @@ type PushBack = CachedArgs<PushBackEv>;
 #[derive(Debug, Default)]
 struct PushFrontEv(SmallVec<[Value; 32]>);
 
-impl EvalCached for PushFrontEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for PushFrontEv {
     const NAME: &str = "array_push_front";
-    deftype!("fn(Array<'a>, @args: 'a) -> Array<'a>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         let mut present = true;
         match &from.0[..] {
             [Some(Value::Array(a)), tl @ ..] => {
@@ -262,11 +256,11 @@ type PushFront = CachedArgs<PushFrontEv>;
 #[derive(Debug, Default)]
 struct WindowEv(SmallVec<[Value; 32]>);
 
-impl EvalCached for WindowEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for WindowEv {
     const NAME: &str = "array_window";
-    deftype!("fn(#n:i64, Array<'a>, @args: 'a) -> Array<'a>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         let mut present = true;
         match &from.0[..] {
             [Some(Value::I64(window)), Some(Value::Array(a)), tl @ ..] => {
@@ -316,11 +310,11 @@ type Window = CachedArgs<WindowEv>;
 #[derive(Debug, Default)]
 struct LenEv;
 
-impl EvalCached for LenEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for LenEv {
     const NAME: &str = "array_len";
-    deftype!("fn(Array<'a>) -> i64");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match &from.0[0] {
             Some(Value::Array(a)) => Some(Value::I64(a.len() as i64)),
             Some(_) | None => None,
@@ -333,11 +327,11 @@ type Len = CachedArgs<LenEv>;
 #[derive(Debug, Default)]
 struct FlattenEv(SmallVec<[Value; 32]>);
 
-impl EvalCached for FlattenEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for FlattenEv {
     const NAME: &str = "array_flatten";
-    deftype!("fn(Array<Array<'a>>) -> Array<'a>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match &from.0[0] {
             Some(Value::Array(a)) => {
                 for v in a.iter() {
@@ -359,11 +353,11 @@ type Flatten = CachedArgs<FlattenEv>;
 #[derive(Debug, Default)]
 struct SortEv(SmallVec<[Value; 32]>);
 
-impl EvalCached for SortEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for SortEv {
     const NAME: &str = "array_sort";
-    deftype!("fn(?#dir:Direction, ?#numeric:bool, Array<'a>) -> Array<'a>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         fn cn(v: &Value) -> Value {
             v.clone().cast(Typ::F64).unwrap_or_else(|| v.clone())
         }
@@ -401,11 +395,11 @@ type Sort = CachedArgs<SortEv>;
 #[derive(Debug, Default)]
 struct EnumerateEv;
 
-impl EvalCached for EnumerateEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for EnumerateEv {
     const NAME: &str = "array_enumerate";
-    deftype!("fn(Array<'a>) -> Array<(i64, 'a)>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         if let Some(Value::Array(a)) = &from.0[0] {
             let a = ValArray::from_iter_exact(
                 a.iter().enumerate().map(|(i, v)| (i, v.clone()).into()),
@@ -421,11 +415,11 @@ type Enumerate = CachedArgs<EnumerateEv>;
 #[derive(Debug, Default)]
 struct ZipEv;
 
-impl EvalCached for ZipEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for ZipEv {
     const NAME: &str = "array_zip";
-    deftype!("fn(Array<'a>, Array<'b>) -> Array<('a, 'b)>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match &from.0[..] {
             [Some(Value::Array(a0)), Some(Value::Array(a1))] => {
                 Some(Value::Array(ValArray::from_iter_exact(
@@ -445,11 +439,11 @@ struct UnzipEv {
     t1: Vec<Value>,
 }
 
-impl EvalCached for UnzipEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for UnzipEv {
     const NAME: &str = "array_unzip";
-    deftype!("fn(Array<('a, 'b)>) -> (Array<'a>, Array<'b>)");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match &from.0[..] {
             [Some(Value::Array(a))] => {
                 for v in a {
@@ -487,17 +481,19 @@ struct Group<R: Rt, E: UserEvent> {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Group<R, E> {
     const NAME: &str = "array_group";
-    deftype!("fn('a, fn(i64, 'a) -> bool throws 'e) -> Array<'a> throws 'e");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         ctx: &'a mut ExecCtx<R, E>,
         typ: &'a FnType,
+        resolved: Option<&'d FnType>,
         scope: &'b graphix_compiler::Scope,
         from: &'c [Node<R, E>],
         top_id: ExprId,
     ) -> Result<Box<dyn Apply<R, E>>> {
         match from {
             [_, _] => {
+                let typ = resolved.unwrap_or(typ);
                 let scope =
                     scope.append(&format_compact!("fn{}", LambdaId::new().inner()));
                 let n_typ = Type::Primitive(Typ::I64.into());
@@ -581,8 +577,10 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Group<R, E> {
         &mut self,
         ctx: &mut ExecCtx<R, E>,
         _from: &mut [Node<R, E>],
+        _phase: TypecheckPhase<'_>,
     ) -> anyhow::Result<()> {
-        self.pred.typecheck(ctx)
+        self.pred.typecheck(ctx)?;
+        Ok(())
     }
 
     fn refs(&self, refs: &mut Refs) {
@@ -606,11 +604,12 @@ struct Iter(BindId, ExprId);
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Iter {
     const NAME: &str = "array_iter";
-    deftype!("fn(Array<'a>) -> 'a");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         ctx: &'a mut ExecCtx<R, E>,
         _typ: &'a FnType,
+        _resolved: Option<&'d FnType>,
         _scope: &'b graphix_compiler::Scope,
         _from: &'c [Node<R, E>],
         top_id: ExprId,
@@ -657,11 +656,12 @@ struct IterQ {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for IterQ {
     const NAME: &str = "array_iterq";
-    deftype!("fn(#clock:Any, Array<'a>) -> 'a");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         ctx: &'a mut ExecCtx<R, E>,
         _typ: &'a FnType,
+        _resolved: Option<&'d FnType>,
         _scope: &'b graphix_compiler::Scope,
         _from: &'c [Node<R, E>],
         top_id: ExprId,
@@ -724,26 +724,31 @@ struct Init<R: Rt, E: UserEvent> {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Init<R, E> {
     const NAME: &str = "array_init";
-    deftype!("fn(i64, fn(i64) -> 'a throws 'e) -> Array<'a> throws 'e");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         _ctx: &'a mut ExecCtx<R, E>,
         typ: &'a FnType,
+        resolved: Option<&'c FnType>,
         scope: &'b Scope,
         from: &'c [Node<R, E>],
         top_id: ExprId,
     ) -> Result<Box<dyn Apply<R, E>>> {
         match from {
-            [_, _] => Ok(Box::new(Self {
-                scope: scope.append(&format_compact!("fn{}", LambdaId::new().inner())),
-                fid: BindId::new(),
-                top_id,
-                mftyp: match &typ.args[1].typ {
-                    Type::Fn(ft) => ft.clone(),
-                    t => bail!("expected a function not {t}"),
-                },
-                slots: vec![],
-            })),
+            [_, _] => {
+                let typ = resolved.unwrap_or(typ);
+                Ok(Box::new(Self {
+                    scope: scope
+                        .append(&format_compact!("fn{}", LambdaId::new().inner())),
+                    fid: BindId::new(),
+                    top_id,
+                    mftyp: match &typ.args[1].typ {
+                        Type::Fn(ft) => ft.clone(),
+                        t => bail!("expected a function not {t}"),
+                    },
+                    slots: vec![],
+                }))
+            }
             _ => bail!("expected two arguments"),
         }
     }
@@ -845,16 +850,18 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for Init<R, E> {
         &mut self,
         ctx: &mut ExecCtx<R, E>,
         _from: &mut [Node<R, E>],
+        _phase: TypecheckPhase<'_>,
     ) -> anyhow::Result<()> {
         let i_typ = Type::Primitive(Typ::I64.into());
-        let (_, node) =
-            genn::bind(ctx, &self.scope.lexical, "i", i_typ, self.top_id);
+        let (_, node) = genn::bind(ctx, &self.scope.lexical, "i", i_typ, self.top_id);
         let ft = self.mftyp.clone();
         let fnode = genn::reference(ctx, self.fid, Type::Fn(ft.clone()), self.top_id);
-        let mut node = genn::apply(fnode, self.scope.clone(), vec![node], &ft, self.top_id);
+        let mut node =
+            genn::apply(fnode, self.scope.clone(), vec![node], &ft, self.top_id);
         let r = node.typecheck(ctx);
         node.delete(ctx);
-        r
+        r?;
+        Ok(())
     }
 
     fn refs(&self, refs: &mut Refs) {

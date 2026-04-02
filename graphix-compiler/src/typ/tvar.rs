@@ -42,8 +42,15 @@ pub(super) fn would_cycle_inner(addr: usize, t: &Type) -> bool {
         Type::Struct(ts) => ts.iter().any(|(_, t)| would_cycle_inner(addr, t)),
         Type::Set(s) => s.iter().any(|t| would_cycle_inner(addr, t)),
         Type::Fn(f) => {
-            let FnType { args, vargs, rtype, constraints, throws, explicit_throws: _ } =
-                &**f;
+            let FnType {
+                args,
+                vargs,
+                rtype,
+                constraints,
+                throws,
+                explicit_throws: _,
+                lambda_ids: _,
+            } = &**f;
             args.iter().any(|t| would_cycle_inner(addr, &t.typ))
                 || match vargs {
                     None => false,
@@ -107,7 +114,7 @@ impl PartialEq for TVar {
     fn eq(&self, other: &Self) -> bool {
         let t0 = self.read();
         let t1 = other.read();
-        t0.typ.as_ptr().addr() == t1.typ.as_ptr().addr() || {
+        Arc::ptr_eq(&t0.typ, &t1.typ) || {
             let t0 = t0.typ.read();
             let t1 = t1.typ.read();
             *t0 == *t1
@@ -121,7 +128,7 @@ impl PartialOrd for TVar {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         let t0 = self.read();
         let t1 = other.read();
-        if t0.typ.as_ptr().addr() == t1.typ.as_ptr().addr() {
+        if Arc::ptr_eq(&t0.typ, &t1.typ) {
             Some(std::cmp::Ordering::Equal)
         } else {
             let t0 = t0.typ.read();
@@ -135,7 +142,7 @@ impl Ord for TVar {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let t0 = self.read();
         let t1 = other.read();
-        if t0.typ.as_ptr().addr() == t1.typ.as_ptr().addr() {
+        if Arc::ptr_eq(&t0.typ, &t1.typ) {
             std::cmp::Ordering::Equal
         } else {
             let t0 = t0.typ.read();
@@ -434,7 +441,7 @@ impl Type {
             Type::Tuple(ts) => ts.iter().any(|t| t.has_unbound()),
             Type::Struct(ts) => ts.iter().any(|(_, t)| t.has_unbound()),
             Type::Variant(_, ts) => ts.iter().any(|t| t.has_unbound()),
-            Type::TVar(tv) => tv.read().typ.read().is_some(),
+            Type::TVar(tv) => tv.read().typ.read().is_none(),
             Type::Set(s) => s.iter().any(|t| t.has_unbound()),
             Type::Abstract { id: _, params } => params.iter().any(|t| t.has_unbound()),
             Type::Fn(ft) => ft.has_unbound(),
@@ -547,9 +554,8 @@ impl Type {
             Type::TVar(tv) => match known.get(&tv.name) {
                 Some(t) => t.clone(),
                 None => {
-                    let fresh = renamed
-                        .entry(tv.name.clone())
-                        .or_insert_with(TVar::default);
+                    let fresh =
+                        renamed.entry(tv.name.clone()).or_insert_with(TVar::default);
                     Type::TVar(fresh.clone())
                 }
             },
@@ -563,20 +569,25 @@ impl Type {
                     params.iter().map(|t| t.replace_tvars_int(known, renamed)),
                 ),
             },
-            Type::Error(t0) => Type::Error(Arc::new(t0.replace_tvars_int(known, renamed))),
-            Type::Array(t0) => Type::Array(Arc::new(t0.replace_tvars_int(known, renamed))),
+            Type::Error(t0) => {
+                Type::Error(Arc::new(t0.replace_tvars_int(known, renamed)))
+            }
+            Type::Array(t0) => {
+                Type::Array(Arc::new(t0.replace_tvars_int(known, renamed)))
+            }
             Type::Map { key, value } => {
                 let key = Arc::new(key.replace_tvars_int(known, renamed));
                 let value = Arc::new(value.replace_tvars_int(known, renamed));
                 Type::Map { key, value }
             }
-            Type::ByRef(t0) => Type::ByRef(Arc::new(t0.replace_tvars_int(known, renamed))),
+            Type::ByRef(t0) => {
+                Type::ByRef(Arc::new(t0.replace_tvars_int(known, renamed)))
+            }
             Type::Tuple(ts) => Type::Tuple(Arc::from_iter(
                 ts.iter().map(|t| t.replace_tvars_int(known, renamed)),
             )),
             Type::Struct(ts) => Type::Struct(Arc::from_iter(
-                ts.iter()
-                    .map(|(n, t)| (n.clone(), t.replace_tvars_int(known, renamed))),
+                ts.iter().map(|(n, t)| (n.clone(), t.replace_tvars_int(known, renamed))),
             )),
             Type::Variant(tag, ts) => Type::Variant(
                 tag.clone(),

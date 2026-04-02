@@ -3,7 +3,7 @@ use graphix_compiler::{
     expr::ExprId, typ::FnType, Apply, BuiltIn, Event, ExecCtx, Node, Rt, Scope, UserEvent,
 };
 use graphix_derive::defpackage;
-use graphix_package_core::{deftype, CachedArgs, CachedVals, EvalCached};
+use graphix_package_core::{CachedArgs, CachedVals, EvalCached};
 use netidx_value::Value;
 use std::boxed::Box;
 
@@ -12,11 +12,12 @@ struct ExampleBuiltin;
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for ExampleBuiltin {
     const NAME: &str = "{{name}}_example";
-    deftype!("fn(Any) -> bool");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         _ctx: &'a mut ExecCtx<R, E>,
         _typ: &'a FnType,
+        _resolved_typ: Option<&'d FnType>,
         _scope: &'b Scope,
         _from: &'c [Node<R, E>],
         _top_id: ExprId,
@@ -44,11 +45,11 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for ExampleBuiltin {
 #[derive(Debug, Default)]
 struct ExampleCachedEv;
 
-impl EvalCached for ExampleCachedEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for ExampleCachedEv {
     const NAME: &str = "{{name}}_example_cached";
-    deftype!("fn(@args: bool) -> bool");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         let mut res = Some(Value::Bool(false));
         for v in from.flat_iter() {
             match v {

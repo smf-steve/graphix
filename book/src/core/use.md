@@ -3,8 +3,8 @@
 Use allows you to bring names in modules into your current scope so they can be used without prefixing.
 
 ```graphix
-net::subscribe(...); // call subscribe in the net module
-use net;
+sys::net::subscribe(...); // call subscribe in the sys::net module
+use sys::net;
 subscribe(...) // same function
 ```
 
@@ -37,6 +37,20 @@ Error: in file "test.gx"
 Caused by:
     at line: 5, column: 1 map not defined
 ```
+
+Use paths are always absolute — they are resolved from the root of the
+module tree, not relative to the current module. For example, if you are
+inside the `sys::net` module and want to use the `sys::time` module, you
+must write `use sys::time`, not `use time`.
+
+```graphix
+// inside sys::net
+use sys::time;     // correct — absolute path
+```
+
+A submodule can reference bindings from its parent directly, but
+only if the `mod` declaration comes after those bindings in the
+parent's interface file.
 
 Use shadows earlier declarations in it's scope. Consider,
 

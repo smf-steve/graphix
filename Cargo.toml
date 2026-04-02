@@ -5,9 +5,10 @@ lto = true
 debug = false
 
 [profile.dev]
-opt-level = "s"
+opt-level = "z"
 lto = "thin"
-debug = true
+debug = false
+split-debuginfo = "unpacked"
 
 [workspace.dependencies]
 syn = "2"
@@ -20,7 +21,7 @@ bitflags = "2"
 bytes = { version = "1", features = ["serde"] }
 cargo_toml = "0.22.3"
 chrono = { version = "^0.4.24", features = ["serde"] }
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "string"] }
 cp_r = "0.5"
 combine = "4"
 compact_str = { version = "0.9", features = ["serde"] }
@@ -44,16 +45,23 @@ immutable-chunkmap = { version = "2.1", features = ["pool", "serde"] }
 indexmap = "2"
 log = "0.4"
 netidx-core = { version = "0.31.0", path = "../netidx/netidx-core" }
+netidx-derive = { version = "0.31.0", path = "../netidx/netidx-derive" }
 netidx-protocols = { version = "0.31.0", path = "../netidx/netidx-protocols" }
 netidx-value = { version = "0.31.6", path = "../netidx/netidx-value" }
 netidx = { version = "0.31.0", default-features = false, path = "../netidx/netidx" }
 parking_lot = "0.12.1"
-poolshark = { version = "0.2.6" }
+poolshark = { version = "0.2.7" }
 rand = "0.10"
 ratatui = { version = "0.30", features = ["widget-calendar"] }
 reedline = "0.45"
 regex = "1"
 reqwest = "0.13"
+rustls = "0.23"
+rustls-pemfile = "2.2"
+tokio-rustls = "0.26"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
 rust_decimal = { version = "1", features = [
     "serde-with-float",
     "serde-with-str",
@@ -80,9 +88,12 @@ tokio = { version = "1", features = [
     "io-std",
 ] }
 toml = { version = "1" }
+calamine = { version = "0.34", features = ["dates"] }
+rust_xlsxwriter = "0.94"
 toml_edit = { version = "0.25" }
 triomphe = { version = "0.1" }
 uuid = "1"
+webpki-roots = "0.26"
 walkdir = "2.5"
 which = "8"
 arboard = "3"
@@ -105,14 +116,22 @@ members = [
     "graphix-package",
     "stdlib/graphix-package-core",
     "stdlib/graphix-package-array",
-    "stdlib/graphix-package-fs",
+    "stdlib/graphix-package-list",
     "stdlib/graphix-package-map",
-    "stdlib/graphix-package-net",
     "stdlib/graphix-package-rand",
     "stdlib/graphix-package-re",
     "stdlib/graphix-package-str",
-    "stdlib/graphix-package-time",
+    "stdlib/graphix-package-sys",
+    "stdlib/graphix-package-args",
+    "stdlib/graphix-package-http",
+    "stdlib/graphix-package-json",
+    "stdlib/graphix-package-toml",
     "stdlib/graphix-package-tui",
     "stdlib/graphix-package-gui",
+    "stdlib/graphix-package-db",
+    "stdlib/graphix-package-xls",
+    "stdlib/graphix-package-pack",
+    "stdlib/graphix-package-sqlite",
+    "stdlib/graphix-package-hbs",
     "stdlib/graphix-tests"
 ]

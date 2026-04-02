@@ -5,14 +5,15 @@ use crate::{
     node::pattern::StructPatternNode,
     typ::{FnArgType, FnType, Type},
     wrap, Apply, BindId, CFlag, Event, ExecCtx, InitFn, LambdaId, Node, Refs, Rt, Scope,
-    Update, UserEvent,
+    TypecheckPhase, Update, UserEvent,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use arcstr::ArcStr;
 use compact_str::format_compact;
 use enumflags2::BitFlags;
+use fxhash::FxHashSet;
 use netidx::{pack::Pack, subscriber::Value, utils::Either};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use poolshark::local::LPooled;
 use std::{fmt, hash::Hash, sync::Arc as SArc};
 use triomphe::Arc;
@@ -24,6 +25,8 @@ pub struct LambdaDef<R: Rt, E: UserEvent> {
     pub argspec: Arc<[Arg]>,
     pub typ: Arc<FnType>,
     pub init: InitFn<R, E>,
+    pub needs_callsite: bool,
+    pub check: Mutex<Option<Box<dyn Apply<R, E>>>>,
 }
 
 impl<R: Rt, E: UserEvent> fmt::Debug for LambdaDef<R, E> {
@@ -106,6 +109,7 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for GXLambda<R, E> {
         &mut self,
         ctx: &mut ExecCtx<R, E>,
         args: &mut [Node<R, E>],
+        _phase: TypecheckPhase<'_>,
     ) -> Result<()> {
         for (arg, FnArgType { typ, .. }) in args.iter_mut().zip(self.typ.args.iter()) {
             wrap!(arg, arg.typecheck(ctx))?;
@@ -194,32 +198,37 @@ impl<R: Rt, E: UserEvent> Apply<R, E> for BuiltInLambda<R, E> {
         &mut self,
         ctx: &mut ExecCtx<R, E>,
         args: &mut [Node<R, E>],
+        phase: TypecheckPhase<'_>,
     ) -> Result<()> {
-        if args.len() < self.typ.args.len()
-            || (args.len() > self.typ.args.len() && self.typ.vargs.is_none())
-        {
-            let vargs = if self.typ.vargs.is_some() { "at least " } else { "" };
-            bail!(
-                "expected {}{} arguments got {}",
-                vargs,
-                self.typ.args.len(),
-                args.len()
-            )
+        match &phase {
+            TypecheckPhase::CallSite(_) => (),
+            TypecheckPhase::Lambda => {
+                if args.len() < self.typ.args.len()
+                    || (args.len() > self.typ.args.len() && self.typ.vargs.is_none())
+                {
+                    let vargs = if self.typ.vargs.is_some() { "at least " } else { "" };
+                    bail!(
+                        "expected {}{} arguments got {}",
+                        vargs,
+                        self.typ.args.len(),
+                        args.len()
+                    )
+                }
+                for i in 0..args.len() {
+                    wrap!(args[i], args[i].typecheck(ctx))?;
+                    let atyp = if i < self.typ.args.len() {
+                        &self.typ.args[i].typ
+                    } else {
+                        self.typ.vargs.as_ref().unwrap()
+                    };
+                    wrap!(args[i], atyp.check_contains(&ctx.env, &args[i].typ()))?
+                }
+                for (tv, tc) in self.typ.constraints.read().iter() {
+                    tc.check_contains(&ctx.env, &Type::TVar(tv.clone()))?
+                }
+            }
         }
-        for i in 0..args.len() {
-            wrap!(args[i], args[i].typecheck(ctx))?;
-            let atyp = if i < self.typ.args.len() {
-                &self.typ.args[i].typ
-            } else {
-                self.typ.vargs.as_ref().unwrap()
-            };
-            wrap!(args[i], atyp.check_contains(&ctx.env, &args[i].typ()))?
-        }
-        for (tv, tc) in self.typ.constraints.read().iter() {
-            tc.check_contains(&ctx.env, &Type::TVar(tv.clone()))?
-        }
-        self.apply.typecheck(ctx, args)?;
-        Ok(())
+        self.apply.typecheck(ctx, args, phase)
     }
 
     fn typ(&self) -> Arc<FnType> {
@@ -308,49 +317,61 @@ impl Lambda {
         let _scope = scope.clone();
         let env = ctx.env.clone();
         let _env = ctx.env.clone();
-        let typ = match &l.body {
-            Either::Left(_) => {
-                let args = Arc::from_iter(argspec.iter().map(|a| FnArgType {
-                    label: a.labeled.as_ref().and_then(|dv| {
-                        a.pattern.single_bind().map(|n| (n.clone(), dv.is_some()))
-                    }),
-                    typ: match a.constraint.as_ref() {
-                        Some(t) => t.clone(),
-                        None => Type::empty_tvar(),
-                    },
-                }));
-                let vargs = match vargs {
-                    Some(Some(t)) => Some(t.clone()),
-                    Some(None) => Some(Type::empty_tvar()),
-                    None => None,
-                };
-                let rtype = rtype.clone().unwrap_or_else(|| Type::empty_tvar());
-                let explicit_throws = throws.is_some();
-                let throws = throws.clone().unwrap_or_else(|| Type::empty_tvar());
-                Arc::new(FnType {
-                    constraints,
-                    args,
-                    vargs,
-                    rtype,
-                    throws,
-                    explicit_throws,
-                })
+        let mut needs_callsite = false;
+        if let Either::Right(builtin) = &l.body {
+            if let Some((_, nc)) = ctx.builtins.get(builtin.as_str()) {
+                needs_callsite = *nc;
+            } else {
+                bail!("unknown builtin function {builtin}")
             }
-            Either::Right(builtin) => match ctx.builtins.get(builtin.as_str()) {
-                None => bail!("unknown builtin function {builtin}"),
-                Some((styp, _)) => {
-                    if !ctx.builtins_allowed {
-                        bail!("defining builtins is not allowed in this context")
-                    }
-                    Arc::new(styp.scope_refs(&_original_scope.lexical))
+            if !ctx.builtins_allowed {
+                bail!("defining builtins is not allowed in this context")
+            }
+            for a in argspec.iter() {
+                if a.constraint.is_none() {
+                    bail!("builtin function {builtin} requires all arguments to have type annotations")
                 }
-            },
+            }
+            if rtype.is_none() {
+                bail!("builtin function {builtin} requires a return type annotation")
+            }
+        }
+        let typ = {
+            let args = Arc::from_iter(argspec.iter().map(|a| FnArgType {
+                label: a.labeled.as_ref().and_then(|dv| {
+                    a.pattern.single_bind().map(|n| (n.clone(), dv.is_some()))
+                }),
+                typ: match a.constraint.as_ref() {
+                    Some(t) => t.clone(),
+                    None => Type::empty_tvar(),
+                },
+            }));
+            let vargs = match vargs {
+                Some(Some(t)) => Some(t.clone()),
+                Some(None) => Some(Type::empty_tvar()),
+                None => None,
+            };
+            let rtype = rtype.clone().unwrap_or_else(|| Type::empty_tvar());
+            let explicit_throws = throws.is_some();
+            let throws = throws.clone().unwrap_or_else(|| Type::empty_tvar());
+            Arc::new(FnType {
+                constraints,
+                args,
+                vargs,
+                rtype,
+                throws,
+                explicit_throws,
+                lambda_ids: Arc::new(RwLock::new(FxHashSet::default())),
+            })
         };
         typ.alias_tvars(&mut LPooled::take());
+        if needs_callsite {
+            typ.lambda_ids.write().insert(id);
+        }
         let _typ = typ.clone();
         let _argspec = argspec.clone();
         let body = l.body.clone();
-        let init: InitFn<R, E> = SArc::new(move |scope, ctx, args, tid, tcerr| {
+        let init: InitFn<R, E> = SArc::new(move |scope, ctx, args, resolved, tid| {
             // restore the lexical environment to the state it was in
             // when the closure was created
             ctx.with_restored(_env.clone(), |ctx| match body.clone() {
@@ -359,7 +380,7 @@ impl Lambda {
                         dynamic: scope.dynamic.clone(),
                         lexical: _scope.lexical.clone(),
                     };
-                    let apply = GXLambda::new(
+                    GXLambda::new(
                         ctx,
                         flags,
                         _typ.clone(),
@@ -368,31 +389,17 @@ impl Lambda {
                         &scope,
                         tid,
                         body.clone(),
-                    );
-                    apply.and_then(|a| {
-                        let mut f: Box<dyn Apply<R, E>> = Box::new(a);
-                        if tcerr {
-                            f.typecheck(ctx, args).map(|()| f)
-                        } else {
-                            let _ = f.typecheck(ctx, args);
-                            Ok(f)
-                        }
-                    })
+                    )
+                    .map(|a| -> Box<dyn Apply<R, E>> { Box::new(a) })
                 }
                 Either::Right(builtin) => match ctx.builtins.get(&*builtin) {
                     None => bail!("unknown builtin function {builtin}"),
-                    Some((_, init)) => {
-                        init(ctx, &_typ, &_scope, args, tid).and_then(|apply| {
-                            let mut f: Box<dyn Apply<R, E>> =
+                    Some((init, _)) => init(ctx, &_typ, resolved, &_scope, args, tid)
+                        .map(|apply| {
+                            let f: Box<dyn Apply<R, E>> =
                                 Box::new(BuiltInLambda { typ: _typ.clone(), apply });
-                            if tcerr {
-                                f.typecheck(ctx, args).map(|()| f)
-                            } else {
-                                let _ = f.typecheck(ctx, args);
-                                Ok(f)
-                            }
-                        })
-                    }
+                            f
+                        }),
                 },
             })
         });
@@ -403,7 +410,10 @@ impl Lambda {
             argspec,
             init,
             scope: original_scope,
+            needs_callsite,
+            check: Mutex::new(None),
         });
+        ctx.lambda_defs.insert(id, def.clone());
         Ok(Box::new(Self { spec, def, typ: Type::Fn(typ), top_id, flags }))
     }
 }
@@ -436,6 +446,7 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda {
             .def
             .downcast_ref::<LambdaDef<R, E>>()
             .ok_or_else(|| anyhow!("failed to unwrap lambda"))?;
+        let needs_callsite = def.needs_callsite;
         let mut faux_args: LPooled<Vec<Node<R, E>>> = def
             .argspec
             .iter()
@@ -463,11 +474,23 @@ impl<R: Rt, E: UserEvent> Update<R, E> for Lambda {
             },
         );
         let prev_catch = ctx.env.catch.insert_cow(def.scope.dynamic.clone(), faux_id);
-        let res = (def.init)(&def.scope, ctx, &mut faux_args, ExprId::new(), true)
+        let res = (def.init)(&def.scope, ctx, &mut faux_args, None, ExprId::new())
             .with_context(|| ErrorContext(Update::<R, E>::spec(self).clone()));
         let res = res.and_then(|mut f| {
             let ftyp = f.typ().clone();
-            f.delete(ctx);
+            let res = f
+                .typecheck(ctx, &mut faux_args, TypecheckPhase::Lambda)
+                .with_context(|| ErrorContext(Update::<R, E>::spec(self).clone()));
+            if !needs_callsite {
+                f.delete(ctx)
+            } else {
+                let def = self
+                    .def
+                    .downcast_ref::<LambdaDef<R, E>>()
+                    .expect("failed to unwrap lambda");
+                *def.check.lock() = Some(f);
+            }
+            res?;
             let inferred_throws = ctx.env.by_id[&faux_id]
                 .typ
                 .with_deref(|t| t.cloned())

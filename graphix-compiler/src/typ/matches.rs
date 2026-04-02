@@ -202,7 +202,9 @@ impl Type {
                 }
             }
             (Self::Fn(f0), Self::Fn(f1)) => {
-                f0.sig_matches_int(env, f1, tvar_map, hist, adts)
+                f0.sig_matches_int(env, f1, tvar_map, hist, adts)?;
+                f0.merge_lambda_ids(f1);
+                Ok(())
             }
             (Self::Set(s0), Self::Set(s1)) if s0.len() == s1.len() => {
                 for (t0, t1) in s0.iter().zip(s1.iter()) {
@@ -248,11 +250,9 @@ impl Type {
                 k0.sig_matches_int(env, k1, tvar_map, hist, adts)?;
                 v0.sig_matches_int(env, v1, tvar_map, hist, adts)
             }
-            (Self::Abstract { .. }, Self::Abstract { .. }) => {
-                bail!("abstract types must have a concrete definition in the implementation")
-            }
+            (Self::Abstract { .. }, Self::Abstract { .. }) => Ok(()),
             (Self::Abstract { id, params: _ }, t0) => match adts.get(id) {
-                None => bail!("undefined abstract type"),
+                None => Ok(()), // it's in another module
                 Some(t1) => {
                     if t0 != t1 {
                         format_with_flags(PrintFlag::DerefTVars, || {

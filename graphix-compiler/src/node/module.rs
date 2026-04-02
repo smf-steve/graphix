@@ -42,7 +42,6 @@ fn bind_sig(env: &mut Env, mod_env: &mut Env, scope: &Scope, sig: &Sig) -> Resul
             }
             SigKind::TypeDef(td) => {
                 let typ = td.typ.scope_refs(&scope.lexical);
-                // Always bind to env (for external callers to see)
                 env.deftype(
                     &scope.lexical,
                     &td.name,
@@ -50,18 +49,6 @@ fn bind_sig(env: &mut Env, mod_env: &mut Env, scope: &Scope, sig: &Sig) -> Resul
                     typ.clone(),
                     si.doc.0.clone(),
                 )?;
-                // Only bind concrete types to mod_env. Abstract types are not
-                // bound to mod_env so the implementation can provide the
-                // concrete definition via its own type statement.
-                if !matches!(typ, Type::Abstract { .. }) {
-                    mod_env.deftype(
-                        &scope.lexical,
-                        &td.name,
-                        td.params.clone(),
-                        typ,
-                        si.doc.0.clone(),
-                    )?;
-                }
             }
         }
     }
@@ -71,18 +58,27 @@ fn bind_sig(env: &mut Env, mod_env: &mut Env, scope: &Scope, sig: &Sig) -> Resul
 // copy the exported signature of all the exported inner modules in this sig to
 // the global env
 fn export_sig(env: &mut Env, inner_env: &Env, scope: &Scope, sig: &Sig) {
+    let mut buf: LPooled<String> = LPooled::take();
     for si in sig.items.iter() {
         if let SigKind::Module(name) = &si.kind {
             use std::fmt::Write;
-            let mut buf: LPooled<String> = LPooled::take();
             let scope = scope.append(name);
             env.modules.insert_cow(scope.lexical.clone());
+            buf.clear();
+            write!(buf, "{}/", scope.lexical.0).unwrap();
+            for m in inner_env.modules.range::<ModPath, _>(&scope.lexical..) {
+                if m == &scope.lexical || m.starts_with(&*buf) {
+                    env.modules.insert_cow(m.clone());
+                } else {
+                    break;
+                }
+            }
             macro_rules! copy_sig {
                 ($kind:ident) => {
                     let iter = inner_env.$kind.range::<ModPath, _>(&scope.lexical..);
                     for (path, inner) in iter {
                         buf.clear();
-                        write!(buf, "{}/", scope.lexical).unwrap();
+                        write!(buf, "{}/", scope.lexical.0).unwrap();
                         if path == &scope.lexical || path.starts_with(&*buf) {
                             env.$kind.insert_cow(path.clone(), inner.clone());
                         }
@@ -138,9 +134,6 @@ fn check_sig<R: Rt, E: UserEvent>(
             };
             match &sig_td.typ {
                 Type::Abstract { id, params: _ } => {
-                    if let Type::Abstract { .. } = &td.typ {
-                        bail!("abstract types must have a concrete definition")
-                    }
                     for (tv0, con0) in td.params.iter() {
                         match sig_td.params.iter().find(|(tv1, _)| tv0.name == tv1.name) {
                             Some((_, con1)) if con0 != con1 => {
@@ -164,15 +157,19 @@ fn check_sig<R: Rt, E: UserEvent>(
                     }
                     abstract_types.insert(*id, td.typ.clone());
                 }
-                _ if td != &sig_td => {
-                    bail!(
-                        "signature mismatch in {}, expected {}, found {}",
-                        td.name,
-                        sig_td,
-                        td
-                    )
+                _ => {
+                    if sig_td.name != td.name
+                        || sig_td.params != td.params
+                        || sig_td.typ != td.typ.scope_refs(&scope.lexical)
+                    {
+                        bail!(
+                            "signature mismatch in {}, expected {}, found {}",
+                            td.name,
+                            sig_td,
+                            td
+                        )
+                    }
                 }
-                _ => (),
             }
         }
     }

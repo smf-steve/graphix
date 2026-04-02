@@ -3,11 +3,12 @@
     html_favicon_url = "https://graphix-lang.github.io/graphix/graphix-icon.svg"
 )]
 use anyhow::Result;
+use graphix_compiler::typ::FnType;
 use graphix_compiler::{
     expr::ExprId, Apply, BindId, BuiltIn, Event, ExecCtx, Node, Rt, Scope, UserEvent,
 };
 use graphix_package_core::{
-    deftype, CachedArgs, CachedVals, EvalCached, FoldFn, FoldQ, MapFn, MapQ, Slot,
+    CachedArgs, CachedVals, EvalCached, FoldFn, FoldQ, MapFn, MapQ, Slot,
 };
 use graphix_rt::GXRt;
 use immutable_chunkmap::map::Map as CMap;
@@ -24,9 +25,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for MapImpl {
     type Collection = CMap<Value, Value, 32>;
 
     const NAME: &str = "map_map";
-    deftype!(
-        "fn(Map<'a, 'b>, fn(('a, 'b)) -> ('c, 'd) throws 'e) -> Map<'c, 'd> throws 'e"
-    );
 
     fn finish(&mut self, slots: &[Slot<R, E>], _: &Self::Collection) -> Option<Value> {
         Some(Value::Map(CMap::from_iter(
@@ -46,7 +44,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterImpl {
     type Collection = CMap<Value, Value, 32>;
 
     const NAME: &str = "map_filter";
-    deftype!("fn(Map<'a, 'b>, fn(('a, 'b)) -> bool throws 'e) -> Map<'a, 'b> throws 'e");
 
     fn finish(
         &mut self,
@@ -71,9 +68,6 @@ impl<R: Rt, E: UserEvent> MapFn<R, E> for FilterMapImpl {
     type Collection = CMap<Value, Value, 32>;
 
     const NAME: &str = "map_filter_map";
-    deftype!(
-        "fn(Map<'a, 'b>, fn(('a, 'b)) -> Option<('c, 'd)> throws 'e) -> Map<'c, 'd> throws 'e"
-    );
 
     fn finish(
         &mut self,
@@ -98,7 +92,6 @@ impl<R: Rt, E: UserEvent> FoldFn<R, E> for FoldImpl {
     type Collection = CMap<Value, Value, 32>;
 
     const NAME: &str = "map_fold";
-    deftype!("fn(Map<'a, 'b>, 'c, fn('c, ('a, 'b)) -> 'c throws 'e) -> 'c throws 'e");
 }
 
 type Fold<R, E> = FoldQ<R, E, FoldImpl>;
@@ -106,11 +99,11 @@ type Fold<R, E> = FoldQ<R, E, FoldImpl>;
 #[derive(Debug, Default)]
 struct LenEv;
 
-impl EvalCached for LenEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for LenEv {
     const NAME: &str = "map_len";
-    deftype!("fn(Map<'a, 'b>) -> i64");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match &from.0[0] {
             Some(Value::Map(m)) => Some(Value::I64(m.len() as i64)),
             Some(_) | None => None,
@@ -123,11 +116,11 @@ type Len = CachedArgs<LenEv>;
 #[derive(Debug, Default)]
 struct GetEv;
 
-impl EvalCached for GetEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for GetEv {
     const NAME: &str = "map_get";
-    deftype!("fn(Map<'a, 'b>, 'a) -> Option<'b>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match (&from.0[0], &from.0[1]) {
             (Some(Value::Map(m)), Some(key)) => {
                 Some(m.get(key).cloned().unwrap_or(Value::Null))
@@ -142,11 +135,11 @@ type Get = CachedArgs<GetEv>;
 #[derive(Debug, Default)]
 struct InsertEv;
 
-impl EvalCached for InsertEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for InsertEv {
     const NAME: &str = "map_insert";
-    deftype!("fn(Map<'a, 'b>, 'a, 'b) -> Map<'a, 'b>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match (&from.0[0], &from.0[1], &from.0[2]) {
             (Some(Value::Map(m)), Some(key), Some(value)) => {
                 Some(Value::Map(m.insert(key.clone(), value.clone()).0))
@@ -161,11 +154,11 @@ type Insert = CachedArgs<InsertEv>;
 #[derive(Debug, Default)]
 struct RemoveEv;
 
-impl EvalCached for RemoveEv {
+impl<R: Rt, E: UserEvent> EvalCached<R, E> for RemoveEv {
     const NAME: &str = "map_remove";
-    deftype!("fn(Map<'a, 'b>, 'a) -> Map<'a, 'b>");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn eval(&mut self, from: &CachedVals) -> Option<Value> {
+    fn eval(&mut self, _ctx: &mut ExecCtx<R, E>, from: &CachedVals) -> Option<Value> {
         match (&from.0[0], &from.0[1]) {
             (Some(Value::Map(m)), Some(key)) => Some(Value::Map(m.remove(key).0)),
             _ => None,
@@ -183,11 +176,12 @@ struct Iter {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for Iter {
     const NAME: &str = "map_iter";
-    deftype!("fn(Map<'a, 'b>) -> ('a, 'b)");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         ctx: &'a mut ExecCtx<R, E>,
-        _typ: &'a graphix_compiler::typ::FnType,
+        _typ: &'a FnType,
+        _resolved: Option<&'d FnType>,
         _scope: &'b Scope,
         _from: &'c [Node<R, E>],
         top_id: ExprId,
@@ -237,11 +231,12 @@ struct IterQ {
 
 impl<R: Rt, E: UserEvent> BuiltIn<R, E> for IterQ {
     const NAME: &str = "map_iterq";
-    deftype!("fn(#clock:Any, Map<'a, 'b>) -> ('a, 'b)");
+    const NEEDS_CALLSITE: bool = false;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         ctx: &'a mut ExecCtx<R, E>,
-        _typ: &'a graphix_compiler::typ::FnType,
+        _typ: &'a FnType,
+        _resolved: Option<&'d FnType>,
         _scope: &'b Scope,
         _from: &'c [Node<R, E>],
         top_id: ExprId,

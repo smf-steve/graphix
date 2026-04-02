@@ -73,20 +73,23 @@ pub enum CFlag {
 static TRACE: AtomicBool = AtomicBool::new(false);
 
 #[allow(dead_code)]
-fn set_trace(b: bool) {
+pub fn set_trace(b: bool) {
     TRACE.store(b, Ordering::Relaxed)
 }
 
 #[allow(dead_code)]
-fn with_trace<F: FnOnce() -> Result<R>, R>(enable: bool, spec: &Expr, f: F) -> Result<R> {
-    let set = if enable {
+pub fn with_trace<F: FnOnce() -> Result<R>, R>(
+    enable: bool,
+    spec: &Expr,
+    f: F,
+) -> Result<R> {
+    let prev = trace();
+    set_trace(enable);
+    if !prev && enable {
         eprintln!("trace enabled at {}, spec: {}", spec.pos, spec);
-        let prev = trace();
-        set_trace(true);
-        !prev
-    } else {
-        false
-    };
+    } else if prev && !enable {
+        eprintln!("trace disabled at {}, spec: {}", spec.pos, spec);
+    }
     let r = match f() {
         Err(e) => {
             eprintln!("traced at {} failed with {e:?}", spec.pos);
@@ -94,15 +97,15 @@ fn with_trace<F: FnOnce() -> Result<R>, R>(enable: bool, spec: &Expr, f: F) -> R
         }
         r => r,
     };
-    if set {
-        eprintln!("trace disabled at {}", spec.pos);
-        set_trace(false)
+    if prev && !enable {
+        eprintln!("trace reenabled")
     }
+    set_trace(prev);
     r
 }
 
 #[allow(dead_code)]
-fn trace() -> bool {
+pub fn trace() -> bool {
     TRACE.load(Ordering::Relaxed)
 }
 
@@ -299,13 +302,22 @@ impl Refs {
 
 pub type Node<R, E> = Box<dyn Update<R, E>>;
 
+/// Phase indicator for Apply::typecheck
+#[derive(Debug)]
+pub enum TypecheckPhase<'a> {
+    /// During Lambda::typecheck — faux args, building FnType
+    Lambda,
+    /// During deferred check or bind — resolved FnType available
+    CallSite(&'a FnType),
+}
+
 pub type InitFn<R, E> = sync::Arc<
-    dyn for<'a, 'b, 'c> Fn(
+    dyn for<'a, 'b, 'c, 'd> Fn(
             &'a Scope,
             &'b mut ExecCtx<R, E>,
             &'c mut [Node<R, E>],
+            Option<&'d FnType>,
             ExprId,
-            bool,
         ) -> Result<Box<dyn Apply<R, E>>>
         + Send
         + Sync
@@ -330,12 +342,15 @@ pub trait Apply<R: Rt, E: UserEvent>: Debug + Send + Sync + Any {
         ()
     }
 
-    /// apply custom typechecking to the lambda, only needed for
-    /// builtins that take lambdas as arguments
+    /// apply custom typechecking. Phase indicates context:
+    /// - Lambda: during lambda body checking (faux args). Return NeedsCallSite
+    ///   to opt in to deferred call-site type checking.
+    /// - CallSite: during deferred check or bind (resolved FnType available)
     fn typecheck(
         &mut self,
         _ctx: &mut ExecCtx<R, E>,
         _from: &mut [Node<R, E>],
+        _phase: TypecheckPhase<'_>,
     ) -> Result<()> {
         Ok(())
     }
@@ -351,6 +366,7 @@ pub trait Apply<R: Rt, E: UserEvent>: Debug + Send + Sync + Any {
                 throws: Type::Bottom,
                 vargs: None,
                 explicit_throws: false,
+                ..Default::default()
             })
         });
         Arc::clone(&*EMPTY)
@@ -394,9 +410,10 @@ pub trait Update<R: Rt, E: UserEvent>: Debug + Send + Sync + Any + 'static {
     fn sleep(&mut self, ctx: &mut ExecCtx<R, E>);
 }
 
-pub type BuiltInInitFn<R, E> = for<'a, 'b, 'c> fn(
+pub type BuiltInInitFn<R, E> = for<'a, 'b, 'c, 'd> fn(
     &'a mut ExecCtx<R, E>,
     &'a FnType,
+    Option<&'d FnType>,
     &'b Scope,
     &'c [Node<R, E>],
     ExprId,
@@ -407,11 +424,12 @@ pub type BuiltInInitFn<R, E> = for<'a, 'b, 'c> fn(
 /// graphix-derive crate
 pub trait BuiltIn<R: Rt, E: UserEvent> {
     const NAME: &str;
-    const TYP: LazyLock<FnType>;
+    const NEEDS_CALLSITE: bool;
 
-    fn init<'a, 'b, 'c>(
+    fn init<'a, 'b, 'c, 'd>(
         ctx: &'a mut ExecCtx<R, E>,
         typ: &'a FnType,
+        resolved_type: Option<&'d FnType>,
         scope: &'b Scope,
         from: &'c [Node<R, E>],
         top_id: ExprId,
@@ -720,7 +738,7 @@ pub struct ExecCtx<R: Rt, E: UserEvent> {
     // used to wrap lambdas into an abstract netidx value type
     lambdawrap: AbstractWrapper<LambdaDef<R, E>>,
     // all registered built-in functions
-    builtins: FxHashMap<&'static str, (FnType, BuiltInInitFn<R, E>)>,
+    builtins: FxHashMap<&'static str, (BuiltInInitFn<R, E>, bool)>,
     // whether calling built-in functions is allowed in this context, used for
     // sandboxing
     builtins_allowed: bool,
@@ -734,6 +752,11 @@ pub struct ExecCtx<R: Rt, E: UserEvent> {
     pub cached: FxHashMap<BindId, Value>,
     /// the runtime
     pub rt: R,
+    /// LambdaDefs indexed by LambdaId, for deferred type checking
+    pub lambda_defs: FxHashMap<LambdaId, Value>,
+    /// deferred type check closures, evaluated after all primary type checking
+    pub deferred_checks:
+        Vec<Box<dyn FnOnce(&mut ExecCtx<R, E>) -> Result<()> + Send + Sync>>,
 }
 
 impl<R: Rt, E: UserEvent> ExecCtx<R, E> {
@@ -761,13 +784,15 @@ impl<R: Rt, E: UserEvent> ExecCtx<R, E> {
             tags: FxHashSet::default(),
             cached: HashMap::default(),
             rt: user,
+            lambda_defs: FxHashMap::default(),
+            deferred_checks: Vec::new(),
         })
     }
 
     pub fn register_builtin<T: BuiltIn<R, E>>(&mut self) -> Result<()> {
         match self.builtins.entry(T::NAME) {
             Entry::Vacant(e) => {
-                e.insert((T::TYP.clone(), T::init));
+                e.insert((T::init, T::NEEDS_CALLSITE));
             }
             Entry::Occupied(_) => bail!("builtin {} is already registered", T::NAME),
         }
@@ -864,6 +889,13 @@ pub fn compile<R: Rt, E: UserEvent>(
     if let Err(e) = node.typecheck(ctx) {
         ctx.env = env;
         return Err(e);
+    }
+    // run deferred builtin type checks after all primary type checking completes
+    while let Some(check) = ctx.deferred_checks.pop() {
+        if let Err(e) = check(ctx) {
+            ctx.env = env;
+            return Err(e);
+        }
     }
     info!("typecheck time {:?}", st.elapsed());
     Ok(node)

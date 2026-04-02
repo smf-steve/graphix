@@ -27,6 +27,8 @@ graphix-compiler = { version = "0.6.0", path = "../../graphix-compiler" }
 graphix-derive = { version = "0.6.0", path = "../../graphix-derive" }
 graphix-package = { version = "0.6.0", path = "../../graphix-package" }
 graphix-package-core = { version = "0.6.0", path = "../graphix-package-core" }
+graphix-package-sys = { version = "0.6.0", path = "../graphix-package-sys" }
+graphix-package-array = { version = "0.6.0", path = "../graphix-package-array" }
 graphix-rt = { version = "0.6.0", path = "../../graphix-rt" }
 log = { workspace = true }
 netidx = { workspace = true }

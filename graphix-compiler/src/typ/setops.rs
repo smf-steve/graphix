@@ -1,4 +1,7 @@
-use crate::{env::Env, typ::{RefHist, Type}};
+use crate::{
+    env::Env,
+    typ::{RefHist, Type},
+};
 use anyhow::Result;
 use enumflags2::BitFlags;
 use fxhash::FxHashMap;
@@ -312,12 +315,13 @@ impl Type {
                     Ok(Type::Fn(f0.clone()))
                 }
             }
-            (Type::TVar(tv0), Type::TVar(tv1)) => {
-                if tv0.read().typ.as_ptr() == tv1.read().typ.as_ptr() {
+            (Type::TVar(tv0), t1 @ Type::TVar(tv1)) => {
+                if Arc::ptr_eq(&tv0.read().typ, &tv1.read().typ) {
                     return Ok(Type::Primitive(BitFlags::empty()));
                 }
                 Ok(match (&*tv0.read().typ.read(), &*tv1.read().typ.read()) {
-                    (None, _) | (_, None) => Type::TVar(tv0.clone()),
+                    (None, _) => Type::TVar(tv0.clone()),
+                    (Some(t0), None) => t0.diff_int(env, hist, t1)?,
                     (Some(t0), Some(t1)) => t0.diff_int(env, hist, t1)?,
                 })
             }

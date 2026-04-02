@@ -192,9 +192,8 @@ const DEFAULT_PACKAGES: &[(&str, &str)] = &[
     ("array", SKEL.version),
     ("str", SKEL.version),
     ("map", SKEL.version),
-    ("fs", SKEL.version),
-    ("time", SKEL.version),
-    ("net", SKEL.version),
+    ("sys", SKEL.version),
+    ("http", SKEL.version),
     ("re", SKEL.version),
     ("rand", SKEL.version),
     ("tui", SKEL.version),
@@ -859,6 +858,9 @@ impl GraphixPM {
             })?;
         let mut packages = BTreeMap::new();
         packages.insert(short_name.to_string(), PackageEntry::Path(package_dir.clone()));
+        // because shell depends on core
+        packages
+            .insert("core".to_string(), PackageEntry::Version(SKEL.version.to_string()));
         let mut lock_storage =
             if source_override.is_none() { Some(Self::lock_file()?) } else { None };
         let _guard = lock_storage
