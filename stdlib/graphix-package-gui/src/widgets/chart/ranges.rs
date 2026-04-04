@@ -4,7 +4,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use graphix_rt::GXExt;
 
 /// Compute numeric axis ranges across all dataset entries.
-pub(super) fn compute_ranges<X: GXExt>(
+pub fn compute_ranges<X: GXExt>(
     datasets: &[DatasetEntry<X>],
 ) -> ((f64, f64), (f64, f64)) {
     let mut x_min = f64::INFINITY;
@@ -64,7 +64,7 @@ pub(super) fn compute_ranges<X: GXExt>(
 }
 
 /// Compute datetime x-axis and numeric y-axis ranges across all dataset entries.
-pub(super) fn compute_time_ranges<X: GXExt>(
+pub fn compute_time_ranges<X: GXExt>(
     datasets: &[DatasetEntry<X>],
 ) -> ((DateTime<Utc>, DateTime<Utc>), (f64, f64)) {
     let mut x_min = DateTime::<Utc>::MAX_UTC;
@@ -132,7 +132,7 @@ pub(super) fn compute_time_ranges<X: GXExt>(
 }
 
 /// Compute 3D axis ranges across all 3D dataset entries.
-pub(super) fn compute_3d_ranges<X: GXExt>(
+pub fn compute_3d_ranges<X: GXExt>(
     datasets: &[DatasetEntry<X>],
 ) -> ((f64, f64), (f64, f64), (f64, f64)) {
     let mut x_min = f64::INFINITY;
@@ -190,7 +190,7 @@ pub(super) fn compute_3d_ranges<X: GXExt>(
     (pad_range(x_min, x_max), pad_range(y_min, y_max), pad_range(z_min, z_max))
 }
 
-pub(crate) fn pad_range(min: f64, max: f64) -> (f64, f64) {
+pub fn pad_range(min: f64, max: f64) -> (f64, f64) {
     if min > max {
         return (-1.0, 1.0);
     }
@@ -202,7 +202,7 @@ pub(crate) fn pad_range(min: f64, max: f64) -> (f64, f64) {
 /// Estimate the number of decimal places needed for tick labels
 /// given the axis range. Plotters generates ~10 ticks, so the step
 /// is roughly range/10. We need enough precision to distinguish ticks.
-pub(super) fn tick_precision(range: f64) -> usize {
+pub fn tick_precision(range: f64) -> usize {
     let step = range / 10.0;
     if step >= 1.0 {
         1
@@ -215,7 +215,7 @@ pub(super) fn tick_precision(range: f64) -> usize {
     }
 }
 
-pub(super) fn pad_time_range(
+pub fn pad_time_range(
     min: DateTime<Utc>,
     max: DateTime<Utc>,
 ) -> (DateTime<Utc>, DateTime<Utc>) {

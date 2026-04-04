@@ -15,7 +15,7 @@ const DOUBLE_CLICK_MS: u128 = 400;
 
 /// Plot area info captured during draw() for use by update().
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PlotInfo {
+pub struct PlotInfo {
     pub rect: Rectangle,
     pub x_range: (f64, f64),
     pub y_range: (f64, f64),
@@ -23,14 +23,14 @@ pub(crate) struct PlotInfo {
 
 /// A snapped data point for tooltip display.
 #[derive(Clone, Debug)]
-pub(crate) struct SnapPoint {
+pub struct SnapPoint {
     pub pixel: Point,
     pub label: String,
     pub value: String,
 }
 
 /// Interactive chart state, held as `Program::State`.
-pub(crate) struct ChartState {
+pub struct ChartState {
     pub cache: iced_canvas::Cache<Renderer>,
     // cursor position (canvas-relative)
     pub cursor: Option<Point>,
@@ -80,7 +80,7 @@ impl Default for ChartState {
 
 impl ChartState {
     /// Handle a mouse event. Returns an optional Action.
-    pub(super) fn handle_event<X: GXExt>(
+    pub(crate) fn handle_event<X: GXExt>(
         &mut self,
         chart: &super::ChartW<X>,
         event: &iced_core::event::Event,
@@ -276,7 +276,7 @@ impl ChartState {
     }
 
     /// Return the appropriate mouse cursor for the current state.
-    pub(super) fn mouse_interaction(
+    pub fn mouse_interaction(
         &self,
         mode: ChartMode,
         bounds: Rectangle,
@@ -532,7 +532,7 @@ fn find_nearest_point<X: GXExt>(
 }
 
 /// Draw the tooltip overlay onto a frame.
-pub(super) fn draw_tooltip(
+pub fn draw_tooltip(
     frame: &mut iced_widget::canvas::Frame<Renderer>,
     snap: &SnapPoint,
     bounds_size: iced_core::Size,

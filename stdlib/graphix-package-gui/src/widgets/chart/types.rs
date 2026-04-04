@@ -6,10 +6,40 @@ use netidx::publisher::{FromValue, Value};
 use plotters::prelude::SeriesLabelPosition;
 use poolshark::local::LPooled;
 
+// ── Backend-agnostic color ─────────────────────────────────────────
+
+/// A simple RGBA color that does not depend on iced_core.
+/// Consumers (e.g. netidx-browser) can convert to/from their own
+/// color types through the public fields.
+#[derive(Clone, Copy, Debug)]
+pub struct ChartColor(pub f32, pub f32, pub f32, pub f32);
+
+impl ChartColor {
+    pub fn to_plotters_rgb(self) -> plotters::style::RGBColor {
+        plotters::style::RGBColor(
+            (self.0 * 255.0) as u8,
+            (self.1 * 255.0) as u8,
+            (self.2 * 255.0) as u8,
+        )
+    }
+}
+
+impl From<iced_core::Color> for ChartColor {
+    fn from(c: iced_core::Color) -> Self {
+        Self(c.r, c.g, c.b, c.a)
+    }
+}
+
+impl From<ChartColor> for iced_core::Color {
+    fn from(c: ChartColor) -> Self {
+        iced_core::Color::from_rgba(c.0, c.1, c.2, c.3)
+    }
+}
+
 // ── Data point types ────────────────────────────────────────────────
 
 /// XY data: either numeric (f64, f64) or time-series (DateTime<Utc>, f64).
-pub(super) enum XYData {
+pub enum XYData {
     Numeric(LPooled<Vec<(f64, f64)>>),
     DateTime(LPooled<Vec<(DateTime<Utc>, f64)>>),
 }
@@ -43,7 +73,7 @@ impl FromValue for XYData {
 }
 
 /// Bar chart data: categorical (String) x-axis, numeric y-axis.
-pub(super) struct BarData(pub LPooled<Vec<(String, f64)>>);
+pub struct BarData(pub LPooled<Vec<(String, f64)>>);
 
 impl FromValue for BarData {
     fn from_value(v: Value) -> Result<Self> {
@@ -60,7 +90,7 @@ impl FromValue for BarData {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct OHLCPoint {
+pub struct OHLCPoint {
     pub x: f64,
     pub open: f64,
     pub high: f64,
@@ -77,7 +107,7 @@ impl FromValue for OHLCPoint {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct TimeOHLCPoint {
+pub struct TimeOHLCPoint {
     pub x: DateTime<Utc>,
     pub open: f64,
     pub high: f64,
@@ -100,7 +130,7 @@ impl FromValue for TimeOHLCPoint {
 }
 
 /// OHLC data: either numeric or time-series x-axis.
-pub(super) enum OHLCData {
+pub enum OHLCData {
     Numeric(LPooled<Vec<OHLCPoint>>),
     DateTime(LPooled<Vec<TimeOHLCPoint>>),
 }
@@ -135,7 +165,7 @@ impl FromValue for OHLCData {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct EBPoint {
+pub struct EBPoint {
     pub x: f64,
     pub min: f64,
     pub avg: f64,
@@ -150,7 +180,7 @@ impl FromValue for EBPoint {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(super) struct TimeEBPoint {
+pub struct TimeEBPoint {
     pub x: DateTime<Utc>,
     pub min: f64,
     pub avg: f64,
@@ -171,7 +201,7 @@ impl FromValue for TimeEBPoint {
 }
 
 /// Error bar data: either numeric or time-series x-axis.
-pub(super) enum EBData {
+pub enum EBData {
     Numeric(LPooled<Vec<EBPoint>>),
     DateTime(LPooled<Vec<TimeEBPoint>>),
 }
@@ -206,7 +236,7 @@ impl FromValue for EBData {
 }
 
 /// 3D point data: Array<(f64, f64, f64)>.
-pub(super) struct XYZData(pub LPooled<Vec<(f64, f64, f64)>>);
+pub struct XYZData(pub LPooled<Vec<(f64, f64, f64)>>);
 
 impl FromValue for XYZData {
     fn from_value(v: Value) -> Result<Self> {
@@ -223,7 +253,7 @@ impl FromValue for XYZData {
 }
 
 /// Surface data: Array<Array<(f64, f64, f64)>> — a grid of 3D points.
-pub(super) struct SurfaceData(pub Vec<Vec<(f64, f64, f64)>>);
+pub struct SurfaceData(pub Vec<Vec<(f64, f64, f64)>>);
 
 impl FromValue for SurfaceData {
     fn from_value(v: Value) -> Result<Self> {
@@ -249,8 +279,8 @@ impl FromValue for SurfaceData {
 
 // ── Style types ─────────────────────────────────────────────────────
 
-pub(super) struct SeriesStyleV {
-    pub color: Option<iced_core::Color>,
+pub struct SeriesStyleV {
+    pub color: Option<ChartColor>,
     pub label: Option<String>,
     pub stroke_width: Option<f64>,
     pub point_size: Option<f64>,
@@ -264,7 +294,7 @@ impl FromValue for SeriesStyleV {
             color: if color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(color)?.0)
+                Some(ColorV::from_value(color)?.0.into())
             },
             label: if label == Value::Null {
                 None
@@ -285,8 +315,8 @@ impl FromValue for SeriesStyleV {
     }
 }
 
-pub(super) struct BarStyleV {
-    pub color: Option<iced_core::Color>,
+pub struct BarStyleV {
+    pub color: Option<ChartColor>,
     pub label: Option<String>,
     pub margin: Option<f64>,
 }
@@ -299,7 +329,7 @@ impl FromValue for BarStyleV {
             color: if color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(color)?.0)
+                Some(ColorV::from_value(color)?.0.into())
             },
             label: if label == Value::Null {
                 None
@@ -315,9 +345,9 @@ impl FromValue for BarStyleV {
     }
 }
 
-pub(super) struct CandlestickStyleV {
-    pub gain_color: Option<iced_core::Color>,
-    pub loss_color: Option<iced_core::Color>,
+pub struct CandlestickStyleV {
+    pub gain_color: Option<ChartColor>,
+    pub loss_color: Option<ChartColor>,
     pub bar_width: Option<f64>,
     pub label: Option<String>,
 }
@@ -330,12 +360,12 @@ impl FromValue for CandlestickStyleV {
             gain_color: if gain_color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(gain_color)?.0)
+                Some(ColorV::from_value(gain_color)?.0.into())
             },
             loss_color: if loss_color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(loss_color)?.0)
+                Some(ColorV::from_value(loss_color)?.0.into())
             },
             bar_width: if bar_width == Value::Null {
                 None
@@ -351,8 +381,8 @@ impl FromValue for CandlestickStyleV {
     }
 }
 
-pub(super) struct PieStyleV {
-    pub colors: Option<Vec<iced_core::Color>>,
+pub struct PieStyleV {
+    pub colors: Option<Vec<ChartColor>>,
     pub donut: Option<f64>,
     pub label_offset: Option<f64>,
     pub show_percentages: Option<bool>,
@@ -374,7 +404,7 @@ impl FromValue for PieStyleV {
                 };
                 Some(
                     arr.iter()
-                        .map(|v| Ok(ColorV::from_value(v.clone())?.0))
+                        .map(|v| Ok(ChartColor::from(ColorV::from_value(v.clone())?.0)))
                         .collect::<Result<_>>()?,
                 )
             },
@@ -402,8 +432,8 @@ impl FromValue for PieStyleV {
     }
 }
 
-pub(super) struct SurfaceStyleV {
-    pub color: Option<iced_core::Color>,
+pub struct SurfaceStyleV {
+    pub color: Option<ChartColor>,
     pub color_by_z: Option<bool>,
     pub label: Option<String>,
 }
@@ -417,7 +447,7 @@ impl FromValue for SurfaceStyleV {
             color: if color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(color)?.0)
+                Some(ColorV::from_value(color)?.0.into())
             },
             color_by_z: if color_by_z == Value::Null {
                 None
@@ -435,12 +465,12 @@ impl FromValue for SurfaceStyleV {
 
 // ── Mesh style ──────────────────────────────────────────────────────
 
-pub(super) struct MeshStyleV {
+pub struct MeshStyleV {
     pub show_x_grid: Option<bool>,
     pub show_y_grid: Option<bool>,
-    pub grid_color: Option<iced_core::Color>,
-    pub axis_color: Option<iced_core::Color>,
-    pub label_color: Option<iced_core::Color>,
+    pub grid_color: Option<ChartColor>,
+    pub axis_color: Option<ChartColor>,
+    pub label_color: Option<ChartColor>,
     pub label_size: Option<f64>,
     pub x_label_area_size: Option<f64>,
     pub x_labels: Option<i64>,
@@ -466,17 +496,17 @@ impl FromValue for MeshStyleV {
             grid_color: if grid_color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(grid_color)?.0)
+                Some(ColorV::from_value(grid_color)?.0.into())
             },
             axis_color: if axis_color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(axis_color)?.0)
+                Some(ColorV::from_value(axis_color)?.0.into())
             },
             label_color: if label_color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(label_color)?.0)
+                Some(ColorV::from_value(label_color)?.0.into())
             },
             label_size: if label_size == Value::Null {
                 None
@@ -508,7 +538,7 @@ impl FromValue for MeshStyleV {
 }
 
 /// Newtype for Option<MeshStyleV> to satisfy orphan rules.
-pub(super) struct OptMeshStyle(pub Option<MeshStyleV>);
+pub struct OptMeshStyle(pub Option<MeshStyleV>);
 
 impl FromValue for OptMeshStyle {
     fn from_value(v: Value) -> Result<Self> {
@@ -522,10 +552,10 @@ impl FromValue for OptMeshStyle {
 
 // ── Legend style ────────────────────────────────────────────────────
 
-pub(super) struct LegendStyleV {
-    pub background: Option<iced_core::Color>,
-    pub border: Option<iced_core::Color>,
-    pub label_color: Option<iced_core::Color>,
+pub struct LegendStyleV {
+    pub background: Option<ChartColor>,
+    pub border: Option<ChartColor>,
+    pub label_color: Option<ChartColor>,
     pub label_size: Option<f64>,
 }
 
@@ -537,17 +567,17 @@ impl FromValue for LegendStyleV {
             background: if background == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(background)?.0)
+                Some(ColorV::from_value(background)?.0.into())
             },
             border: if border == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(border)?.0)
+                Some(ColorV::from_value(border)?.0.into())
             },
             label_color: if label_color == Value::Null {
                 None
             } else {
-                Some(ColorV::from_value(label_color)?.0)
+                Some(ColorV::from_value(label_color)?.0.into())
             },
             label_size: if label_size == Value::Null {
                 None
@@ -559,7 +589,7 @@ impl FromValue for LegendStyleV {
 }
 
 /// Newtype for Option<LegendStyleV> to satisfy orphan rules.
-pub(super) struct OptLegendStyle(pub Option<LegendStyleV>);
+pub struct OptLegendStyle(pub Option<LegendStyleV>);
 
 impl FromValue for OptLegendStyle {
     fn from_value(v: Value) -> Result<Self> {
@@ -574,7 +604,7 @@ impl FromValue for OptLegendStyle {
 // ── Legend position ─────────────────────────────────────────────────
 
 #[derive(Clone)]
-pub(super) struct LegendPositionV(pub SeriesLabelPosition);
+pub struct LegendPositionV(pub SeriesLabelPosition);
 
 impl FromValue for LegendPositionV {
     fn from_value(v: Value) -> Result<Self> {
@@ -593,7 +623,7 @@ impl FromValue for LegendPositionV {
 }
 
 /// Newtype for Option<LegendPositionV> to satisfy orphan rules.
-pub(super) struct OptLegendPosition(pub Option<LegendPositionV>);
+pub struct OptLegendPosition(pub Option<LegendPositionV>);
 
 impl FromValue for OptLegendPosition {
     fn from_value(v: Value) -> Result<Self> {
@@ -607,7 +637,7 @@ impl FromValue for OptLegendPosition {
 
 // ── Optional f64 newtype ────────────────────────────────────────────
 
-pub(super) struct OptF64(pub Option<f64>);
+pub struct OptF64(pub Option<f64>);
 
 impl FromValue for OptF64 {
     fn from_value(v: Value) -> Result<Self> {
@@ -621,21 +651,21 @@ impl FromValue for OptF64 {
 
 // ── Optional Color newtype ──────────────────────────────────────────
 
-pub(super) struct OptColor(pub Option<iced_core::Color>);
+pub struct OptColor(pub Option<ChartColor>);
 
 impl FromValue for OptColor {
     fn from_value(v: Value) -> Result<Self> {
         if v == Value::Null {
             Ok(Self(None))
         } else {
-            Ok(Self(Some(ColorV::from_value(v)?.0)))
+            Ok(Self(Some(ColorV::from_value(v)?.0.into())))
         }
     }
 }
 
 // ── Projection3D ───────────────────────────────────────────────────
 
-pub(super) struct Projection3DV {
+pub struct Projection3DV {
     pub pitch: Option<f64>,
     pub scale: Option<f64>,
     pub yaw: Option<f64>,
@@ -661,7 +691,7 @@ impl FromValue for Projection3DV {
     }
 }
 
-pub(super) struct OptProjection3D(pub Option<Projection3DV>);
+pub struct OptProjection3D(pub Option<Projection3DV>);
 
 impl FromValue for OptProjection3D {
     fn from_value(v: Value) -> Result<Self> {
@@ -676,7 +706,7 @@ impl FromValue for OptProjection3D {
 // ── Axis range ──────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
-pub(super) struct AxisRange {
+pub struct AxisRange {
     pub min: f64,
     pub max: f64,
 }
@@ -690,7 +720,7 @@ impl FromValue for AxisRange {
 
 /// Newtype for Option<AxisRange> to satisfy orphan rules.
 #[derive(Clone, Debug)]
-pub(super) struct OptAxisRange(pub Option<AxisRange>);
+pub struct OptAxisRange(pub Option<AxisRange>);
 
 impl FromValue for OptAxisRange {
     fn from_value(v: Value) -> Result<Self> {
@@ -705,13 +735,13 @@ impl FromValue for OptAxisRange {
 // ── X-axis range ───────────────────────────────────────────────────
 
 /// Parsed x-axis range: either numeric or datetime.
-pub(super) enum XAxisRange {
+pub enum XAxisRange {
     Numeric { min: f64, max: f64 },
     DateTime { min: DateTime<Utc>, max: DateTime<Utc> },
 }
 
 /// Optional x-axis range from graphix value.
-pub(super) struct OptXAxisRange(pub Option<XAxisRange>);
+pub struct OptXAxisRange(pub Option<XAxisRange>);
 
 impl FromValue for OptXAxisRange {
     fn from_value(v: Value) -> Result<Self> {

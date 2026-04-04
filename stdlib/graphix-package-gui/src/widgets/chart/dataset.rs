@@ -9,14 +9,14 @@ use poolshark::local::LPooled;
 // ── Dataset types ───────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
-pub(super) enum XYKind {
+pub enum XYKind {
     Line,
     Scatter,
     Area,
 }
 
 /// A compiled dataset with live reactive data refs.
-pub(super) enum DatasetEntry<X: GXExt> {
+pub enum DatasetEntry<X: GXExt> {
     XY { kind: XYKind, data: TRef<X, XYData>, style: SeriesStyleV },
     DashedLine { data: TRef<X, XYData>, dash: f64, gap: f64, style: SeriesStyleV },
     Bar { data: TRef<X, BarData>, style: BarStyleV },
@@ -29,7 +29,7 @@ pub(super) enum DatasetEntry<X: GXExt> {
 }
 
 impl<X: GXExt> DatasetEntry<X> {
-    pub(super) fn label(&self) -> Option<&str> {
+    pub fn label(&self) -> Option<&str> {
         match self {
             Self::XY { style, .. }
             | Self::DashedLine { style, .. }
@@ -136,7 +136,7 @@ impl FromValue for DatasetMeta {
 }
 
 /// Compile dataset metadata into live entries with data refs.
-pub(super) async fn compile_datasets<X: GXExt>(
+pub async fn compile_datasets<X: GXExt>(
     gx: &GXHandle<X>,
     v: Value,
 ) -> Result<LPooled<Vec<DatasetEntry<X>>>> {
@@ -202,7 +202,7 @@ pub(super) async fn compile_datasets<X: GXExt>(
 // ── Chart mode detection ────────────────────────────────────────────
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum ChartMode {
+pub enum ChartMode {
     Numeric,
     TimeSeries,
     Bar,
@@ -211,7 +211,7 @@ pub(super) enum ChartMode {
     Empty,
 }
 
-pub(super) fn chart_mode<X: GXExt>(datasets: &[DatasetEntry<X>]) -> ChartMode {
+pub fn chart_mode<X: GXExt>(datasets: &[DatasetEntry<X>]) -> ChartMode {
     let mut has_bar = false;
     let mut has_pie = false;
     let mut has_3d = false;

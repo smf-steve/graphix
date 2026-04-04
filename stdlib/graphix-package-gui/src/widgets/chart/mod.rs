@@ -1,15 +1,14 @@
-mod dataset;
+pub mod dataset;
 mod draw;
-mod interact;
+pub mod interact;
 mod plotters_backend;
-mod ranges;
-mod types;
+pub mod ranges;
+pub mod types;
 
 use crate::types::LengthV;
 use crate::widgets::{GuiW, GuiWidget, IcedElement};
 use anyhow::{Context, Result};
 use arcstr::ArcStr;
-use dataset::{compile_datasets, DatasetEntry};
 use graphix_compiler::expr::ExprId;
 use graphix_rt::{GXExt, GXHandle, Ref, TRef};
 use iced_widget::canvas as iced_canvas;
@@ -17,10 +16,11 @@ use netidx::publisher::Value;
 use poolshark::local::LPooled;
 use std::cell::Cell;
 use tokio::try_join;
-use types::*;
 
-#[cfg(test)]
-pub(crate) use ranges::pad_range;
+pub use dataset::*;
+pub use interact::{ChartState, PlotInfo, SnapPoint};
+pub use ranges::*;
+pub use types::*;
 
 // ── ChartW ──────────────────────────────────────────────────────────
 

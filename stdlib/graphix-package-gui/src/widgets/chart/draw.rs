@@ -37,11 +37,6 @@ const PALETTE: [RGBColor; 8] = [
 const DEFAULT_GAIN: RGBColor = RGBColor(44, 160, 44);
 const DEFAULT_LOSS: RGBColor = RGBColor(214, 39, 40);
 
-fn iced_to_plotters(c: iced_core::Color) -> RGBColor {
-    let [r, g, b, _] = c.into_rgba8();
-    RGBColor(r, g, b)
-}
-
 // ── Drawing macros ──────────────────────────────────────────────────
 
 /// Draw series data onto a chart context. The macro is parameterized by
@@ -60,7 +55,7 @@ macro_rules! draw_chart_body {
                     };
                     let color = style
                         .color
-                        .map(iced_to_plotters)
+                        .map(ChartColor::to_plotters_rgb)
                         .unwrap_or(PALETTE[i % PALETTE.len()]);
                     let sw = style.stroke_width.unwrap_or(2.0) as u32;
                     let ps = style.point_size.unwrap_or(3.0) as u32;
@@ -132,7 +127,7 @@ macro_rules! draw_chart_body {
                     };
                     let color = style
                         .color
-                        .map(iced_to_plotters)
+                        .map(ChartColor::to_plotters_rgb)
                         .unwrap_or(PALETTE[i % PALETTE.len()]);
                     let sw = style.stroke_width.unwrap_or(2.0) as u32;
                     let line_style = ShapeStyle::from(color).stroke_width(sw);
@@ -164,10 +159,14 @@ macro_rules! draw_chart_body {
                 | DatasetEntry::Surface { .. } => {}
 
                 DatasetEntry::Candlestick { data, style } => {
-                    let gain =
-                        style.gain_color.map(iced_to_plotters).unwrap_or(DEFAULT_GAIN);
-                    let loss =
-                        style.loss_color.map(iced_to_plotters).unwrap_or(DEFAULT_LOSS);
+                    let gain = style
+                        .gain_color
+                        .map(ChartColor::to_plotters_rgb)
+                        .unwrap_or(DEFAULT_GAIN);
+                    let loss = style
+                        .loss_color
+                        .map(ChartColor::to_plotters_rgb)
+                        .unwrap_or(DEFAULT_LOSS);
                     let bw = style.bar_width.unwrap_or(5.0) as u32;
                     let label = style.label.as_deref();
 
@@ -207,7 +206,7 @@ macro_rules! draw_chart_body {
                 DatasetEntry::ErrorBar { data, style } => {
                     let color = style
                         .color
-                        .map(iced_to_plotters)
+                        .map(ChartColor::to_plotters_rgb)
                         .unwrap_or(PALETTE[i % PALETTE.len()]);
                     let sw = style.stroke_width.unwrap_or(2.0) as u32;
                     let line_style = ShapeStyle::from(color).stroke_width(sw);
@@ -251,10 +250,14 @@ macro_rules! draw_chart_body {
                 .map(|p| p.0.clone())
                 .unwrap_or(SeriesLabelPosition::UpperLeft);
             let ls = $self.legend_style.t.as_ref().and_then(|o| o.0.as_ref());
-            let legend_bg =
-                ls.and_then(|s| s.background).map(iced_to_plotters).unwrap_or(WHITE);
-            let legend_border =
-                ls.and_then(|s| s.border).map(iced_to_plotters).unwrap_or(BLACK);
+            let legend_bg = ls
+                .and_then(|s| s.background)
+                .map(ChartColor::to_plotters_rgb)
+                .unwrap_or(WHITE);
+            let legend_border = ls
+                .and_then(|s| s.border)
+                .map(ChartColor::to_plotters_rgb)
+                .unwrap_or(BLACK);
             let legend_font_sz = ls.and_then(|s| s.label_size).unwrap_or($label_sz);
             let mut labels = $chart.configure_series_labels();
             labels.position(legend_pos);
@@ -263,7 +266,7 @@ macro_rules! draw_chart_body {
             labels.border_style(legend_border);
             let mut style = TextStyle::from(("sans-serif", legend_font_sz).into_font());
             if let Some(lc) = ls.and_then(|s| s.label_color) {
-                style.color = iced_to_plotters(lc).to_backend_color();
+                style.color = ChartColor::to_plotters_rgb(lc).to_backend_color();
             }
             labels.label_font(style);
             if let Err(e) = labels.draw() {
@@ -291,18 +294,18 @@ macro_rules! configure_mesh {
                 mesh_cfg.disable_y_mesh();
             }
             if let Some(c) = ms.grid_color {
-                let pc = iced_to_plotters(c);
+                let pc = ChartColor::to_plotters_rgb(c);
                 mesh_cfg.light_line_style(pc);
             }
             if let Some(c) = ms.axis_color {
-                let pc = iced_to_plotters(c);
+                let pc = ChartColor::to_plotters_rgb(c);
                 mesh_cfg.axis_style(pc);
             }
             if ms.label_size.is_some() || ms.label_color.is_some() {
                 let s = ms.label_size.unwrap_or(12.0);
                 if let Some(lc) = ms.label_color {
                     let mut style = TextStyle::from(("sans-serif", s).into_font());
-                    style.color = iced_to_plotters(lc).to_backend_color();
+                    style.color = ChartColor::to_plotters_rgb(lc).to_backend_color();
                     mesh_cfg.label_style(style.clone());
                     mesh_cfg.axis_desc_style(style);
                 } else {
@@ -385,7 +388,7 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                 .t
                 .as_ref()
                 .and_then(|o| o.0)
-                .map(iced_to_plotters)
+                .map(ChartColor::to_plotters_rgb)
                 .unwrap_or(WHITE);
             if let Err(e) = root.fill(&bg) {
                 error!("chart fill: {e:?}");
@@ -406,7 +409,7 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                 let font = ("sans-serif", title_size).into_font();
                 if let Some(tc) = self.title_color.t.as_ref().and_then(|o| o.0) {
                     let mut style = TextStyle::from(font);
-                    style.color = iced_to_plotters(tc).to_backend_color();
+                    style.color = ChartColor::to_plotters_rgb(tc).to_backend_color();
                     builder.caption(t, style);
                 } else {
                     builder.caption(t, font);
@@ -655,7 +658,7 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                             if let Some(bd) = data.t.as_ref() {
                                 let color = style
                                     .color
-                                    .map(iced_to_plotters)
+                                    .map(ChartColor::to_plotters_rgb)
                                     .unwrap_or(PALETTE[i % PALETTE.len()]);
                                 let fill_style = ShapeStyle::from(color).filled();
                                 let margin_px = style.margin.unwrap_or(5.0) as u32;
@@ -693,11 +696,11 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                         let ls = self.legend_style.t.as_ref().and_then(|o| o.0.as_ref());
                         let legend_bg = ls
                             .and_then(|s| s.background)
-                            .map(iced_to_plotters)
+                            .map(ChartColor::to_plotters_rgb)
                             .unwrap_or(WHITE);
                         let legend_border = ls
                             .and_then(|s| s.border)
-                            .map(iced_to_plotters)
+                            .map(ChartColor::to_plotters_rgb)
                             .unwrap_or(BLACK);
                         let legend_font_sz =
                             ls.and_then(|s| s.label_size).unwrap_or(label_sz);
@@ -709,7 +712,8 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                         let mut style =
                             TextStyle::from(("sans-serif", legend_font_sz).into_font());
                         if let Some(lc) = ls.and_then(|s| s.label_color) {
-                            style.color = iced_to_plotters(lc).to_backend_color();
+                            style.color =
+                                ChartColor::to_plotters_rgb(lc).to_backend_color();
                         }
                         labels.label_font(style);
                         if let Err(e) = labels.draw() {
@@ -749,7 +753,9 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                         pie_data.0.iter().map(|(l, _)| l.clone()).collect();
                     let sizes: Vec<f64> = pie_data.0.iter().map(|(_, v)| *v).collect();
                     let colors: Vec<RGBColor> = match &pie_style.colors {
-                        Some(cs) => cs.iter().map(|c| iced_to_plotters(*c)).collect(),
+                        Some(cs) => {
+                            cs.iter().map(|c| ChartColor::to_plotters_rgb(*c)).collect()
+                        }
                         None => {
                             (0..sizes.len()).map(|i| PALETTE[i % PALETTE.len()]).collect()
                         }
@@ -861,7 +867,8 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                             if let Some(lc) = mesh_style.and_then(|ms| ms.label_color) {
                                 let mut style =
                                     TextStyle::from(("sans-serif", s).into_font());
-                                style.color = iced_to_plotters(lc).to_backend_color();
+                                style.color =
+                                    ChartColor::to_plotters_rgb(lc).to_backend_color();
                                 axes.label_style(style);
                             } else {
                                 axes.label_style(("sans-serif", s).into_font());
@@ -899,7 +906,7 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                                 if let Some(pts) = data.t.as_ref() {
                                     let color = style
                                         .color
-                                        .map(iced_to_plotters)
+                                        .map(ChartColor::to_plotters_rgb)
                                         .unwrap_or(PALETTE[i % PALETTE.len()]);
                                     let ps = style.point_size.unwrap_or(3.0) as u32;
                                     let fill_style = ShapeStyle::from(color).filled();
@@ -922,7 +929,7 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                                 if let Some(pts) = data.t.as_ref() {
                                     let color = style
                                         .color
-                                        .map(iced_to_plotters)
+                                        .map(ChartColor::to_plotters_rgb)
                                         .unwrap_or(PALETTE[i % PALETTE.len()]);
                                     let sw = style.stroke_width.unwrap_or(2.0) as u32;
                                     let line_style =
@@ -955,7 +962,7 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                                     }
                                     let color = style
                                         .color
-                                        .map(iced_to_plotters)
+                                        .map(ChartColor::to_plotters_rgb)
                                         .unwrap_or(PALETTE[i % PALETTE.len()]);
                                     let color_by_z = style.color_by_z.unwrap_or(false);
 
@@ -1070,11 +1077,11 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                         let ls = self.legend_style.t.as_ref().and_then(|o| o.0.as_ref());
                         let legend_bg = ls
                             .and_then(|s| s.background)
-                            .map(iced_to_plotters)
+                            .map(ChartColor::to_plotters_rgb)
                             .unwrap_or(WHITE);
                         let legend_border = ls
                             .and_then(|s| s.border)
-                            .map(iced_to_plotters)
+                            .map(ChartColor::to_plotters_rgb)
                             .unwrap_or(BLACK);
                         let legend_font_sz =
                             ls.and_then(|s| s.label_size).unwrap_or(label_sz);
@@ -1086,7 +1093,8 @@ impl<X: GXExt> iced_canvas::Program<crate::widgets::Message, crate::theme::Graph
                         let mut style =
                             TextStyle::from(("sans-serif", legend_font_sz).into_font());
                         if let Some(lc) = ls.and_then(|s| s.label_color) {
-                            style.color = iced_to_plotters(lc).to_backend_color();
+                            style.color =
+                                ChartColor::to_plotters_rgb(lc).to_backend_color();
                         }
                         labels.label_font(style);
                         if let Err(e) = labels.draw() {
